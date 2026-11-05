@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#07090e" />
   <title>Live TV</title>
 
   <!-- HLS.js for .m3u8 streams -->
@@ -22,6 +23,10 @@
       --text: #f8fafc;
       --text-muted: #64748b;
       --live-red: #ef4444;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --safe-left: env(safe-area-inset-left, 0px);
+      --safe-right: env(safe-area-inset-right, 0px);
     }
 
     * {
@@ -31,21 +36,21 @@
       user-select: none;
       -webkit-user-select: none;
       -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
     }
 
+    /* Native Android Non-Bouncy Scroll Engine */
     html, body {
       background: var(--bg);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
-      min-height: 100vh;
-      overflow-x: hidden;
-      margin: 0;
-      padding: 0;
-      /* Remove fluid elastic web bouncing / pull-to-refresh */
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      width: 100%;
+      height: 100%;
       overscroll-behavior-y: none;
       overscroll-behavior-x: none;
+      -webkit-overflow-scrolling: touch;
       touch-action: pan-y;
-      -webkit-overflow-scrolling: auto;
+      overflow-x: hidden;
     }
 
     .app-wrap {
@@ -67,19 +72,17 @@
       overflow: hidden;
     }
 
-    /* Normal Mobile Portrait: Starts directly from top without empty black space */
+    /* Normal Mobile Portrait */
     body.mode-portrait .player-box {
       height: calc(100vw * 9 / 16);
-      max-height: 42vh;
-      margin-top: 0 !important;
-      padding-top: 0 !important;
+      max-height: 45vh;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.85);
       position: sticky;
       top: 0;
       z-index: 100;
     }
 
-    /* Android TV / Physical Landscape View */
+    /* Android TV / Physical Landscape */
     body.is-tv .player-box,
     body.mode-physical-landscape .player-box {
       position: fixed;
@@ -91,7 +94,7 @@
       z-index: 999;
     }
 
-    /* 100% FORCED CSS ROTATION: Menu pinned left side */
+    /* FORCED CSS 90-DEGREE ROTATION */
     body.force-rotated #playerBox {
       position: fixed !important;
       top: 50% !important;
@@ -107,9 +110,6 @@
 
     body.force-rotated {
       overflow: hidden !important;
-      position: fixed;
-      width: 100vw;
-      height: 100vh;
     }
 
     body.force-rotated .mobile-feed,
@@ -190,6 +190,12 @@
       transition: opacity 0.3s ease, transform 0.3s ease;
     }
 
+    body.is-tv .osd-top,
+    body.mode-physical-landscape .osd-top {
+      top: calc(16px + var(--safe-top));
+      left: calc(16px + var(--safe-left));
+    }
+
     .osd-top.hidden,
     .osd-bottom.hidden {
       opacity: 0;
@@ -199,7 +205,7 @@
     .osd-top.hidden { transform: translateY(-12px); }
     .osd-bottom.hidden { transform: translateY(12px); }
 
-    /* In-Video Menu Button (Left Side) */
+    /* In-Video Menu Button */
     .video-menu-btn {
       background: var(--surface-glass);
       backdrop-filter: blur(14px);
@@ -289,6 +295,12 @@
       pointer-events: none;
     }
 
+    body.is-tv .osd-bottom,
+    body.mode-physical-landscape .osd-bottom {
+      bottom: calc(16px + var(--safe-bottom));
+      right: calc(16px + var(--safe-right));
+    }
+
     .bottom-right-group {
       display: flex;
       align-items: center;
@@ -365,43 +377,52 @@
       font-weight: 700;
     }
 
-    /* Channel Drawer */
+    /* Left-Side Drawer (Clean Alignment) */
     .tv-drawer {
       position: fixed;
       top: 0;
       left: 0;
       width: 320px;
-      max-width: 78vw;
+      max-width: 80vw;
       height: 100vh;
       background: rgba(10, 13, 20, 0.97);
       backdrop-filter: blur(28px);
       border-right: 1px solid var(--border);
       z-index: 1000;
       transform: translateX(-100%);
-      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
       display: flex;
       flex-direction: column;
       box-shadow: 25px 0 60px rgba(0, 0, 0, 0.8);
+      padding-top: var(--safe-top);
+      padding-bottom: var(--safe-bottom);
+      padding-left: var(--safe-left);
     }
 
     .tv-drawer.open {
       transform: translateX(0);
     }
 
+    /* Fixed Left Alignment in 90-degree mode */
     body.force-rotated #drawer {
-      top: 50% !important;
-      left: 50% !important;
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
       width: 100vh !important;
-      height: 100vw !important;
-      max-width: 58vh !important;
-      transform: translate(-50%, -50%) rotate(90deg) !important;
-      transform-origin: center center !important;
+      height: 65vw !important;
+      max-width: 65vw !important;
+      transform: rotate(90deg) translate(0, -100%) !important;
+      transform-origin: top left !important;
       z-index: 100000 !important;
-      display: none;
+      display: flex !important;
+      visibility: hidden;
+      opacity: 0;
+      transition: opacity 0.25s ease, visibility 0.25s ease !important;
     }
 
     body.force-rotated #drawer.open {
-      display: flex !important;
+      visibility: visible !important;
+      opacity: 1 !important;
     }
 
     .drawer-head {
@@ -434,6 +455,7 @@
       display: flex;
       flex-direction: column;
       gap: 8px;
+      overscroll-behavior: contain;
     }
 
     .channel-item {
@@ -542,11 +564,13 @@
       display: block;
     }
 
-    /* Mobile Portrait Feed: Rigid native scroll */
+    /* Native-Style Mobile Feed */
     .mobile-feed {
       display: block;
       padding: 16px 16px 80px;
       background: var(--bg);
+      overscroll-behavior: none;
+      touch-action: pan-y;
     }
 
     .feed-head { margin-bottom: 14px; }
@@ -568,7 +592,8 @@
       border: 1px solid var(--border);
       border-radius: 12px;
       cursor: pointer;
-      transition: background 0.15s ease;
+      transition: background 0.12s ease;
+      touch-action: pan-y;
     }
 
     .mobile-card.active {
@@ -591,7 +616,7 @@
         <div id="loaderText" class="loader-text">Loading Channel...</div>
       </div>
 
-      <!-- Top Left: Clean Menu Icon & Live Status -->
+      <!-- Top Left: Live Status + Left Menu -->
       <div id="osdTop" class="osd-top">
         <button id="inVideoMenuBtn" class="video-menu-btn" title="Open Channels" onclick="toggleDrawer(true, event)">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -612,10 +637,8 @@
       <!-- Bottom Right Controls -->
       <div id="osdBottom" class="osd-bottom">
         <div class="bottom-right-group">
-          <!-- Quality Menu Dropdown -->
           <div id="qualityMenu" class="quality-menu" onclick="event.stopPropagation()"></div>
 
-          <!-- Quality Action Button -->
           <button id="qualityBtn" class="action-btn" title="Resolution" onclick="toggleQualityMenu(event)">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="3"></circle>
@@ -623,7 +646,6 @@
             </svg>
           </button>
 
-          <!-- Landscape Toggle Button -->
           <button id="fsBtn" class="action-btn" title="Toggle Landscape" onclick="handleLandscapeToggle(event)">
             <svg id="fsIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
@@ -632,13 +654,12 @@
         </div>
       </div>
 
-      <!-- TV Remote Guide Hint -->
       <div class="tv-hint">
         ◀ Left: Channels | ▲/▼: Switch
       </div>
     </div>
 
-    <!-- Quick In-Video Slide Drawer -->
+    <!-- Quick Slide Drawer (Left Side Aligned) -->
     <div id="drawer" class="tv-drawer" onclick="event.stopPropagation()">
       <div class="drawer-head">
         <h2>Live Channels</h2>
@@ -730,14 +751,10 @@
     const qualityMenu = document.getElementById('qualityMenu');
     const fsIcon = document.getElementById('fsIcon');
 
-    let hls = null;
-    let shakaPlayer = null;
-
     if (window.shaka) {
       shaka.polyfill.installAll();
     }
 
-    // Identify TV vs Mobile
     const ua = navigator.userAgent.toLowerCase();
     const isTV = ua.includes('googletv') ||
                  ua.includes('android tv') ||
@@ -751,7 +768,6 @@
       document.body.classList.add('is-tv');
     }
 
-    // Physical Phone Flip Detection (When auto-rotate is ON)
     function syncPhysicalOrientation() {
       if (isTV || document.body.classList.contains('force-rotated')) return;
 
@@ -771,19 +787,17 @@
       setTimeout(syncPhysicalOrientation, 150);
     });
 
-    // Forced Landscape Toggle (Works with Auto-Rotate Locked)
+    // Forced Landscape Toggle
     function handleLandscapeToggle(e) {
       if (e) e.stopPropagation();
 
       const isRotated = document.body.classList.contains('force-rotated');
 
       if (!isRotated) {
-        // Direct 90-degree rotate viewport
         document.body.classList.remove('mode-portrait', 'mode-physical-landscape');
         document.body.classList.add('force-rotated');
         fsIcon.innerHTML = `<path d="M4 14h6m0 0v6m0-6L3 21m17-7h-6m0 0v6m0-6l7 7M14 4h6m-6 0v6m0-6l7-7M4 10h6M4 10V4m0 6L3 3"></path>`;
       } else {
-        // Return to normal portrait mode
         document.body.classList.remove('force-rotated');
         document.body.classList.add('mode-portrait');
         fsIcon.innerHTML = `<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>`;
@@ -792,7 +806,6 @@
       showOSD();
     }
 
-    // Render channels
     function renderChannelLists() {
       drawerListEl.innerHTML = '';
       mobileListEl.innerHTML = '';
@@ -800,7 +813,6 @@
       CHANNELS.forEach((ch, idx) => {
         const chFormattedNum = `#${String(idx + 1).padStart(2, '0')}`;
 
-        // In-Video Drawer Item
         const dItem = document.createElement('div');
         dItem.className = `channel-item ${idx === currentIndex ? 'active' : ''}`;
         dItem.tabIndex = 0;
@@ -819,7 +831,6 @@
         };
         drawerListEl.appendChild(dItem);
 
-        // Mobile Portrait Card
         const mobItem = document.createElement('div');
         mobItem.className = `mobile-card ${idx === currentIndex ? 'active' : ''}`;
         mobItem.setAttribute('data-mob-idx', idx);
@@ -1066,7 +1077,6 @@
     window.addEventListener('click', unlockSoundOnFirstTap, { once: true });
     window.addEventListener('keydown', unlockSoundOnFirstTap, { once: true });
 
-    // Drawer slide handler
     function toggleDrawer(open, e) {
       if (e) e.stopPropagation();
 
@@ -1086,7 +1096,6 @@
       }
     }
 
-    // Android TV Remote Keydown & DPAD Listener
     document.addEventListener('keydown', (e) => {
       showOSD();
 
@@ -1143,7 +1152,6 @@
       }
     });
 
-    // Boot Up
     renderChannelLists();
     syncPhysicalOrientation();
     playChannel(0);
