@@ -7,6 +7,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
@@ -18,13 +21,21 @@ jobs:
         with:
           node-version: 20
 
-      - name: Build Pure Clean APK
+      - name: Build Pure Clean APK with Custom Logo
         run: |
           npm install -g cordova
           cordova create ystream com.ystream.app YStream
           cd ystream
           cordova platform add android
-          sed -i 's/<content src="index.html" \/>/<content src="https:\/\/ystream.pages.dev\/" \/>\n<preference name="Orientation" value="landscape" \/>\n<preference name="KeepRunning" value="true" \/>\n<preference name="Fullscreen" value="true" \/>/g' config.xml
+          
+          # assets folder-la irukura ellam images-um app-kulla copy aagum
+          mkdir -p www/assets
+          cp -r ../assets/* www/assets/ 2>/dev/null || true
+          cp ../assets/icon.png www/icon.png
+          
+          # Landscape, Fullscreen, Logo icon matrum Splash screen setup
+          sed -i 's/<content src="index.html" \/>/<content src="https:\/\/ystream.pages.dev\/" \/>\n    <preference name="Orientation" value="landscape" \/>\n    <preference name="KeepRunning" value="true" \/>\n    <preference name="Fullscreen" value="true" \/>\n    <icon src="www\/icon.png" \/>\n    <preference name="SplashScreen" value="screen" \/>\n    <preference name="SplashScreenDelay" value="3000" \/>\n    <preference name="ShowSplashScreenSpinner" value="false" \/>/g' config.xml
+          
           cordova build android --debug
 
       - name: Upload Clean APK
