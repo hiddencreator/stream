@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Live TV</title>
+
+  <!-- HLS.js for .m3u8 streams -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <!-- Shaka Player for ClearKey DRM .mpd streams -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.7.11/shaka-player.compiled.js"></script>
+
+  <style>
+    :root {
+      --bg: #07090e;
+      --surface: #10141f;
+      --surface-elevated: #161c2b;
+      --surface-glass: rgba(16, 20, 31, 0.88);
+      --border: rgba(255, 255, 255, 0.08);
+      --border-focus: #00d2ff;
+      --accent: #e8005d;
+      --text: #f8fafc;
+      --text-muted: #64748b;
+      --live-red: #ef4444;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .app-wrap {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      position: relative;
+      background: #000;
+      overflow: hidden;
+    }
+
+    /* Video Player Viewport */
+    .player-box {
+      position: relative;
+      flex: 1;
+      height: 100%;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #000;
+    }
+
+    /* Minimal Loader */
+    .loader-wrap {
+      position: absolute;
+      inset: 0;
+      background: rgba(7, 9, 14, 0.85);
+      backdrop-filter: blur(8px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      z-index: 10;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+
+    .loader-wrap.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .ring-spinner {
+      width: 44px;
+      height: 44px;
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      border-top-color: var(--accent);
+      border-right-color: #00d2ff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loader-text {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #cbd5e1;
+    }
+
+    /* Top Left Header / OSD */
+    .osd-top {
+      position: absolute;
+      top: 18px;
+      left: 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 30;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+
+    .osd-top.hidden,
+    .osd-bottom.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .osd-top.hidden { transform: translateY(-12px); }
+    .osd-bottom.hidden { transform: translateY(12px); }
+
+    /* In-Video Menu Button (TV Large Screens Only) */
+    .video-menu-btn {
+      background: var(--surface-glass);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--border);
+      color: #fff;
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      outline: none;
+      transition: background 0.2s ease;
+    }
+
+    .video-menu-btn:hover,
+    .video-menu-btn:active {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .osd-badge {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--surface-glass);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      padding: 6px 14px;
+      border-radius: 30px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    }
+
+    .live-dot {
+      width: 7px;
+      height: 7px;
+      background: var(--live-red);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--live-red);
+      animation: pulseDot 1.4s infinite;
+    }
+
+    @keyframes pulseDot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.35; transform: scale(0.85); }
+    }
+
+    .osd-num {
+      font-size: 0.78rem;
+      font-weight: 800;
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.12);
+      padding: 2px 6px;
+      border-radius: 5px;
+    }
+
+    .osd-name {
+      font-size: 0.92rem;
+      font-weight: 700;
+    }
+
+    .quality-badge {
+      font-size: 0.68rem;
+      font-weight: 800;
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.14);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      padding: 2px 7px;
+      border-radius: 10px;
+      text-transform: uppercase;
+    }
+
+    /* Bottom Control Bar */
+    .osd-bottom {
+      position: absolute;
+      bottom: 18px;
+      right: 18px;
+      display: flex;
+      align-items: center;
+      z-index: 30;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      pointer-events: none;
+    }
+
+    .bottom-right-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      pointer-events: auto;
+      position: relative;
+    }
+
+    .action-btn {
+      pointer-events: auto;
+      background: var(--surface-glass);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(14px);
+      color: #e2e8f0;
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      outline: none;
+      transition: background 0.2s ease;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    }
+
+    .action-btn:hover,
+    .action-btn:active {
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
+    }
+
+    /* Responsive Quality Menu Popup */
+    .quality-menu {
+      position: absolute;
+      bottom: 50px;
+      right: 48px;
+      background: rgba(14, 18, 28, 0.96);
+      backdrop-filter: blur(24px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 6px;
+      display: none;
+      flex-direction: column;
+      gap: 3px;
+      min-width: 140px;
+      max-height: 52vh;
+      overflow-y: auto;
+      box-shadow: 0 14px 36px rgba(0,0,0,0.85);
+      z-index: 60;
+    }
+
+    .quality-menu::-webkit-scrollbar {
+      width: 4px;
+    }
+    .quality-menu::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+    }
+
+    .quality-menu.show {
+      display: flex;
+    }
+
+    .quality-opt {
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #94a3b8;
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      text-align: left;
+      transition: background 0.15s ease, color 0.15s ease;
+      white-space: nowrap;
+    }
+
+    .quality-opt:hover,
+    .quality-opt:active {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+
+    .quality-opt.active {
+      background: rgba(232, 0, 93, 0.18);
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    /* TV Drawer (Desktop/TV Only) */
+    .tv-drawer {
+      display: none;
+    }
+
+    @media (min-width: 769px) {
+      .tv-drawer {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 360px;
+        height: 100%;
+        background: rgba(10, 13, 20, 0.96);
+        backdrop-filter: blur(28px);
+        border-right: 1px solid var(--border);
+        z-index: 60;
+        transform: translateX(-100%);
+        transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+        display: flex;
+        flex-direction: column;
+        box-shadow: 25px 0 60px rgba(0, 0, 0, 0.8);
+      }
+
+      .tv-drawer.open {
+        transform: translateX(0);
+      }
+    }
+
+    .drawer-head {
+      padding: 24px 20px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .drawer-head h2 {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .close-drawer-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      outline: none;
+      padding: 4px;
+    }
+
+    .drawer-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .channel-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      cursor: pointer;
+      outline: none;
+      transition: background 0.15s ease;
+    }
+
+    .channel-item:hover {
+      background: var(--surface-elevated);
+    }
+
+    .channel-item:focus, .channel-item.focused {
+      background: rgba(0, 210, 255, 0.08);
+      border-color: var(--border-focus);
+      transform: scale(1.02);
+    }
+
+    .channel-item.active {
+      background: rgba(232, 0, 93, 0.12);
+      border-color: var(--accent);
+    }
+
+    /* Channel Logos */
+    .ch-logo {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      object-fit: cover;
+      background: #181d2c;
+      padding: 2px;
+      border: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .item-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .item-title {
+      font-size: 0.92rem;
+      font-weight: 600;
+    }
+
+    .item-badge {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--text-muted);
+    }
+
+    .channel-item.active .item-badge,
+    .mobile-card.active .item-badge {
+      color: var(--accent);
+    }
+
+    .eq-wave {
+      display: none;
+      align-items: flex-end;
+      gap: 2px;
+      height: 14px;
+    }
+
+    .channel-item.active .eq-wave,
+    .mobile-card.active .eq-wave {
+      display: flex;
+    }
+
+    .eq-wave span {
+      width: 3px;
+      height: 100%;
+      background: var(--accent);
+      border-radius: 2px;
+      animation: eq 0.8s ease-in-out infinite alternate;
+    }
+    .eq-wave span:nth-child(2) { animation-delay: -0.3s; }
+    .eq-wave span:nth-child(3) { animation-delay: -0.5s; }
+
+    @keyframes eq {
+      0% { height: 3px; }
+      100% { height: 14px; }
+    }
+
+    .tv-hint {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      background: rgba(16, 20, 31, 0.7);
+      backdrop-filter: blur(12px);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 0.74rem;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      pointer-events: none;
+      z-index: 15;
+    }
+
+    .mobile-feed { display: none; }
+
+    /* ========================================================
+       MOBILE VIEW (Clean Feed Directly Under Player)
+       ======================================================== */
+    @media (max-width: 768px) {
+      body { overflow-y: auto; }
+
+      .app-wrap {
+        display: block;
+        height: auto;
+      }
+
+      .player-box {
+        position: sticky;
+        top: 0;
+        width: 100vw;
+        height: calc(100vw * 9 / 16);
+        max-height: 48vh;
+        z-index: 100;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.75);
+      }
+
+      .video-menu-btn {
+        display: none !important;
+      }
+
+      .osd-top {
+        top: 10px;
+        left: 10px;
+      }
+
+      .osd-badge {
+        padding: 4px 10px;
+        gap: 8px;
+      }
+
+      .osd-name { font-size: 0.8rem; }
+      .quality-badge { font-size: 0.6rem; padding: 2px 5px; }
+
+      .osd-bottom {
+        bottom: 10px;
+        right: 10px;
+      }
+
+      .action-btn {
+        width: 34px;
+        height: 34px;
+      }
+
+      .quality-menu {
+        bottom: 44px;
+        right: 44px;
+      }
+
+      .tv-hint { display: none !important; }
+
+      .mobile-feed {
+        display: block;
+        padding: 18px 16px 80px;
+        background: var(--bg);
+      }
+
+      .feed-head { margin-bottom: 14px; }
+      .feed-head h3 { font-size: 1.05rem; font-weight: 800; }
+      .feed-head p { font-size: 0.74rem; color: var(--text-muted); margin-top: 3px; }
+
+      .mobile-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .mobile-card {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 12px 14px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        cursor: pointer;
+        transition: background 0.15s ease;
+      }
+
+      .mobile-card:active {
+        background: var(--surface-elevated);
+      }
+
+      .mobile-card.active {
+        background: rgba(232, 0, 93, 0.1);
+        border-color: var(--accent);
+      }
+
+      .mobile-card.active .item-title { color: var(--accent); }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="appContainer" class="app-wrap">
+    <div id="playerBox" class="player-box" onclick="handleScreenTap(event)">
+      <video id="tvPlayer" playsinline></video>
+
+      <!-- Loader -->
+      <div id="loader" class="loader-wrap show">
+        <div class="ring-spinner"></div>
+        <div id="loaderText" class="loader-text">Loading Channel...</div>
+      </div>
+
+      <!-- Top Left: Menu Button (TV only) & Status -->
+      <div id="osdTop" class="osd-top">
+        <button id="inVideoMenuBtn" class="video-menu-btn" title="Open Channels" onclick="toggleDrawer(true, event)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
+
+        <div class="osd-badge">
+          <div class="live-dot"></div>
+          <span id="osdNum" class="osd-num">CH 01</span>
+          <span id="osdTitle" class="osd-name">Sun TV</span>
+          <span id="osdQuality" class="quality-badge">AUTO</span>
+        </div>
+      </div>
+
+      <!-- Bottom Right: Quality + Fullscreen Controls -->
+      <div id="osdBottom" class="osd-bottom">
+        <div class="bottom-right-group">
+          <!-- Quality Menu -->
+          <div id="qualityMenu" class="quality-menu" onclick="event.stopPropagation()"></div>
+
+          <!-- Quality Gear Button -->
+          <button id="qualityBtn" class="action-btn" title="Resolution" onclick="toggleQualityMenu(event)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+          </button>
+
+          <!-- Fullscreen Button -->
+          <button id="fsBtn" class="action-btn" title="Toggle Fullscreen" onclick="toggleFullscreen(event)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- TV Hint -->
+      <div class="tv-hint">
+        ◀ Left: Channels | ▲/▼: Switch
+      </div>
+    </div>
+
+    <!-- TV Slide Drawer (Desktop / TV Only) -->
+    <div id="drawer" class="tv-drawer" onclick="event.stopPropagation()">
+      <div class="drawer-head">
+        <h2>Live Channels</h2>
+        <button class="close-drawer-btn" onclick="toggleDrawer(false)">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div id="drawerList" class="drawer-list"></div>
+    </div>
+
+    <!-- Mobile Channels Feed (Underneath Player) -->
+    <div class="mobile-feed">
+      <div class="feed-head">
+        <h3>Live Channels</h3>
+        <p>Tap any channel to play instantly</p>
+      </div>
+      <div id="mobileList" class="mobile-grid"></div>
+    </div>
+  </div>
+
+  <script>
+    const CHANNELS = [
+      {
+        id: "suntv",
+        name: "Sun TV",
+        type: "hls",
+        logo: "https://tamilradios.org/wp-content/uploads/2025/04/suntv-100x100.png",
+        url: "https://d2px1d6ssc60fw.cloudfront.net/SunTV/SunTV-HDR10-IN-index.m3u8"
+      },
+      {
+        id: "zeetamil",
+        name: "Zee Tamil HD",
+        type: "hls",
+        logo: "https://tamilradios.org/wp-content/uploads/2025/11/zee-tamil1-100x100.jpg",
+        url: "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:zeetamil1.smil/playlist.m3u8"
+      },
+      {
+        id: "colorstamil",
+        name: "Colors Tamil HD",
+        type: "hls",
+        logo: "https://tamilradios.org/wp-content/uploads/2025/11/colors-tamil2-100x100.jpg",
+        url: "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:colorstamilhd11.smil/playlist.m3u8"
+      },
+      {
+        id: "makkaltv",
+        name: "Makkal TV",
+        type: "hls",
+        logo: "https://tamilradios.org/wp-content/uploads/2025/11/makkal-tv-1-100x100.jpg",
+        url: "https://5k8q87azdy4v-hls-live.wmncdn.net/MAKKAL/271ddf829afeece44d8732757fba1a66.sdp/playlist.m3u8"
+      },
+      {
+        id: "historytv18",
+        name: "History TV18 HD",
+        type: "mpd",
+        logo: "https://tamilradios.org/wp-content/uploads/2026/02/history-tv-18-tamil-100x100.jpg",
+        url: "https://login.bheem.tv/bpk-tv/22652/output/index.mpd",
+        keyId: "c6cb0bcbeac25fb286fed851e41de38c",
+        key: "955c54f2cac8783fafccae5e5f9cdf8d"
+      },
+      {
+        id: "discoverytamil",
+        name: "Discovery Tamil",
+        type: "mpd",
+        logo: "https://tamilradios.org/wp-content/uploads/2026/02/discovery-tamil.png",
+        url: "https://login.bheem.tv/bpk-tv/22652/output/index.mpd",
+        keyId: "c6cb0bcbeac25fb286fed851e41de38c",
+        key: "955c54f2cac8783fafccae5e5f9cdf8d"
+      }
+    ];
+
+    let currentIndex = -1;
+    let focusedIndex = 0;
+    let isDrawerOpen = false;
+    let osdTimeout = null;
+    let currentQuality = 'auto';
+
+    const videoEl = document.getElementById('tvPlayer');
+    const playerBoxEl = document.getElementById('playerBox');
+    const drawerEl = document.getElementById('drawer');
+    const drawerListEl = document.getElementById('drawerList');
+    const mobileListEl = document.getElementById('mobileList');
+    const loaderEl = document.getElementById('loader');
+    const loaderTextEl = document.getElementById('loaderText');
+    const osdTopEl = document.getElementById('osdTop');
+    const osdBottomEl = document.getElementById('osdBottom');
+    const osdNumEl = document.getElementById('osdNum');
+    const osdTitleEl = document.getElementById('osdTitle');
+    const osdQualityEl = document.getElementById('osdQuality');
+    const qualityMenu = document.getElementById('qualityMenu');
+
+    let hls = null;
+    let shakaPlayer = null;
+
+    if (window.shaka) {
+      shaka.polyfill.installAll();
+    }
+
+    // Render channels list with badges
+    function renderChannelLists() {
+      drawerListEl.innerHTML = '';
+      mobileListEl.innerHTML = '';
+
+      CHANNELS.forEach((ch, idx) => {
+        const chFormattedNum = `#${String(idx + 1).padStart(2, '0')}`;
+
+        // TV Drawer Item
+        const dItem = document.createElement('div');
+        dItem.className = `channel-item ${idx === currentIndex ? 'active' : ''}`;
+        dItem.tabIndex = 0;
+        dItem.setAttribute('data-idx', idx);
+        dItem.innerHTML = `
+          <img class="ch-logo" src="${ch.logo}" alt="${ch.name}" onerror="this.src='https://tamilradios.org/wp-content/uploads/2024/11/icon-192.png'" />
+          <div class="item-body">
+            <div class="item-title">${ch.name}</div>
+            <div class="item-badge">${chFormattedNum} • HD Broadcast</div>
+          </div>
+          <div class="eq-wave"><span></span><span></span><span></span></div>
+        `;
+        dItem.onclick = () => {
+          handleSelectChannel(idx);
+          toggleDrawer(false);
+        };
+        drawerListEl.appendChild(dItem);
+
+        // Mobile Item
+        const mobItem = document.createElement('div');
+        mobItem.className = `mobile-card ${idx === currentIndex ? 'active' : ''}`;
+        mobItem.setAttribute('data-mob-idx', idx);
+        mobItem.innerHTML = `
+          <img class="ch-logo" src="${ch.logo}" alt="${ch.name}" onerror="this.src='https://tamilradios.org/wp-content/uploads/2024/11/icon-192.png'" />
+          <div class="item-body">
+            <div class="item-title">${ch.name}</div>
+            <div class="item-badge">${chFormattedNum} • HD Broadcast</div>
+          </div>
+          <div class="eq-wave"><span></span><span></span><span></span></div>
+        `;
+        mobItem.onclick = () => {
+          handleSelectChannel(idx);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+        mobileListEl.appendChild(mobItem);
+      });
+    }
+
+    function handleSelectChannel(index) {
+      if (currentIndex === index) {
+        showOSD();
+        return;
+      }
+      playChannel(index);
+    }
+
+    function handleScreenTap(e) {
+      if (qualityMenu.classList.contains('show')) {
+        qualityMenu.classList.remove('show');
+        return;
+      }
+      if (isDrawerOpen) {
+        toggleDrawer(false);
+        return;
+      }
+      if (osdTopEl.classList.contains('hidden')) {
+        showOSD();
+      } else {
+        hideOSD();
+      }
+    }
+
+    function showOSD() {
+      osdTopEl.classList.remove('hidden');
+      osdBottomEl.classList.remove('hidden');
+      clearTimeout(osdTimeout);
+      osdTimeout = setTimeout(hideOSD, 4500);
+    }
+
+    function hideOSD() {
+      osdTopEl.classList.add('hidden');
+      osdBottomEl.classList.add('hidden');
+      qualityMenu.classList.remove('show');
+    }
+
+    function updateActiveUI(index) {
+      document.querySelectorAll('.channel-item').forEach((el, idx) => {
+        el.classList.toggle('active', idx === index);
+      });
+      document.querySelectorAll('.mobile-card').forEach((el, idx) => {
+        el.classList.toggle('active', idx === index);
+      });
+    }
+
+    // Fullscreen with Auto-Landscape Orientation Lock
+    async function toggleFullscreen(e) {
+      if (e) e.stopPropagation();
+
+      const docEl = playerBoxEl;
+      const isFs = document.fullscreenElement || document.webkitFullscreenElement;
+
+      if (!isFs) {
+        try {
+          if (docEl.requestFullscreen) {
+            await docEl.requestFullscreen();
+          } else if (docEl.webkitRequestFullscreen) {
+            await docEl.webkitRequestFullscreen();
+          } else if (videoEl.webkitEnterFullscreen) {
+            videoEl.webkitEnterFullscreen();
+          }
+
+          if (screen.orientation && screen.orientation.lock) {
+            screen.orientation.lock('landscape').catch(() => {});
+          }
+        } catch (err) {
+          console.warn("Fullscreen lock error:", err);
+        }
+      } else {
+        try {
+          if (document.exitFullscreen) {
+            await document.exitFullscreen();
+          } else if (document.webkitExitFullscreen) {
+            await document.webkitExitFullscreen();
+          }
+
+          if (screen.orientation && screen.orientation.unlock) {
+            screen.orientation.unlock();
+          }
+        } catch (err) {
+          console.warn("Exit Fullscreen error:", err);
+        }
+      }
+      showOSD();
+    }
+
+    function toggleQualityMenu(e) {
+      if (e) e.stopPropagation();
+      qualityMenu.classList.toggle('show');
+      showOSD();
+    }
+
+    function updateQualityBadge(text) {
+      osdQualityEl.textContent = text;
+    }
+
+    // Deduplicated, clean quality list generator
+    function buildQualityMenu(levels, isShaka = false) {
+      qualityMenu.innerHTML = '';
+
+      // Auto Option
+      const autoBtn = document.createElement('button');
+      autoBtn.className = `quality-opt ${currentQuality === 'auto' ? 'active' : ''}`;
+      autoBtn.textContent = 'Auto';
+      autoBtn.onclick = () => {
+        currentQuality = 'auto';
+        updateQualityBadge('AUTO');
+        if (hls) hls.currentLevel = -1;
+        if (shakaPlayer) shakaPlayer.configure({ abr: { enabled: true } });
+        buildQualityMenu(levels, isShaka);
+        qualityMenu.classList.remove('show');
+      };
+      qualityMenu.appendChild(autoBtn);
+
+      // Filter duplicate heights (common in multi-audio DASH/HLS feeds)
+      const seenHeights = new Set();
+      const uniqueLevels = [];
+
+      levels.forEach((lvl, idx) => {
+        const h = lvl.height || Math.round(lvl.bitrate / 1000);
+        if (!seenHeights.has(h)) {
+          seenHeights.add(h);
+          uniqueLevels.push({ level: lvl, originalIndex: idx });
+        }
+      });
+
+      uniqueLevels.forEach(({ level: lvl, originalIndex: idx }) => {
+        const opt = document.createElement('button');
+        const label = lvl.height ? `${lvl.height}p` : `${Math.round(lvl.bitrate / 1000)} kbps`;
+        opt.className = `quality-opt ${currentQuality === idx ? 'active' : ''}`;
+        opt.textContent = label;
+        opt.onclick = () => {
+          currentQuality = idx;
+          updateQualityBadge(label);
+          if (hls) {
+            hls.currentLevel = idx;
+          } else if (shakaPlayer) {
+            shakaPlayer.configure({ abr: { enabled: false } });
+            shakaPlayer.selectVariantTrack(lvl, /* clearBuffer= */ true);
+          }
+          buildQualityMenu(levels, isShaka);
+          qualityMenu.classList.remove('show');
+        };
+        qualityMenu.appendChild(opt);
+      });
+    }
+
+    function cleanup() {
+      if (hls) {
+        hls.destroy();
+        hls = null;
+      }
+      if (shakaPlayer) {
+        shakaPlayer.destroy();
+        shakaPlayer = null;
+      }
+      videoEl.pause();
+      videoEl.removeAttribute('src');
+      videoEl.load();
+    }
+
+    async function playChannel(index) {
+      if (index < 0 || index >= CHANNELS.length) return;
+
+      currentIndex = index;
+      currentQuality = 'auto';
+      updateQualityBadge('AUTO');
+
+      const channel = CHANNELS[index];
+      loaderTextEl.textContent = `Connecting to ${channel.name}...`;
+      loaderEl.classList.add('show');
+      cleanup();
+
+      osdNumEl.textContent = `CH ${String(index + 1).padStart(2, '0')}`;
+      osdTitleEl.textContent = channel.name;
+      showOSD();
+      updateActiveUI(index);
+
+      // Reliable Playback Trigger (Solves the initial Sun TV boot loop)
+      const executePlay = () => {
+        const playPromise = videoEl.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              loaderEl.classList.remove('show');
+            })
+            .catch(() => {
+              // If browser blocks unmuted sound on cold boot, start muted immediately without looping
+              videoEl.muted = true;
+              videoEl.play().finally(() => {
+                loaderEl.classList.remove('show');
+              });
+            });
+        }
+      };
+
+      if (channel.type === 'hls') {
+        if (Hls.isSupported()) {
+          hls = new Hls({ enableWorker: true, lowLatencyMode: true });
+          hls.loadSource(channel.url);
+          hls.attachMedia(videoEl);
+
+          hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+            buildQualityMenu(data.levels);
+            executePlay();
+          });
+
+          hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
+            if (currentQuality === 'auto' && hls.levels[data.level]) {
+              const h = hls.levels[data.level].height;
+              updateQualityBadge(h ? `${h}p` : 'AUTO');
+            }
+          });
+
+          hls.on(Hls.Events.ERROR, (evt, data) => {
+            if (data.fatal) {
+              loaderTextEl.textContent = "Stream temporarily unavailable";
+            }
+          });
+        } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+          videoEl.src = channel.url;
+          executePlay();
+        }
+      } else if (channel.type === 'mpd') {
+        shakaPlayer = new shaka.Player(videoEl);
+        shakaPlayer.configure({
+          drm: {
+            clearKeys: {
+              [channel.keyId]: channel.key
+            }
+          }
+        });
+
+        try {
+          await shakaPlayer.load(channel.url);
+          const tracks = shakaPlayer.getVariantTracks();
+          buildQualityMenu(tracks, true);
+
+          shakaPlayer.addEventListener('adaptation', () => {
+            if (currentQuality === 'auto') {
+              const activeTracks = shakaPlayer.getVariantTracks().filter(t => t.active);
+              if (activeTracks.length > 0 && activeTracks[0].height) {
+                updateQualityBadge(`${activeTracks[0].height}p`);
+              }
+            }
+          });
+
+          executePlay();
+        } catch (err) {
+          console.error("Shaka error", err);
+          loaderTextEl.textContent = "DRM Stream Error";
+        }
+      }
+    }
+
+    videoEl.addEventListener('playing', () => {
+      loaderEl.classList.remove('show');
+    });
+
+    videoEl.addEventListener('waiting', () => {
+      loaderTextEl.textContent = "Buffering...";
+      loaderEl.classList.add('show');
+    });
+
+    // Unmute on the very first screen interaction without touching volume level
+    const unlockSoundOnFirstTap = () => {
+      if (videoEl.muted) {
+        videoEl.muted = false;
+      }
+    };
+    window.addEventListener('click', unlockSoundOnFirstTap, { once: true });
+    window.addEventListener('keydown', unlockSoundOnFirstTap, { once: true });
+
+    // TV Drawer Navigation
+    function toggleDrawer(open, e) {
+      if (e) e.stopPropagation();
+      if (window.innerWidth <= 768) return;
+
+      isDrawerOpen = open;
+      drawerEl.classList.toggle('open', open);
+      if (open) {
+        focusedIndex = currentIndex >= 0 ? currentIndex : 0;
+        focusCard(focusedIndex);
+      }
+    }
+
+    function focusCard(index) {
+      const items = document.querySelectorAll('.channel-item');
+      if (items[index]) {
+        items[index].focus();
+        items[index].scrollIntoView({ block: 'nearest' });
+      }
+    }
+
+    // Android TV Remote Keydown Listener
+    document.addEventListener('keydown', (e) => {
+      showOSD();
+
+      switch (e.key) {
+        case 'ArrowLeft':
+          if (!isDrawerOpen && window.innerWidth > 768) {
+            e.preventDefault();
+            toggleDrawer(true);
+          }
+          break;
+
+        case 'ArrowRight':
+        case 'Escape':
+        case 'GoBack':
+          if (isDrawerOpen) {
+            e.preventDefault();
+            toggleDrawer(false);
+          } else if (qualityMenu.classList.contains('show')) {
+            qualityMenu.classList.remove('show');
+          }
+          break;
+
+        case 'ArrowUp':
+        case 'ChannelUp':
+          e.preventDefault();
+          if (isDrawerOpen) {
+            focusedIndex = (focusedIndex - 1 + CHANNELS.length) % CHANNELS.length;
+            focusCard(focusedIndex);
+          } else {
+            const nextIdx = (currentIndex - 1 + CHANNELS.length) % CHANNELS.length;
+            playChannel(nextIdx);
+          }
+          break;
+
+        case 'ArrowDown':
+        case 'ChannelDown':
+          e.preventDefault();
+          if (isDrawerOpen) {
+            focusedIndex = (focusedIndex + 1) % CHANNELS.length;
+            focusCard(focusedIndex);
+          } else {
+            const nextIdx = (currentIndex + 1) % CHANNELS.length;
+            playChannel(nextIdx);
+          }
+          break;
+
+        case 'Enter':
+          if (isDrawerOpen) {
+            e.preventDefault();
+            handleSelectChannel(focusedIndex);
+            toggleDrawer(false);
+          }
+          break;
+      }
+    });
+
+    // Boot Up
+    renderChannelLists();
+    playChannel(0);
+  </script>
+</body>
+</html>
