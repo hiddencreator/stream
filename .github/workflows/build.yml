@@ -1,0 +1,34 @@
+name: Build Clean TV APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Node & Cordova
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build Pure Clean APK
+        run: |
+          npm install -g cordova
+          cordova create ystream com.ystream.app YStream
+          cd ystream
+          cordova platform add android
+          sed -i 's/<content src="index.html" \/>/<content src="https:\/\/ystream.pages.dev\/" \/>\n<preference name="KeepRunning" value="true" \/>\n<preference name="Fullscreen" value="true" \/>/g' config.xml
+          cordova build android --debug
+
+      - name: Upload Clean APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: YStream-Clean-TV-APK
+          path: ystream/platforms/android/app/build/outputs/apk/debug/*.apk
