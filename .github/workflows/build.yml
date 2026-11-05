@@ -28,13 +28,18 @@ jobs:
           cd ystream
           cordova platform add android
           
-          # assets folder-la irukura ellam images-um app-kulla copy aagum
+          # assets folder setup
           mkdir -p www/assets
           cp -r ../assets/* www/assets/ 2>/dev/null || true
           cp ../assets/icon.png www/icon.png
-          
-          # Landscape, Fullscreen, Logo icon matrum Splash screen setup
-          sed -i 's/<content src="index.html" \/>/<content src="https:\/\/ystream.pages.dev\/" \/>\n    <preference name="Orientation" value="landscape" \/>\n    <preference name="KeepRunning" value="true" \/>\n    <preference name="Fullscreen" value="true" \/>\n    <icon src="www\/icon.png" \/>\n    <preference name="SplashScreen" value="screen" \/>\n    <preference name="SplashScreenDelay" value="3000" \/>\n    <preference name="ShowSplashScreenSpinner" value="false" \/>/g' config.xml
+
+          # Android native splash screen matrum launcher icons replace panradhu
+          find platforms/android/app/src/main/res/ -name "ic_cdv_splashscreen.png" -exec cp ../assets/icon.png {} \;
+          find platforms/android/app/src/main/res/ -name "screen.png" -exec cp ../assets/icon.png {} \;
+          find platforms/android/app/src/main/res/ -name "ic_launcher*.png" -exec cp ../assets/icon.png {} \;
+
+          # Fullscreen, landscape, custom icon & splash screen preference configuration
+          sed -i 's/<content src="index.html" \/>/<content src="https:\/\/ystream.pages.dev\/" \/>\n    <preference name="Orientation" value="landscape" \/>\n    <preference name="KeepRunning" value="true" \/>\n    <preference name="Fullscreen" value="true" \/>\n    <icon src="www\/icon.png" \/>\n    <preference name="SplashScreen" value="screen" \/>\n    <preference name="AndroidWindowSplashScreenAnimatedIcon" value="www\/icon.png" \/>\n    <preference name="AndroidWindowSplashScreenBackground" value="#0d1117" \/>\n    <preference name="SplashScreenDelay" value="2500" \/>\n    <preference name="ShowSplashScreenSpinner" value="false" \/>/g' config.xml
           
           cordova build android --debug
 
