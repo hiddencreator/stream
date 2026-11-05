@@ -24,7 +24,7 @@ jobs:
           cordova create ystream com.ystream.app YStream
           cd ystream
           cordova platform add android
-          sed -i 's/<content src="index.html" \/>/<content src="https:\/\/ystream.pages.dev\/" \/>\n<preference name="KeepRunning" value="true" \/>\n<preference name="Fullscreen" value="true" \/>/g' config.xml
+          sed -i 's/<content src="index.html" \/>/<content src="https:\/\/ystream.pages.dev\/" \/>\n<preference name="Orientation" value="landscape" \/>\n<preference name="KeepRunning" value="true" \/>\n<preference name="Fullscreen" value="true" \/>/g' config.xml
           cordova build android --debug
 
       - name: Upload Clean APK
