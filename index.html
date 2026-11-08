@@ -1003,12 +1003,29 @@
 
       if (channel.type === 'hls') {
         if (Hls.isSupported()) {
-          hls = new Hls({ enableWorker: true, lowLatencyMode: true });
+          // TV-safe buffering & capping to prevent Sun TV HDR from hanging low-end TV chipsets
+          hls = new Hls({
+            enableWorker: true,
+            lowLatencyMode: false,
+            liveSyncDurationCount: 3,
+            liveMaxLatencyDurationCount: 6,
+            maxBufferLength: 20,
+            maxMaxBufferLength: 30,
+            backBufferLength: 10
+          });
+
           hls.loadSource(channel.url);
           hls.attachMedia(videoEl);
 
           hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
             buildQualityMenu(data.levels);
+            // Sun TV heavy 4K/HDR10 track TV-la hang aagaama 1080p/720p-oda cap pannudhu
+            if (channel.id === 'suntv' && data.levels && data.levels.length > 0) {
+              const safeLevelIdx = data.levels.findIndex(lvl => lvl.height && lvl.height <= 1080);
+              if (safeLevelIdx !== -1) {
+                hls.autoLevelCapping = safeLevelIdx;
+              }
+            }
             executePlay();
           });
 
@@ -1021,7 +1038,17 @@
 
           hls.on(Hls.Events.ERROR, (evt, data) => {
             if (data.fatal) {
-              loaderTextEl.textContent = "Stream temporarily unavailable";
+              switch (data.type) {
+                case Hls.ErrorTypes.NETWORK_ERROR:
+                  hls.startLoad();
+                  break;
+                case Hls.ErrorTypes.MEDIA_ERROR:
+                  hls.recoverMediaError();
+                  break;
+                default:
+                  cleanup();
+                  break;
+              }
             }
           });
         } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
