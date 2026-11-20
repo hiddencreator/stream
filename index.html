@@ -3,25 +3,40 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Live TV</title>
+  <title>YStream Live TV</title>
 
-  <!-- HLS.js for .m3u8 streams -->
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-  <!-- Shaka Player for ClearKey DRM .mpd streams -->
+  <!-- Preconnect to Stream CDNs for Fast Channel Zapping -->
+  <link rel="preconnect" href="https://d2px1d6ssc60fw.cloudfront.net" crossorigin />
+  <link rel="preconnect" href="https://da86m1sqpm3o0.cloudfront.net" crossorigin />
+  <link rel="preconnect" href="https://5k8q87azdy4v-hls-live.wmncdn.net" crossorigin />
+  <link rel="preconnect" href="https://login.bheem.tv" crossorigin />
+  <link rel="dns-prefetch" href="https://d2px1d6ssc60fw.cloudfront.net" />
+  <link rel="dns-prefetch" href="https://da86m1sqpm3o0.cloudfront.net" />
+  <link rel="dns-prefetch" href="https://5k8q87azdy4v-hls-live.wmncdn.net" />
+  <link rel="dns-prefetch" href="https://login.bheem.tv" />
+
+  <!-- Web Browser Streaming Engines -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.7.11/shaka-player.compiled.js"></script>
 
   <style>
+    /* ========================================================
+       EYE-COMFORT CINEMA SLATE THEME (Zero Glare / Night Safe)
+       ======================================================== */
     :root {
-      --bg: #07090e;
-      --surface: #10141f;
-      --surface-elevated: #161c2b;
-      --surface-glass: rgba(16, 20, 31, 0.88);
+      --bg: #0e1218;
+      --surface: #151b24;
+      --surface-elevated: #1c2430;
+      --surface-glass: rgba(20, 26, 36, 0.90);
       --border: rgba(255, 255, 255, 0.08);
-      --border-focus: #00d2ff;
-      --accent: #e8005d;
-      --text: #f8fafc;
-      --text-muted: #64748b;
-      --live-red: #ef4444;
+      --border-strong: rgba(255, 255, 255, 0.14);
+      --accent: #3b82f6;
+      --accent-soft: rgba(59, 130, 246, 0.15);
+      --accent-text: #60a5fa;
+      --focus-ring: #93c5fd;
+      --text: #e6ebf2;
+      --text-muted: #8a96a8;
+      --live-dot: #22c55e;
       --safe-top: env(safe-area-inset-top, 0px);
       --safe-bottom: env(safe-area-inset-bottom, 0px);
       --safe-left: env(safe-area-inset-left, 0px);
@@ -36,14 +51,25 @@
       -webkit-tap-highlight-color: transparent;
     }
 
-    body {
+    html, body {
       background: var(--bg);
       color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
       min-height: 100vh;
       overflow-x: hidden;
-      margin: 0;
-      padding: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Transparent WebView when Native Hardware ExoPlayer is active inside APK */
+    html.native-hw-active,
+    html.native-hw-active body,
+    html.native-hw-active .app-wrap,
+    html.native-hw-active .player-box {
+      background: transparent !important;
+    }
+
+    html.native-hw-active video {
+      display: none !important;
     }
 
     .app-wrap {
@@ -53,11 +79,13 @@
       background: var(--bg);
     }
 
-    /* Video Player Viewport */
+    /* ========================================================
+       VIDEO VIEWPORT & RESPONSIVE MODES
+       ======================================================== */
     .player-box {
       position: relative;
       width: 100vw;
-      background: #000;
+      background: #080a0e;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -65,18 +93,31 @@
       overflow: hidden;
     }
 
-    /* Normal Mobile Portrait: Notch safe area + 16:9 ratio */
+    /* 1. Mobile Portrait Mode */
     body.mode-portrait .player-box {
       height: calc(100vw * 9 / 16);
-      max-height: 45vh;
+      max-height: 46vh;
       margin-top: var(--safe-top);
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.85);
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
       position: sticky;
       top: var(--safe-top);
       z-index: 100;
+      border-bottom: 1px solid var(--border);
     }
 
-    /* Android TV / Physical Landscape View */
+    body.mode-portrait::before {
+      content: "";
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: var(--safe-top);
+      background: var(--bg);
+      z-index: 101;
+      pointer-events: none;
+    }
+
+    /* 2. Android TV & Physical Landscape Mode */
     body.is-tv .player-box,
     body.mode-physical-landscape .player-box {
       position: fixed;
@@ -86,9 +127,14 @@
       max-height: 100vh;
       margin: 0;
       z-index: 999;
+      border-bottom: none;
     }
 
-    /* FORCED CSS 90-DEGREE ROTATION (Works even when auto-rotate is completely locked) */
+    /* 3. Forced 90-Degree Rotation (Bypasses Mobile Auto-Rotate Lock) */
+    body.force-rotated {
+      overflow: hidden !important;
+    }
+
     body.force-rotated #playerBox {
       position: fixed !important;
       top: 50% !important;
@@ -100,10 +146,17 @@
       transform-origin: center center !important;
       z-index: 99999 !important;
       margin: 0 !important;
+      border-bottom: none;
     }
 
-    body.force-rotated {
-      overflow: hidden !important;
+    body.force-rotated .osd-top {
+      top: 16px;
+      left: calc(16px + var(--safe-top));
+    }
+
+    body.force-rotated .osd-bottom {
+      bottom: 16px;
+      right: calc(16px + var(--safe-bottom));
     }
 
     body.force-rotated .mobile-feed,
@@ -118,33 +171,30 @@
       display: flex !important;
     }
 
-    body.force-rotated .tv-hint,
-    body.mode-physical-landscape .tv-hint {
-      display: none !important;
-    }
-
     video {
       width: 100%;
       height: 100%;
       object-fit: contain;
-      background: #000;
+      background: #080a0e;
     }
 
-    /* Minimal Loader */
+    /* ========================================================
+       SOFT NON-INTRUSIVE LOADER
+       ======================================================== */
     .loader-wrap {
       position: absolute;
       inset: 0;
-      background: rgba(7, 9, 14, 0.85);
-      backdrop-filter: blur(8px);
+      background: rgba(14, 18, 24, 0.62);
+      backdrop-filter: blur(6px);
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 14px;
-      z-index: 10;
+      gap: 12px;
+      z-index: 15;
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.25s ease;
+      transition: opacity 0.18s ease;
     }
 
     .loader-wrap.show {
@@ -153,13 +203,12 @@
     }
 
     .ring-spinner {
-      width: 44px;
-      height: 44px;
-      border: 3px solid rgba(255, 255, 255, 0.1);
-      border-top-color: var(--accent);
-      border-right-color: #00d2ff;
+      width: 36px;
+      height: 36px;
+      border: 2.5px solid rgba(255, 255, 255, 0.12);
+      border-top-color: var(--accent-text);
       border-radius: 50%;
-      animation: spin 0.8s linear infinite;
+      animation: spin 0.7s linear infinite;
     }
 
     @keyframes spin {
@@ -167,12 +216,15 @@
     }
 
     .loader-text {
-      font-size: 0.88rem;
+      font-size: 0.82rem;
       font-weight: 600;
-      color: #cbd5e1;
+      color: var(--text);
+      letter-spacing: 0.2px;
     }
 
-    /* Top Left Header / OSD */
+    /* ========================================================
+       TOP-LEFT OSD
+       ======================================================== */
     .osd-top {
       position: absolute;
       top: 14px;
@@ -181,13 +233,13 @@
       align-items: center;
       gap: 10px;
       z-index: 30;
-      transition: opacity 0.3s ease, transform 0.3s ease;
+      transition: opacity 0.22s ease, transform 0.22s ease;
     }
 
     body.is-tv .osd-top,
     body.mode-physical-landscape .osd-top {
-      top: calc(16px + var(--safe-top));
-      left: calc(16px + var(--safe-left));
+      top: calc(18px + var(--safe-top));
+      left: calc(18px + var(--safe-left));
     }
 
     .osd-top.hidden,
@@ -196,88 +248,111 @@
       pointer-events: none;
     }
 
-    .osd-top.hidden { transform: translateY(-12px); }
-    .osd-bottom.hidden { transform: translateY(12px); }
+    .osd-top.hidden { transform: translateY(-8px); }
+    .osd-bottom.hidden { transform: translateY(8px); }
 
-    /* In-Video Menu Button (Hidden in portrait, visible in landscape & TV) */
     .video-menu-btn {
       background: var(--surface-glass);
-      backdrop-filter: blur(14px);
-      border: 1px solid var(--border);
-      color: #fff;
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border-strong);
+      color: var(--text);
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
       display: none;
       align-items: center;
       justify-content: center;
       cursor: pointer;
       outline: none;
-      box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
       flex-shrink: 0;
+      transition: background 0.15s ease, border-color 0.15s ease;
     }
 
+    .video-menu-btn:focus,
     .video-menu-btn:active {
-      background: rgba(255, 255, 255, 0.2);
+      border-color: var(--focus-ring);
+      background: var(--surface-elevated);
     }
 
-    /* Pure OSD Live Badge */
     .osd-badge {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
+      gap: 9px;
       background: var(--surface-glass);
       backdrop-filter: blur(16px);
-      border: 1px solid var(--border);
-      padding: 6px 12px;
-      border-radius: 30px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      border: 1px solid var(--border-strong);
+      padding: 6px 14px;
+      border-radius: 12px;
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
     }
 
     .live-dot {
       width: 7px;
       height: 7px;
-      background: var(--live-red);
+      background: var(--live-dot);
       border-radius: 50%;
-      box-shadow: 0 0 8px var(--live-red);
-      animation: pulseDot 1.4s infinite;
+      box-shadow: 0 0 6px rgba(34, 197, 94, 0.55);
+      animation: pulseDot 1.8s infinite;
       flex-shrink: 0;
     }
 
     @keyframes pulseDot {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.35; transform: scale(0.85); }
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
     }
 
     .osd-num {
-      font-size: 0.76rem;
-      font-weight: 800;
-      color: #38bdf8;
-      background: rgba(56, 189, 248, 0.12);
-      padding: 2px 6px;
-      border-radius: 5px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      color: var(--accent-text);
+      background: var(--accent-soft);
+      padding: 2px 7px;
+      border-radius: 6px;
       white-space: nowrap;
     }
 
     .osd-name {
       font-size: 0.86rem;
-      font-weight: 700;
+      font-weight: 600;
+      color: var(--text);
       white-space: nowrap;
     }
 
     .quality-badge {
-      font-size: 0.65rem;
-      font-weight: 800;
-      color: #38bdf8;
-      background: rgba(56, 189, 248, 0.14);
-      border: 1px solid rgba(56, 189, 248, 0.3);
-      padding: 2px 6px;
-      border-radius: 10px;
+      font-size: 0.66rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border);
+      padding: 2px 7px;
+      border-radius: 6px;
       text-transform: uppercase;
       white-space: nowrap;
     }
 
-    /* Bottom Control Bar */
+    .unmute-pill {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 7px 12px;
+      border-radius: 10px;
+      font-size: 0.76rem;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(59, 130, 246, 0.35);
+    }
+
+    .unmute-pill.show {
+      display: inline-flex;
+    }
+
+    /* ========================================================
+       BOTTOM-RIGHT CONTROLS
+       ======================================================== */
     .osd-bottom {
       position: absolute;
       bottom: 14px;
@@ -285,14 +360,14 @@
       display: flex;
       align-items: center;
       z-index: 30;
-      transition: opacity 0.3s ease, transform 0.3s ease;
+      transition: opacity 0.22s ease, transform 0.22s ease;
       pointer-events: none;
     }
 
     body.is-tv .osd-bottom,
     body.mode-physical-landscape .osd-bottom {
-      bottom: calc(16px + var(--safe-bottom));
-      right: calc(16px + var(--safe-right));
+      bottom: calc(18px + var(--safe-bottom));
+      right: calc(18px + var(--safe-right));
     }
 
     .bottom-right-group {
@@ -306,47 +381,52 @@
     .action-btn {
       pointer-events: auto;
       background: var(--surface-glass);
-      border: 1px solid var(--border);
-      backdrop-filter: blur(14px);
-      color: #e2e8f0;
+      border: 1px solid var(--border-strong);
+      backdrop-filter: blur(16px);
+      color: var(--text);
       width: 38px;
       height: 38px;
-      border-radius: 50%;
+      border-radius: 12px;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       outline: none;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+      transition: border-color 0.15s ease, background 0.15s ease;
     }
 
+    .action-btn:focus,
     .action-btn:active {
-      background: rgba(255, 255, 255, 0.2);
+      border-color: var(--focus-ring);
+      background: var(--surface-elevated);
     }
 
-    /* Hide fullscreen toggle button on TV */
     body.is-tv #fsBtn {
       display: none !important;
     }
 
-    /* Quality Menu Popup */
+    /* Quality Popup Menu */
     .quality-menu {
       position: absolute;
-      bottom: 50px;
+      bottom: 48px;
       right: 48px;
-      background: rgba(14, 18, 28, 0.96);
-      backdrop-filter: blur(24px);
-      border: 1px solid var(--border);
+      background: var(--surface);
+      border: 1px solid var(--border-strong);
       border-radius: 12px;
       padding: 6px;
       display: none;
       flex-direction: column;
       gap: 3px;
-      min-width: 130px;
+      min-width: 140px;
       max-height: 50vh;
       overflow-y: auto;
-      box-shadow: 0 14px 36px rgba(0,0,0,0.85);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
       z-index: 60;
+    }
+
+    body.is-tv .quality-menu {
+      right: 0;
     }
 
     .quality-menu.show {
@@ -357,38 +437,48 @@
       padding: 8px 12px;
       border-radius: 8px;
       font-size: 0.8rem;
-      font-weight: 600;
-      color: #94a3b8;
+      font-weight: 500;
+      color: var(--text-muted);
       cursor: pointer;
-      border: none;
+      border: 1px solid transparent;
       background: transparent;
       text-align: left;
       white-space: nowrap;
+      outline: none;
+    }
+
+    .quality-opt:hover,
+    .quality-opt:focus {
+      background: var(--surface-elevated);
+      border-color: var(--focus-ring);
+      color: var(--text);
     }
 
     .quality-opt.active {
-      background: rgba(232, 0, 93, 0.18);
-      color: var(--accent);
-      font-weight: 700;
+      background: var(--accent-soft);
+      color: var(--accent-text);
+      font-weight: 600;
     }
 
-    /* Drawer / Side menu */
+    /* ========================================================
+       SLIDE-OUT CHANNEL DRAWER (Landscape & Android TV)
+       ======================================================== */
     .tv-drawer {
       position: fixed;
       top: 0;
       left: 0;
-      width: 320px;
-      max-width: 78vw;
+      width: 340px;
+      max-width: 82vw;
       height: 100vh;
-      background: rgba(10, 13, 20, 0.97);
-      backdrop-filter: blur(28px);
-      border-right: 1px solid var(--border);
+      background: rgba(17, 22, 31, 0.97);
+      backdrop-filter: blur(24px);
+      border-right: 1px solid var(--border-strong);
       z-index: 1000;
       transform: translateX(-100%);
-      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
       display: flex;
       flex-direction: column;
-      box-shadow: 25px 0 60px rgba(0, 0, 0, 0.8);
+      box-shadow: 20px 0 50px rgba(0, 0, 0, 0.65);
       padding-top: var(--safe-top);
       padding-bottom: var(--safe-bottom);
       padding-left: var(--safe-left);
@@ -398,13 +488,13 @@
       transform: translateX(0);
     }
 
-    /* Drawer rotation support when forced rotated */
+    /* Drawer Support inside Forced 90-Degree Mode */
     body.force-rotated #drawer {
       top: 50% !important;
       left: 50% !important;
       width: 100vh !important;
       height: 100vw !important;
-      max-width: 58vh !important;
+      max-width: 64vh !important;
       transform: translate(-50%, -50%) rotate(90deg) !important;
       transform-origin: center center !important;
       z-index: 100000 !important;
@@ -423,19 +513,41 @@
       align-items: center;
     }
 
+    .drawer-head-title {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
     .drawer-head h2 {
-      font-size: 1.15rem;
-      font-weight: 800;
-      color: #fff;
+      font-size: 1.08rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .drawer-head span {
+      font-size: 0.74rem;
+      color: var(--text-muted);
     }
 
     .close-drawer-btn {
-      background: transparent;
-      border: none;
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      width: 34px;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       color: var(--text-muted);
       cursor: pointer;
       outline: none;
-      padding: 4px;
+    }
+
+    .close-drawer-btn:focus,
+    .close-drawer-btn:hover {
+      color: var(--text);
+      border-color: var(--focus-ring);
     }
 
     .drawer-list {
@@ -458,26 +570,31 @@
       color: var(--text);
       cursor: pointer;
       outline: none;
-      transition: background 0.15s ease;
+      transition: background 0.15s ease, border-color 0.15s ease;
     }
 
-    .channel-item:focus, .channel-item.focused {
-      background: rgba(0, 210, 255, 0.1);
-      border-color: var(--border-focus);
-      transform: scale(1.02);
+    .channel-item:hover {
+      background: var(--surface-elevated);
+    }
+
+    .channel-item:focus,
+    .channel-item.focused {
+      background: var(--surface-elevated);
+      border-color: var(--focus-ring);
+      box-shadow: 0 0 0 2px rgba(147, 197, 253, 0.25);
     }
 
     .channel-item.active {
-      background: rgba(232, 0, 93, 0.14);
+      background: var(--accent-soft);
       border-color: var(--accent);
     }
 
     .ch-logo {
-      width: 40px;
-      height: 40px;
-      border-radius: 8px;
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
       object-fit: cover;
-      background: #181d2c;
+      background: #1e2633;
       padding: 2px;
       border: 1px solid var(--border);
       flex-shrink: 0;
@@ -488,29 +605,40 @@
       display: flex;
       flex-direction: column;
       gap: 3px;
+      min-width: 0;
     }
 
     .item-title {
       font-size: 0.92rem;
       font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .item-badge {
-      font-size: 0.72rem;
-      font-weight: 700;
+      font-size: 0.74rem;
+      font-weight: 500;
       color: var(--text-muted);
+    }
+
+    .channel-item.active .item-title,
+    .mobile-card.active .item-title {
+      color: var(--accent-text);
     }
 
     .channel-item.active .item-badge,
     .mobile-card.active .item-badge {
-      color: var(--accent);
+      color: var(--text);
     }
 
     .eq-wave {
       display: none;
       align-items: flex-end;
-      gap: 2px;
+      gap: 2.5px;
       height: 14px;
+      flex-shrink: 0;
     }
 
     .channel-item.active .eq-wave,
@@ -521,27 +649,28 @@
     .eq-wave span {
       width: 3px;
       height: 100%;
-      background: var(--accent);
+      background: var(--accent-text);
       border-radius: 2px;
-      animation: eq 0.8s ease-in-out infinite alternate;
+      animation: eq 0.85s ease-in-out infinite alternate;
     }
     .eq-wave span:nth-child(2) { animation-delay: -0.3s; }
     .eq-wave span:nth-child(3) { animation-delay: -0.5s; }
 
     @keyframes eq {
-      0% { height: 3px; }
+      0% { height: 4px; }
       100% { height: 14px; }
     }
 
+    /* TV Bottom-Left Remote Hint */
     .tv-hint {
       position: absolute;
-      bottom: 20px;
-      left: 20px;
-      background: rgba(16, 20, 31, 0.7);
-      backdrop-filter: blur(12px);
-      padding: 6px 12px;
-      border-radius: 8px;
-      font-size: 0.74rem;
+      bottom: 18px;
+      left: 18px;
+      background: var(--surface-glass);
+      backdrop-filter: blur(14px);
+      padding: 7px 13px;
+      border-radius: 10px;
+      font-size: 0.75rem;
       color: var(--text-muted);
       border: 1px solid var(--border);
       pointer-events: none;
@@ -553,21 +682,58 @@
       display: block;
     }
 
-    /* Mobile Portrait Feed */
+    /* ========================================================
+       MOBILE & TABLET PORTRAIT CHANNEL FEED
+       ======================================================== */
     .mobile-feed {
       display: block;
-      padding: 16px 16px 80px;
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 18px 16px calc(36px + var(--safe-bottom));
       background: var(--bg);
+      position: relative;
+      z-index: 50;
     }
 
-    .feed-head { margin-bottom: 14px; }
-    .feed-head h3 { font-size: 1.05rem; font-weight: 800; }
-    .feed-head p { font-size: 0.74rem; color: var(--text-muted); margin-top: 3px; }
+    .feed-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+
+    .feed-head-left h3 {
+      font-size: 1.02rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .feed-head-left p {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .channel-count-pill {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--accent-text);
+      background: var(--accent-soft);
+      border: 1px solid rgba(59, 130, 246, 0.25);
+      padding: 4px 10px;
+      border-radius: 8px;
+    }
 
     .mobile-grid {
-      display: flex;
-      flex-direction: column;
+      display: grid;
+      grid-template-columns: 1fr;
       gap: 10px;
+    }
+
+    @media (min-width: 600px) {
+      .mobile-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
     }
 
     .mobile-card {
@@ -577,38 +743,41 @@
       padding: 12px 14px;
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 12px;
+      border-radius: 14px;
       cursor: pointer;
-      transition: background 0.15s ease;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+
+    .mobile-card:hover {
+      background: var(--surface-elevated);
     }
 
     .mobile-card.active {
-      background: rgba(232, 0, 93, 0.1);
+      background: var(--accent-soft);
       border-color: var(--accent);
     }
-
-    .mobile-card.active .item-title { color: var(--accent); }
   </style>
 </head>
 <body class="mode-portrait">
 
   <div id="appContainer" class="app-wrap">
+    <!-- Video Player Box -->
     <div id="playerBox" class="player-box" onclick="handleScreenTap(event)">
-      <video id="tvPlayer" playsinline></video>
+      <video id="tvPlayer" playsinline webkit-playsinline preload="auto"></video>
 
-      <!-- Minimal Loader -->
+      <!-- Soft Loader -->
       <div id="loader" class="loader-wrap show">
         <div class="ring-spinner"></div>
-        <div id="loaderText" class="loader-text">Loading Channel...</div>
+        <div id="loaderText" class="loader-text">Connecting...</div>
       </div>
 
-      <!-- Top Left: Live Status + In-Video Menu -->
+      <!-- Top-Left OSD -->
       <div id="osdTop" class="osd-top">
-        <button id="inVideoMenuBtn" class="video-menu-btn" title="Open Channels" onclick="toggleDrawer(true, event)">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <line x1="3" y1="12" x2="21" y2="12"></line>
-            <line x1="3" y1="6" x2="21" y2="6"></line>
-            <line x1="3" y1="18" x2="21" y2="18"></line>
+        <button id="inVideoMenuBtn" class="video-menu-btn" title="Channels" onclick="toggleDrawer(true, event)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+            <line x1="4" y1="12" x2="20" y2="12"></line>
+            <line x1="4" y1="6" x2="20" y2="6"></line>
+            <line x1="4" y1="18" x2="20" y2="18"></line>
           </svg>
         </button>
 
@@ -618,53 +787,65 @@
           <span id="osdTitle" class="osd-name">Sun TV</span>
           <span id="osdQuality" class="quality-badge">AUTO</span>
         </div>
+
+        <button id="unmuteBtn" class="unmute-pill" onclick="unmuteWebAudio(event)">
+          Tap for Sound
+        </button>
       </div>
 
-      <!-- Bottom Right Controls -->
+      <!-- Bottom-Right Controls -->
       <div id="osdBottom" class="osd-bottom">
         <div class="bottom-right-group">
-          <!-- Quality Menu Dropdown -->
           <div id="qualityMenu" class="quality-menu" onclick="event.stopPropagation()"></div>
 
-          <!-- Quality Action Button -->
-          <button id="qualityBtn" class="action-btn" title="Resolution" onclick="toggleQualityMenu(event)">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <!-- Quality Selector -->
+          <button id="qualityBtn" class="action-btn" title="Video Quality" onclick="toggleQualityMenu(event)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="3"></circle>
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
             </svg>
           </button>
 
-          <!-- Landscape Toggle Button -->
-          <button id="fsBtn" class="action-btn" title="Toggle Landscape" onclick="handleLandscapeToggle(event)">
-            <svg id="fsIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <!-- Forced Landscape Toggle (Mobile) -->
+          <button id="fsBtn" class="action-btn" title="Rotate Landscape" onclick="handleLandscapeToggle(event)">
+            <svg id="fsIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
             </svg>
           </button>
         </div>
       </div>
 
-      <!-- TV Remote Guide Hint -->
+      <!-- TV Remote Guide -->
       <div class="tv-hint">
-        ◀ Left: Channels | ▲/▼: Switch
+        ◀ Channels &nbsp;•&nbsp; ▲/▼ Switch &nbsp;•&nbsp; 1–6 Direct
       </div>
     </div>
 
-    <!-- Quick In-Video Slide Drawer (For Landscape & TV) -->
+    <!-- Slide-out Drawer (Landscape & Android TV) -->
     <div id="drawer" class="tv-drawer" onclick="event.stopPropagation()">
       <div class="drawer-head">
-        <h2>Live Channels</h2>
+        <div class="drawer-head-title">
+          <h2>Live Channels</h2>
+          <span>Set-Top Channel Guide</span>
+        </div>
         <button class="close-drawer-btn" onclick="toggleDrawer(false)">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
         </button>
       </div>
       <div id="drawerList" class="drawer-list"></div>
     </div>
 
-    <!-- Mobile Portrait Feed -->
+    <!-- Mobile & Tablet Channel Feed -->
     <div class="mobile-feed">
       <div class="feed-head">
-        <h3>Live Channels</h3>
-        <p>Tap any channel to play instantly</p>
+        <div class="feed-head-left">
+          <h3>Live Channels</h3>
+          <p>Tap any channel to start watching</p>
+        </div>
+        <span id="chCountBadge" class="channel-count-pill">6 LIVE</span>
       </div>
       <div id="mobileList" class="mobile-grid"></div>
     </div>
@@ -675,6 +856,7 @@
       {
         id: "suntv",
         name: "Sun TV",
+        category: "Entertainment • Live",
         type: "hls",
         logo: "https://tamilradios.org/wp-content/uploads/2025/04/suntv-100x100.png",
         url: "https://d2px1d6ssc60fw.cloudfront.net/SunTV/SunTV-HDR10-IN-index.m3u8"
@@ -682,6 +864,7 @@
       {
         id: "zeetamil",
         name: "Zee Tamil HD",
+        category: "Entertainment • HD",
         type: "hls",
         logo: "https://tamilradios.org/wp-content/uploads/2025/11/zee-tamil1-100x100.jpg",
         url: "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:zeetamil1.smil/playlist.m3u8"
@@ -689,6 +872,7 @@
       {
         id: "colorstamil",
         name: "Colors Tamil HD",
+        category: "Entertainment • HD",
         type: "hls",
         logo: "https://tamilradios.org/wp-content/uploads/2025/11/colors-tamil2-100x100.jpg",
         url: "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:colorstamilhd11.smil/playlist.m3u8"
@@ -696,6 +880,7 @@
       {
         id: "makkaltv",
         name: "Makkal TV",
+        category: "General • Live",
         type: "hls",
         logo: "https://tamilradios.org/wp-content/uploads/2025/11/makkal-tv-1-100x100.jpg",
         url: "https://5k8q87azdy4v-hls-live.wmncdn.net/MAKKAL/271ddf829afeece44d8732757fba1a66.sdp/playlist.m3u8"
@@ -703,6 +888,7 @@
       {
         id: "historytv18",
         name: "History TV18 HD",
+        category: "Infotainment • HD",
         type: "mpd",
         logo: "https://tamilradios.org/wp-content/uploads/2026/02/history-tv-18-tamil-100x100.jpg",
         url: "https://login.bheem.tv/bpk-tv/22652/output/index.mpd",
@@ -712,6 +898,7 @@
       {
         id: "discoverytamil",
         name: "Discovery Tamil",
+        category: "Infotainment • HD",
         type: "mpd",
         logo: "https://tamilradios.org/wp-content/uploads/2026/02/discovery-tamil.png",
         url: "https://login.bheem.tv/bpk-tv/22652/output/index.mpd",
@@ -725,6 +912,7 @@
     let isDrawerOpen = false;
     let osdTimeout = null;
     let currentQuality = 'auto';
+    let playToken = 0;
 
     const videoEl = document.getElementById('tvPlayer');
     const playerBoxEl = document.getElementById('playerBox');
@@ -740,78 +928,176 @@
     const osdQualityEl = document.getElementById('osdQuality');
     const qualityMenu = document.getElementById('qualityMenu');
     const fsIcon = document.getElementById('fsIcon');
+    const unmuteBtn = document.getElementById('unmuteBtn');
 
     let hls = null;
     let shakaPlayer = null;
+    const prefetchedUrls = new Set();
 
-    if (window.shaka) {
+    // Detect Native Android ExoPlayer APK Bridge
+    const hasNativeExoPlayer = typeof window.AndroidNativePlayer !== 'undefined';
+    if (hasNativeExoPlayer) {
+      document.documentElement.classList.add('native-hw-active');
+    } else if (window.shaka) {
       shaka.polyfill.installAll();
     }
 
-    // Identify TV vs Mobile
+    // Reliable Android TV Detection (Native UiModeManager + UA + Desktop Fallback)
     const ua = navigator.userAgent.toLowerCase();
-    const isTV = ua.includes('googletv') ||
+    let nativeIsTV = false;
+    if (hasNativeExoPlayer && typeof window.AndroidNativePlayer.isTelevision === 'function') {
+      try {
+        nativeIsTV = window.AndroidNativePlayer.isTelevision();
+      } catch (e) {}
+    }
+
+    const isTV = nativeIsTV ||
+                 ua.includes('googletv') ||
                  ua.includes('android tv') ||
                  ua.includes('smarttv') ||
                  ua.includes('aft') ||
                  ua.includes('mitv') ||
-                 (window.innerWidth > 960 && !('ontouchstart' in window));
+                 ua.includes('bravia') ||
+                 (window.innerWidth >= 900 && window.innerWidth > window.innerHeight && !('ontouchstart' in window));
 
     if (isTV) {
       document.body.classList.remove('mode-portrait');
       document.body.classList.add('is-tv');
     }
 
-    // Physical Phone Flip Detection (When auto-rotate is ON)
-    function syncPhysicalOrientation() {
-      if (isTV || document.body.classList.contains('force-rotated')) return;
+    // Sync Native Hardware Video Surface Coordinates
+    function syncNativeViewport() {
+      if (!hasNativeExoPlayer) return;
+      const dpr = window.devicePixelRatio || 1;
+      const isForceRotated = document.body.classList.contains('force-rotated');
 
-      const physicalLandscape = window.innerWidth > window.innerHeight;
-      if (physicalLandscape) {
-        document.body.classList.remove('mode-portrait');
-        document.body.classList.add('mode-physical-landscape');
-      } else {
-        document.body.classList.remove('mode-physical-landscape');
-        document.body.classList.add('mode-portrait');
-        toggleDrawer(false);
+      if (isForceRotated) {
+        window.AndroidNativePlayer.setViewport(
+          0,
+          0,
+          Math.round(window.innerWidth * dpr),
+          Math.round(window.innerHeight * dpr),
+          true
+        );
+        return;
       }
+
+      const rect = playerBoxEl.getBoundingClientRect();
+      window.AndroidNativePlayer.setViewport(
+        Math.round(rect.left * dpr),
+        Math.round(rect.top * dpr),
+        Math.round(rect.width * dpr),
+        Math.round(rect.height * dpr),
+        false
+      );
+    }
+
+    if (hasNativeExoPlayer && typeof ResizeObserver !== 'undefined') {
+      new ResizeObserver(() => syncNativeViewport()).observe(playerBoxEl);
+    }
+
+    // Native ExoPlayer Callbacks
+    window.onNativeState = function(state, info) {
+      if (state === 'playing') {
+        loaderEl.classList.remove('show');
+      } else if (state === 'buffering') {
+        loaderTextEl.textContent = info || 'Buffering...';
+        loaderEl.classList.add('show');
+      } else if (state === 'error') {
+        loaderTextEl.textContent = info || 'Reconnecting...';
+        loaderEl.classList.add('show');
+      }
+    };
+
+    window.onNativeTracks = function(tracksJson, activeHeight) {
+      try {
+        const heights = JSON.parse(tracksJson);
+        if (currentQuality === 'auto' && activeHeight > 0) {
+          updateQualityBadge(`${activeHeight}p`);
+        }
+        buildNativeQualityMenu(heights);
+      } catch (e) {}
+    };
+
+    function buildNativeQualityMenu(heights) {
+      qualityMenu.innerHTML = '';
+
+      const autoBtn = document.createElement('button');
+      autoBtn.className = `quality-opt ${currentQuality === 'auto' ? 'active' : ''}`;
+      autoBtn.textContent = 'Auto (Recommended)';
+      autoBtn.onclick = () => {
+        currentQuality = 'auto';
+        updateQualityBadge('AUTO');
+        window.AndroidNativePlayer.setQuality(-1);
+        buildNativeQualityMenu(heights);
+        qualityMenu.classList.remove('show');
+      };
+      qualityMenu.appendChild(autoBtn);
+
+      heights.forEach((h) => {
+        const opt = document.createElement('button');
+        opt.className = `quality-opt ${currentQuality === h ? 'active' : ''}`;
+        opt.textContent = `${h}p`;
+        opt.onclick = () => {
+          currentQuality = h;
+          updateQualityBadge(`${h}p`);
+          window.AndroidNativePlayer.setQuality(h);
+          buildNativeQualityMenu(heights);
+          qualityMenu.classList.remove('show');
+        };
+        qualityMenu.appendChild(opt);
+      });
+    }
+
+    // Physical Phone Flip Sync (When Auto-Rotate is ON)
+    function syncPhysicalOrientation() {
+      if (!isTV && !document.body.classList.contains('force-rotated')) {
+        const physicalLandscape = window.innerWidth > window.innerHeight;
+        if (physicalLandscape) {
+          document.body.classList.remove('mode-portrait');
+          document.body.classList.add('mode-physical-landscape');
+        } else {
+          document.body.classList.remove('mode-physical-landscape');
+          document.body.classList.add('mode-portrait');
+          toggleDrawer(false);
+        }
+      }
+      requestAnimationFrame(syncNativeViewport);
     }
 
     window.addEventListener('resize', syncPhysicalOrientation);
-    window.addEventListener('orientationchange', () => {
-      setTimeout(syncPhysicalOrientation, 150);
-    });
+    window.addEventListener('scroll', syncNativeViewport, { passive: true });
+    window.addEventListener('orientationchange', () => setTimeout(syncPhysicalOrientation, 150));
 
-    // 100% Guaranteed Forced Landscape Toggle (Works with Auto-Rotate Locked)
+    // Forced 90-Degree Landscape Toggle (Works 100% Even When Auto-Rotate Lock is ON)
     function handleLandscapeToggle(e) {
       if (e) e.stopPropagation();
-
       const isRotated = document.body.classList.contains('force-rotated');
 
       if (!isRotated) {
-        // Direct 90-degree rotate viewport
         document.body.classList.remove('mode-portrait', 'mode-physical-landscape');
         document.body.classList.add('force-rotated');
         fsIcon.innerHTML = `<path d="M4 14h6m0 0v6m0-6L3 21m17-7h-6m0 0v6m0-6l7 7M14 4h6m-6 0v6m0-6l7-7M4 10h6M4 10V4m0 6L3 3"></path>`;
       } else {
-        // Return to normal portrait mode
         document.body.classList.remove('force-rotated');
         document.body.classList.add('mode-portrait');
         fsIcon.innerHTML = `<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>`;
         toggleDrawer(false);
       }
+      requestAnimationFrame(syncNativeViewport);
       showOSD();
     }
 
-    // Render channels
+    // Render Channel Lists
     function renderChannelLists() {
       drawerListEl.innerHTML = '';
       mobileListEl.innerHTML = '';
+      document.getElementById('chCountBadge').textContent = `${CHANNELS.length} LIVE`;
 
       CHANNELS.forEach((ch, idx) => {
-        const chFormattedNum = `#${String(idx + 1).padStart(2, '0')}`;
+        const chNum = `#${String(idx + 1).padStart(2, '0')}`;
 
-        // In-Video Drawer Item
+        // Slide-Out Drawer Card
         const dItem = document.createElement('div');
         dItem.className = `channel-item ${idx === currentIndex ? 'active' : ''}`;
         dItem.tabIndex = 0;
@@ -820,7 +1106,7 @@
           <img class="ch-logo" src="${ch.logo}" alt="${ch.name}" onerror="this.src='https://tamilradios.org/wp-content/uploads/2024/11/icon-192.png'" />
           <div class="item-body">
             <div class="item-title">${ch.name}</div>
-            <div class="item-badge">${chFormattedNum} • HD Broadcast</div>
+            <div class="item-badge">${chNum} • ${ch.category}</div>
           </div>
           <div class="eq-wave"><span></span><span></span><span></span></div>
         `;
@@ -830,7 +1116,7 @@
         };
         drawerListEl.appendChild(dItem);
 
-        // Mobile Portrait Card
+        // Mobile / Tablet Card
         const mobItem = document.createElement('div');
         mobItem.className = `mobile-card ${idx === currentIndex ? 'active' : ''}`;
         mobItem.setAttribute('data-mob-idx', idx);
@@ -838,7 +1124,7 @@
           <img class="ch-logo" src="${ch.logo}" alt="${ch.name}" onerror="this.src='https://tamilradios.org/wp-content/uploads/2024/11/icon-192.png'" />
           <div class="item-body">
             <div class="item-title">${ch.name}</div>
-            <div class="item-badge">${chFormattedNum} • HD Broadcast</div>
+            <div class="item-badge">${chNum} • ${ch.category}</div>
           </div>
           <div class="eq-wave"><span></span><span></span><span></span></div>
         `;
@@ -878,7 +1164,7 @@
       osdTopEl.classList.remove('hidden');
       osdBottomEl.classList.remove('hidden');
       clearTimeout(osdTimeout);
-      osdTimeout = setTimeout(hideOSD, 4500);
+      osdTimeout = setTimeout(hideOSD, 4200);
     }
 
     function hideOSD() {
@@ -911,7 +1197,7 @@
 
       const autoBtn = document.createElement('button');
       autoBtn.className = `quality-opt ${currentQuality === 'auto' ? 'active' : ''}`;
-      autoBtn.textContent = 'Auto';
+      autoBtn.textContent = 'Auto (Recommended)';
       autoBtn.onclick = () => {
         currentQuality = 'auto';
         updateQualityBadge('AUTO');
@@ -954,7 +1240,16 @@
       });
     }
 
-    function cleanup() {
+    function prefetchNextChannel(index) {
+      const nextIdx = (index + 1) % CHANNELS.length;
+      const nextCh = CHANNELS[nextIdx];
+      if (!nextCh || prefetchedUrls.has(nextCh.url)) return;
+      prefetchedUrls.add(nextCh.url);
+      fetch(nextCh.url, { mode: 'cors', priority: 'low' }).catch(() => {});
+    }
+
+    // Complete Reset of Web Media Engines (Prevents HLS <-> DASH MediaSource Conflicts)
+    function cleanupWebPlayers() {
       if (hls) {
         hls.destroy();
         hls = null;
@@ -968,34 +1263,65 @@
       videoEl.load();
     }
 
+    function unmuteWebAudio(e) {
+      if (e) e.stopPropagation();
+      videoEl.muted = false;
+      unmuteBtn.classList.remove('show');
+    }
+
     async function playChannel(index) {
       if (index < 0 || index >= CHANNELS.length) return;
 
+      const currentToken = ++playToken;
       currentIndex = index;
       currentQuality = 'auto';
       updateQualityBadge('AUTO');
 
       const channel = CHANNELS[index];
-      loaderTextEl.textContent = `Connecting to ${channel.name}...`;
+      loaderTextEl.textContent = `CH ${String(index + 1).padStart(2, '0')} • ${channel.name}`;
       loaderEl.classList.add('show');
-      cleanup();
 
       osdNumEl.textContent = `CH ${String(index + 1).padStart(2, '0')}`;
       osdTitleEl.textContent = channel.name;
       showOSD();
       updateActiveUI(index);
+      prefetchNextChannel(index);
+
+      // 1. NATIVE IN-APP EXOPLAYER ENGINE (APK Mode)
+      if (hasNativeExoPlayer) {
+        syncNativeViewport();
+        window.AndroidNativePlayer.playStream(
+          channel.url,
+          channel.type,
+          channel.keyId || '',
+          channel.key || ''
+        );
+        return;
+      }
+
+      // 2. WEB BROWSER ENGINE (Website Mode)
+      cleanupWebPlayers();
 
       const executePlay = () => {
+        if (currentToken !== playToken) return;
         const playPromise = videoEl.play();
         if (playPromise !== undefined) {
           playPromise
             .then(() => {
+              if (currentToken !== playToken) return;
               loaderEl.classList.remove('show');
+              if (!videoEl.muted) {
+                unmuteBtn.classList.remove('show');
+              }
             })
             .catch(() => {
+              if (currentToken !== playToken) return;
               videoEl.muted = true;
+              unmuteBtn.classList.add('show');
               videoEl.play().finally(() => {
-                loaderEl.classList.remove('show');
+                if (currentToken === playToken) {
+                  loaderEl.classList.remove('show');
+                }
               });
             });
         }
@@ -1003,33 +1329,31 @@
 
       if (channel.type === 'hls') {
         if (Hls.isSupported()) {
-          // TV-safe buffering & capping to prevent Sun TV HDR from hanging low-end TV chipsets
           hls = new Hls({
             enableWorker: true,
             lowLatencyMode: false,
-            liveSyncDurationCount: 3,
-            liveMaxLatencyDurationCount: 6,
-            maxBufferLength: 20,
+            startLevel: -1,
+            abrEwmaDefaultEstimate: 2500000,
+            startFragPrefetch: true,
+            backBufferLength: 10,
+            maxBufferLength: 16,
             maxMaxBufferLength: 30,
-            backBufferLength: 10
+            maxBufferSize: 25 * 1000 * 1000,
+            liveSyncDurationCount: 3,
+            liveMaxLatencyDurationCount: 6
           });
 
           hls.loadSource(channel.url);
           hls.attachMedia(videoEl);
 
           hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+            if (currentToken !== playToken) return;
             buildQualityMenu(data.levels);
-            // Sun TV heavy 4K/HDR10 track TV-la hang aagaama 1080p/720p-oda cap pannudhu
-            if (channel.id === 'suntv' && data.levels && data.levels.length > 0) {
-              const safeLevelIdx = data.levels.findIndex(lvl => lvl.height && lvl.height <= 1080);
-              if (safeLevelIdx !== -1) {
-                hls.autoLevelCapping = safeLevelIdx;
-              }
-            }
             executePlay();
           });
 
           hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
+            if (currentToken !== playToken) return;
             if (currentQuality === 'auto' && hls.levels[data.level]) {
               const h = hls.levels[data.level].height;
               updateQualityBadge(h ? `${h}p` : 'AUTO');
@@ -1037,18 +1361,11 @@
           });
 
           hls.on(Hls.Events.ERROR, (evt, data) => {
+            if (currentToken !== playToken) return;
             if (data.fatal) {
-              switch (data.type) {
-                case Hls.ErrorTypes.NETWORK_ERROR:
-                  hls.startLoad();
-                  break;
-                case Hls.ErrorTypes.MEDIA_ERROR:
-                  hls.recoverMediaError();
-                  break;
-                default:
-                  cleanup();
-                  break;
-              }
+              if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
+              else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
+              else loaderTextEl.textContent = "Stream Unavailable";
             }
           });
         } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
@@ -1062,15 +1379,22 @@
             clearKeys: {
               [channel.keyId]: channel.key
             }
+          },
+          streaming: {
+            bufferingGoal: 8,
+            rebufferingGoal: 1.5,
+            bufferBehind: 8
           }
         });
 
         try {
           await shakaPlayer.load(channel.url);
+          if (currentToken !== playToken) return;
           const tracks = shakaPlayer.getVariantTracks();
           buildQualityMenu(tracks, true);
 
           shakaPlayer.addEventListener('adaptation', () => {
+            if (currentToken !== playToken) return;
             if (currentQuality === 'auto') {
               const activeTracks = shakaPlayer.getVariantTracks().filter(t => t.active);
               if (activeTracks.length > 0 && activeTracks[0].height) {
@@ -1081,33 +1405,36 @@
 
           executePlay();
         } catch (err) {
-          console.error("Shaka error", err);
-          loaderTextEl.textContent = "DRM Stream Error";
+          if (currentToken === playToken) {
+            loaderTextEl.textContent = "Stream Unavailable";
+          }
         }
       }
     }
 
-    videoEl.addEventListener('playing', () => {
-      loaderEl.classList.remove('show');
-    });
+    if (!hasNativeExoPlayer) {
+      videoEl.addEventListener('playing', () => {
+        loaderEl.classList.remove('show');
+      });
 
-    videoEl.addEventListener('waiting', () => {
-      loaderTextEl.textContent = "Buffering...";
-      loaderEl.classList.add('show');
-    });
+      videoEl.addEventListener('waiting', () => {
+        loaderTextEl.textContent = "Buffering...";
+        loaderEl.classList.add('show');
+      });
 
-    const unlockSoundOnFirstTap = () => {
-      if (videoEl.muted) {
-        videoEl.muted = false;
-      }
-    };
-    window.addEventListener('click', unlockSoundOnFirstTap, { once: true });
-    window.addEventListener('keydown', unlockSoundOnFirstTap, { once: true });
+      const unlockSoundOnFirstInteraction = () => {
+        if (videoEl.muted) {
+          videoEl.muted = false;
+          unmuteBtn.classList.remove('show');
+        }
+      };
+      window.addEventListener('click', unlockSoundOnFirstInteraction, { once: true });
+      window.addEventListener('keydown', unlockSoundOnFirstInteraction, { once: true });
+    }
 
-    // In-Video Drawer Control
+    // Drawer Control
     function toggleDrawer(open, e) {
       if (e) e.stopPropagation();
-
       isDrawerOpen = open;
       drawerEl.classList.toggle('open', open);
       if (open) {
@@ -1124,9 +1451,33 @@
       }
     }
 
-    // Android TV Remote Keydown & DPAD Listener
+    // Cordova Hardware Back Button Handler for Android TV Remote
+    document.addEventListener('backbutton', (e) => {
+      if (isDrawerOpen) {
+        e.preventDefault();
+        toggleDrawer(false);
+      } else if (qualityMenu.classList.contains('show')) {
+        e.preventDefault();
+        qualityMenu.classList.remove('show');
+      } else if (document.body.classList.contains('force-rotated')) {
+        e.preventDefault();
+        handleLandscapeToggle();
+      }
+    }, false);
+
+    // Android TV Remote D-Pad & Number Keys (1-9) Listener
     document.addEventListener('keydown', (e) => {
       showOSD();
+
+      if (e.key >= '1' && e.key <= '9') {
+        const targetIdx = parseInt(e.key, 10) - 1;
+        if (targetIdx < CHANNELS.length) {
+          e.preventDefault();
+          handleSelectChannel(targetIdx);
+          if (isDrawerOpen) toggleDrawer(false);
+          return;
+        }
+      }
 
       switch (e.key) {
         case 'ArrowLeft':
@@ -1139,6 +1490,7 @@
         case 'ArrowRight':
         case 'Escape':
         case 'GoBack':
+        case 'Backspace':
           if (isDrawerOpen) {
             e.preventDefault();
             toggleDrawer(false);
@@ -1181,7 +1533,7 @@
       }
     });
 
-    // Boot Up
+    // Boot App
     renderChannelLists();
     syncPhysicalOrientation();
     playChannel(0);
