@@ -5,15 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>YStream Live TV</title>
 
-  <!-- Preconnect to Stream CDNs for Fast Channel Zapping -->
+  <!-- Preconnect to Stream CDNs -->
   <link rel="preconnect" href="https://d2px1d6ssc60fw.cloudfront.net" crossorigin />
   <link rel="preconnect" href="https://da86m1sqpm3o0.cloudfront.net" crossorigin />
   <link rel="preconnect" href="https://5k8q87azdy4v-hls-live.wmncdn.net" crossorigin />
   <link rel="preconnect" href="https://login.bheem.tv" crossorigin />
-  <link rel="dns-prefetch" href="https://d2px1d6ssc60fw.cloudfront.net" />
-  <link rel="dns-prefetch" href="https://da86m1sqpm3o0.cloudfront.net" />
-  <link rel="dns-prefetch" href="https://5k8q87azdy4v-hls-live.wmncdn.net" />
-  <link rel="dns-prefetch" href="https://login.bheem.tv" />
 
   <!-- Web Browser Streaming Engines -->
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js"></script>
@@ -21,7 +17,7 @@
 
   <style>
     /* ========================================================
-       EYE-COMFORT CINEMA SLATE THEME (Zero Glare / Night Safe)
+       EYE-COMFORT CINEMA SLATE THEME
        ======================================================== */
     :root {
       --bg: #0e1218;
@@ -179,22 +175,24 @@
     }
 
     /* ========================================================
-       SOFT NON-INTRUSIVE LOADER
+       SOFT NON-INTRUSIVE LOADER / STATUS OVERLAY
        ======================================================== */
     .loader-wrap {
       position: absolute;
       inset: 0;
-      background: rgba(14, 18, 24, 0.62);
+      background: rgba(14, 18, 24, 0.68);
       backdrop-filter: blur(6px);
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 12px;
+      gap: 10px;
       z-index: 15;
       opacity: 0;
       pointer-events: none;
       transition: opacity 0.18s ease;
+      padding: 16px;
+      text-align: center;
     }
 
     .loader-wrap.show {
@@ -203,12 +201,16 @@
     }
 
     .ring-spinner {
-      width: 36px;
-      height: 36px;
+      width: 34px;
+      height: 34px;
       border: 2.5px solid rgba(255, 255, 255, 0.12);
       border-top-color: var(--accent-text);
       border-radius: 50%;
       animation: spin 0.7s linear infinite;
+    }
+
+    .loader-wrap.offline .ring-spinner {
+      display: none;
     }
 
     @keyframes spin {
@@ -220,6 +222,23 @@
       font-weight: 600;
       color: var(--text);
       letter-spacing: 0.2px;
+    }
+
+    .retry-btn {
+      display: none;
+      margin-top: 4px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 7px 14px;
+      border-radius: 8px;
+      font-size: 0.76rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .loader-wrap.offline .retry-btn {
+      display: inline-block;
     }
 
     /* ========================================================
@@ -266,7 +285,6 @@
       outline: none;
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
       flex-shrink: 0;
-      transition: background 0.15s ease, border-color 0.15s ease;
     }
 
     .video-menu-btn:focus,
@@ -393,7 +411,6 @@
       justify-content: center;
       outline: none;
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
-      transition: border-color 0.15s ease, background 0.15s ease;
     }
 
     .action-btn:focus,
@@ -418,7 +435,7 @@
       display: none;
       flex-direction: column;
       gap: 3px;
-      min-width: 140px;
+      min-width: 145px;
       max-height: 50vh;
       overflow-y: auto;
       box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
@@ -470,7 +487,7 @@
       width: 340px;
       max-width: 82vw;
       height: 100vh;
-      background: rgba(17, 22, 31, 0.97);
+      background: rgba(17, 22, 31, 0.98);
       backdrop-filter: blur(24px);
       border-right: 1px solid var(--border-strong);
       z-index: 1000;
@@ -488,7 +505,6 @@
       transform: translateX(0);
     }
 
-    /* Drawer Support inside Forced 90-Degree Mode */
     body.force-rotated #drawer {
       top: 50% !important;
       left: 50% !important;
@@ -570,7 +586,6 @@
       color: var(--text);
       cursor: pointer;
       outline: none;
-      transition: background 0.15s ease, border-color 0.15s ease;
     }
 
     .channel-item:hover {
@@ -589,15 +604,23 @@
       border-color: var(--accent);
     }
 
+    /* Strict Fixed Dimensions for Channel Logos (Prevents Broken Image Overflow) */
     .ch-logo {
-      width: 42px;
-      height: 42px;
+      width: 44px;
+      height: 44px;
+      min-width: 44px;
+      max-width: 44px;
+      min-height: 44px;
+      max-height: 44px;
       border-radius: 10px;
       object-fit: cover;
-      background: #1e2633;
-      padding: 2px;
+      background: #1a2230;
       border: 1px solid var(--border);
       flex-shrink: 0;
+      display: block;
+      overflow: hidden;
+      font-size: 0;
+      color: transparent;
     }
 
     .item-body {
@@ -745,7 +768,6 @@
       border: 1px solid var(--border);
       border-radius: 14px;
       cursor: pointer;
-      transition: background 0.15s ease, border-color 0.15s ease;
     }
 
     .mobile-card:hover {
@@ -763,12 +785,13 @@
   <div id="appContainer" class="app-wrap">
     <!-- Video Player Box -->
     <div id="playerBox" class="player-box" onclick="handleScreenTap(event)">
-      <video id="tvPlayer" playsinline webkit-playsinline preload="auto"></video>
+      <video id="tvPlayer" playsinline webkit-playsinline preload="none"></video>
 
-      <!-- Soft Loader -->
+      <!-- Soft Loader / Status Overlay -->
       <div id="loader" class="loader-wrap show">
         <div class="ring-spinner"></div>
         <div id="loaderText" class="loader-text">Connecting...</div>
+        <button id="retryBtn" class="retry-btn" onclick="retryCurrentChannel(event)">Retry Stream</button>
       </div>
 
       <!-- Top-Left OSD -->
@@ -856,6 +879,8 @@
       {
         id: "suntv",
         name: "Sun TV",
+        short: "SUN",
+        color: "#d97706",
         category: "Entertainment • Live",
         type: "hls",
         logo: "https://tamilradios.org/wp-content/uploads/2025/04/suntv-100x100.png",
@@ -864,6 +889,8 @@
       {
         id: "zeetamil",
         name: "Zee Tamil HD",
+        short: "ZEE",
+        color: "#ea580c",
         category: "Entertainment • HD",
         type: "hls",
         logo: "https://tamilradios.org/wp-content/uploads/2025/11/zee-tamil1-100x100.jpg",
@@ -872,6 +899,8 @@
       {
         id: "colorstamil",
         name: "Colors Tamil HD",
+        short: "CLR",
+        color: "#db2777",
         category: "Entertainment • HD",
         type: "hls",
         logo: "https://tamilradios.org/wp-content/uploads/2025/11/colors-tamil2-100x100.jpg",
@@ -880,6 +909,8 @@
       {
         id: "makkaltv",
         name: "Makkal TV",
+        short: "MKL",
+        color: "#0284c7",
         category: "General • Live",
         type: "hls",
         logo: "https://tamilradios.org/wp-content/uploads/2025/11/makkal-tv-1-100x100.jpg",
@@ -888,6 +919,8 @@
       {
         id: "historytv18",
         name: "History TV18 HD",
+        short: "HIS",
+        color: "#b45309",
         category: "Infotainment • HD",
         type: "mpd",
         logo: "https://tamilradios.org/wp-content/uploads/2026/02/history-tv-18-tamil-100x100.jpg",
@@ -898,6 +931,8 @@
       {
         id: "discoverytamil",
         name: "Discovery Tamil",
+        short: "DSC",
+        color: "#2563eb",
         category: "Infotainment • HD",
         type: "mpd",
         logo: "https://tamilradios.org/wp-content/uploads/2026/02/discovery-tamil.png",
@@ -907,10 +942,22 @@
       }
     ];
 
+    // Zero-Network Inline SVG Fallback Badge (Prevents infinite onerror loop & UI freeze)
+    function makeBadgeDataUri(shortText, bgColor) {
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="88" height="88" viewBox="0 0 88 88"><rect width="88" height="88" rx="18" fill="${bgColor}"/><text x="44" y="51" font-family="Arial,sans-serif" font-size="22" font-weight="bold" fill="#ffffff" text-anchor="middle">${shortText}</text></svg>`;
+      return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+    }
+
+    function handleLogoError(imgEl, shortText, color) {
+      imgEl.onerror = null;
+      imgEl.src = makeBadgeDataUri(shortText, color);
+    }
+
     let currentIndex = -1;
     let focusedIndex = 0;
     let isDrawerOpen = false;
     let osdTimeout = null;
+    let bufferTimer = null;
     let currentQuality = 'auto';
     let playToken = 0;
 
@@ -932,7 +979,6 @@
 
     let hls = null;
     let shakaPlayer = null;
-    const prefetchedUrls = new Set();
 
     // Detect Native Android ExoPlayer APK Bridge
     const hasNativeExoPlayer = typeof window.AndroidNativePlayer !== 'undefined';
@@ -942,7 +988,7 @@
       shaka.polyfill.installAll();
     }
 
-    // Reliable Android TV Detection (Native UiModeManager + UA + Desktop Fallback)
+    // Reliable Android TV Detection
     const ua = navigator.userAgent.toLowerCase();
     let nativeIsTV = false;
     if (hasNativeExoPlayer && typeof window.AndroidNativePlayer.isTelevision === 'function') {
@@ -963,6 +1009,12 @@
     if (isTV) {
       document.body.classList.remove('mode-portrait');
       document.body.classList.add('is-tv');
+    }
+
+    function setLoaderState(show, text, isOffline = false) {
+      if (text) loaderTextEl.textContent = text;
+      loaderEl.classList.toggle('offline', isOffline);
+      loaderEl.classList.toggle('show', show);
     }
 
     // Sync Native Hardware Video Surface Coordinates
@@ -999,13 +1051,13 @@
     // Native ExoPlayer Callbacks
     window.onNativeState = function(state, info) {
       if (state === 'playing') {
-        loaderEl.classList.remove('show');
+        setLoaderState(false, '', false);
       } else if (state === 'buffering') {
-        loaderTextEl.textContent = info || 'Buffering...';
-        loaderEl.classList.add('show');
+        setLoaderState(true, info || 'Buffering...', false);
       } else if (state === 'error') {
-        loaderTextEl.textContent = info || 'Reconnecting...';
-        loaderEl.classList.add('show');
+        setLoaderState(true, info || 'Reconnecting...', false);
+      } else if (state === 'offline') {
+        setLoaderState(true, info || 'Stream Offline / Unavailable', true);
       }
     };
 
@@ -1049,7 +1101,7 @@
       });
     }
 
-    // Physical Phone Flip Sync (When Auto-Rotate is ON)
+    // Physical Phone Flip Sync
     function syncPhysicalOrientation() {
       if (!isTV && !document.body.classList.contains('force-rotated')) {
         const physicalLandscape = window.innerWidth > window.innerHeight;
@@ -1069,7 +1121,7 @@
     window.addEventListener('scroll', syncNativeViewport, { passive: true });
     window.addEventListener('orientationchange', () => setTimeout(syncPhysicalOrientation, 150));
 
-    // Forced 90-Degree Landscape Toggle (Works 100% Even When Auto-Rotate Lock is ON)
+    // Forced 90-Degree Landscape Toggle
     function handleLandscapeToggle(e) {
       if (e) e.stopPropagation();
       const isRotated = document.body.classList.contains('force-rotated');
@@ -1088,7 +1140,7 @@
       showOSD();
     }
 
-    // Render Channel Lists
+    // Render Channel Lists with Safe Zero-Loop Logos
     function renderChannelLists() {
       drawerListEl.innerHTML = '';
       mobileListEl.innerHTML = '';
@@ -1103,7 +1155,7 @@
         dItem.tabIndex = 0;
         dItem.setAttribute('data-idx', idx);
         dItem.innerHTML = `
-          <img class="ch-logo" src="${ch.logo}" alt="${ch.name}" onerror="this.src='https://tamilradios.org/wp-content/uploads/2024/11/icon-192.png'" />
+          <img class="ch-logo" width="44" height="44" loading="lazy" src="${ch.logo}" alt="" onerror="handleLogoError(this,'${ch.short}','${ch.color}')" />
           <div class="item-body">
             <div class="item-title">${ch.name}</div>
             <div class="item-badge">${chNum} • ${ch.category}</div>
@@ -1121,7 +1173,7 @@
         mobItem.className = `mobile-card ${idx === currentIndex ? 'active' : ''}`;
         mobItem.setAttribute('data-mob-idx', idx);
         mobItem.innerHTML = `
-          <img class="ch-logo" src="${ch.logo}" alt="${ch.name}" onerror="this.src='https://tamilradios.org/wp-content/uploads/2024/11/icon-192.png'" />
+          <img class="ch-logo" width="44" height="44" loading="lazy" src="${ch.logo}" alt="" onerror="handleLogoError(this,'${ch.short}','${ch.color}')" />
           <div class="item-body">
             <div class="item-title">${ch.name}</div>
             <div class="item-badge">${chNum} • ${ch.category}</div>
@@ -1137,11 +1189,18 @@
     }
 
     function handleSelectChannel(index) {
-      if (currentIndex === index) {
+      if (currentIndex === index && !loaderEl.classList.contains('offline')) {
         showOSD();
         return;
       }
       playChannel(index);
+    }
+
+    function retryCurrentChannel(e) {
+      if (e) e.stopPropagation();
+      if (currentIndex >= 0) {
+        playChannel(currentIndex);
+      }
     }
 
     function handleScreenTap(e) {
@@ -1240,16 +1299,8 @@
       });
     }
 
-    function prefetchNextChannel(index) {
-      const nextIdx = (index + 1) % CHANNELS.length;
-      const nextCh = CHANNELS[nextIdx];
-      if (!nextCh || prefetchedUrls.has(nextCh.url)) return;
-      prefetchedUrls.add(nextCh.url);
-      fetch(nextCh.url, { mode: 'cors', priority: 'low' }).catch(() => {});
-    }
-
-    // Complete Reset of Web Media Engines (Prevents HLS <-> DASH MediaSource Conflicts)
     function cleanupWebPlayers() {
+      clearTimeout(bufferTimer);
       if (hls) {
         hls.destroy();
         hls = null;
@@ -1278,14 +1329,12 @@
       updateQualityBadge('AUTO');
 
       const channel = CHANNELS[index];
-      loaderTextEl.textContent = `CH ${String(index + 1).padStart(2, '0')} • ${channel.name}`;
-      loaderEl.classList.add('show');
+      setLoaderState(true, `CH ${String(index + 1).padStart(2, '0')} • ${channel.name}`, false);
 
       osdNumEl.textContent = `CH ${String(index + 1).padStart(2, '0')}`;
       osdTitleEl.textContent = channel.name;
       showOSD();
       updateActiveUI(index);
-      prefetchNextChannel(index);
 
       // 1. NATIVE IN-APP EXOPLAYER ENGINE (APK Mode)
       if (hasNativeExoPlayer) {
@@ -1301,6 +1350,7 @@
 
       // 2. WEB BROWSER ENGINE (Website Mode)
       cleanupWebPlayers();
+      let hlsFatalRetries = 0;
 
       const executePlay = () => {
         if (currentToken !== playToken) return;
@@ -1309,7 +1359,7 @@
           playPromise
             .then(() => {
               if (currentToken !== playToken) return;
-              loaderEl.classList.remove('show');
+              setLoaderState(false, '', false);
               if (!videoEl.muted) {
                 unmuteBtn.classList.remove('show');
               }
@@ -1320,7 +1370,7 @@
               unmuteBtn.classList.add('show');
               videoEl.play().finally(() => {
                 if (currentToken === playToken) {
-                  loaderEl.classList.remove('show');
+                  setLoaderState(false, '', false);
                 }
               });
             });
@@ -1334,7 +1384,6 @@
             lowLatencyMode: false,
             startLevel: -1,
             abrEwmaDefaultEstimate: 2500000,
-            startFragPrefetch: true,
             backBufferLength: 10,
             maxBufferLength: 16,
             maxMaxBufferLength: 30,
@@ -1360,12 +1409,22 @@
             }
           });
 
+          // Bounded Recovery: Stops infinite reconnecting loop if stream is offline/blocked
           hls.on(Hls.Events.ERROR, (evt, data) => {
             if (currentToken !== playToken) return;
             if (data.fatal) {
-              if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
-              else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
-              else loaderTextEl.textContent = "Stream Unavailable";
+              hlsFatalRetries++;
+              if (hlsFatalRetries <= 2) {
+                setLoaderState(true, `Reconnecting (${hlsFatalRetries}/2)...`, false);
+                if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                  hls.startLoad();
+                } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+                  hls.recoverMediaError();
+                }
+              } else {
+                cleanupWebPlayers();
+                setLoaderState(true, `${channel.name} stream offline or unsupported on this browser`, true);
+              }
             }
           });
         } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
@@ -1406,7 +1465,7 @@
           executePlay();
         } catch (err) {
           if (currentToken === playToken) {
-            loaderTextEl.textContent = "Stream Unavailable";
+            setLoaderState(true, `${channel.name} stream offline or DRM blocked`, true);
           }
         }
       }
@@ -1414,12 +1473,18 @@
 
     if (!hasNativeExoPlayer) {
       videoEl.addEventListener('playing', () => {
-        loaderEl.classList.remove('show');
+        clearTimeout(bufferTimer);
+        setLoaderState(false, '', false);
       });
 
       videoEl.addEventListener('waiting', () => {
-        loaderTextEl.textContent = "Buffering...";
-        loaderEl.classList.add('show');
+        if (loaderEl.classList.contains('offline')) return;
+        clearTimeout(bufferTimer);
+        bufferTimer = setTimeout(() => {
+          if (videoEl.paused || videoEl.readyState < 3) {
+            setLoaderState(true, "Buffering...", false);
+          }
+        }, 500);
       });
 
       const unlockSoundOnFirstInteraction = () => {
