@@ -29,8 +29,6 @@
 
     .player-stage {
       position: relative;
-      top: 0;
-      z-index: 25;
       background: #000;
       border-bottom: 1px solid var(--border);
     }
@@ -53,62 +51,31 @@
       max-height: 100vh;
     }
 
-    /* Single button inside video for Live TV landscape fullscreen */
-    .live-land-btn {
+    /* Clean icon-only button for Live TV fullscreen */
+    .fs-icon-btn {
       position: absolute;
       right: 12px;
       bottom: 12px;
       z-index: 12;
-      background: rgba(10, 13, 20, 0.78);
-      color: #fff;
-      border: 1px solid rgba(255, 255, 255, 0.25);
+      width: 36px;
+      height: 36px;
       border-radius: 8px;
-      padding: 6px 11px;
-      font-size: 0.76rem;
-      font-weight: 700;
-      cursor: pointer;
+      background: rgba(10, 13, 20, 0.72);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.22);
       display: none;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      cursor: pointer;
     }
-    .live-land-btn.show { display: inline-flex; align-items: center; gap: 5px; }
-    .live-land-btn:hover, .live-land-btn:focus-visible {
+    .fs-icon-btn.show { display: inline-flex; }
+    .fs-icon-btn:hover, .fs-icon-btn:focus-visible {
       background: var(--accent);
       border-color: #fff;
       outline: 2px solid #fff;
     }
 
-    /* Elegant Play-icon loading indicator */
-    .play-loader {
-      position: absolute;
-      inset: 0;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      background: rgba(0, 0, 0, 0.35);
-      pointer-events: none;
-      z-index: 10;
-    }
-    .play-loader.show { display: flex; }
-    .play-glyph {
-      width: 58px;
-      height: 58px;
-      border-radius: 50%;
-      background: rgba(229, 9, 20, 0.92);
-      color: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.45rem;
-      padding-left: 3px;
-      box-shadow: 0 0 0 0 rgba(229, 9, 20, 0.65);
-      animation: playPulse 1.15s ease-in-out infinite;
-    }
-    @keyframes playPulse {
-      0% { transform: scale(0.92); box-shadow: 0 0 0 0 rgba(229, 9, 20, 0.65); }
-      70% { transform: scale(1.06); box-shadow: 0 0 0 14px rgba(229, 9, 20, 0); }
-      100% { transform: scale(0.92); box-shadow: 0 0 0 0 rgba(229, 9, 20, 0); }
-    }
-
-    /* Empty YPlay notice banner */
     .empty-notice {
       display: none;
       background: #1a1114;
@@ -120,7 +87,7 @@
     }
     .empty-notice.show { display: block; }
 
-    /* VOD controls bar (hidden in Live TV mode) */
+    /* VOD controls (only shown for Telegram YPlay movies) */
     .vod-bar {
       background: #0e121b;
       padding: 9px 14px;
@@ -226,7 +193,6 @@
     .ch-name { font-size: 0.95rem; font-weight: 700; }
     .ch-meta { font-size: 0.76rem; color: var(--muted); margin-top: 2px; }
 
-    /* Animated 3 dots on active live channel */
     .anim-dots {
       display: none;
       align-items: center;
@@ -276,8 +242,7 @@
   <div class="player-stage" id="stage">
     <div class="video-box">
       <video id="video" playsinline preload="auto"></video>
-      <div id="playLoader" class="play-loader"><div class="play-glyph">&#9654;</div></div>
-      <button id="liveLandBtn" class="live-land-btn" onclick="toggleLiveLandscape()">Landscape Fullscreen</button>
+      <button id="fsIconBtn" class="fs-icon-btn" title="Fullscreen" onclick="toggleLiveFullscreen()">&#x26F6;</button>
     </div>
 
     <div id="emptyNotice" class="empty-notice"></div>
@@ -301,7 +266,7 @@
         </div>
         <div class="btn-grp">
           <button onclick="toggleMute()">Mute</button>
-          <button onclick="toggleVodLandscape()">Landscape</button>
+          <button onclick="toggleLiveFullscreen()">&#x26F6;</button>
         </div>
       </div>
     </div>
@@ -393,8 +358,7 @@
 
     const stage = document.getElementById("stage");
     const video = document.getElementById("video");
-    const playLoader = document.getElementById("playLoader");
-    const liveLandBtn = document.getElementById("liveLandBtn");
+    const fsIconBtn = document.getElementById("fsIconBtn");
     const emptyNotice = document.getElementById("emptyNotice");
     const vodBar = document.getElementById("vodBar");
     const vodTitle = document.getElementById("vodTitle");
@@ -411,21 +375,8 @@
     let activeYPlayIdx = -1;
     let isVod = false;
     let seeking = false;
-    let loaderTimer = null;
     let redirectTimer = null;
     let redirectCountdown = 0;
-
-    function showLoaderDelayed(delayMs = 350) {
-      clearTimeout(loaderTimer);
-      loaderTimer = setTimeout(() => {
-        playLoader.classList.add("show");
-      }, delayMs);
-    }
-
-    function hideLoader() {
-      clearTimeout(loaderTimer);
-      playLoader.classList.remove("show");
-    }
 
     function clearRedirectTimer() {
       if (redirectTimer) {
@@ -439,7 +390,7 @@
     function setMode(vod) {
       isVod = vod;
       vodBar.classList.toggle("show", vod);
-      liveLandBtn.classList.toggle("show", !vod);
+      fsIconBtn.classList.toggle("show", !vod);
     }
 
     async function cleanupPlayers() {
@@ -472,21 +423,18 @@
       setMode(false);
       renderChannels();
       renderYPlay();
-      showLoaderDelayed(250);
 
       if (ch.type === "dash-clearkey" && window.shaka && shaka.Player.isBrowserSupported()) {
         shakaPlayer = new shaka.Player();
         await shakaPlayer.attach(video);
         shakaPlayer.configure({
           drm: { clearKeys: { [ch.kid]: ch.key } },
-          streaming: { bufferingGoal: 6, rebufferingGoal: 1, jumpLargeGaps: true }
+          streaming: { bufferingGoal: 4, rebufferingGoal: 1, jumpLargeGaps: true }
         });
         try {
           await shakaPlayer.load(ch.url);
-          hideLoader();
           if (autoPlay) video.play().catch(() => {});
         } catch (_) {
-          hideLoader();
           if (allowFallback) fallbackToNextChannel(ch.id);
         }
         return;
@@ -496,23 +444,19 @@
         hls = new Hls({
           enableWorker: true,
           lowLatencyMode: false,
-          maxBufferLength: 6,
-          maxMaxBufferLength: 10,
-          backBufferLength: 6,
-          manifestLoadingTimeOut: 6000,
-          fragLoadingTimeOut: 6000
+          maxBufferLength: 5,
+          maxMaxBufferLength: 8,
+          backBufferLength: 5,
+          manifestLoadingTimeOut: 5000,
+          fragLoadingTimeOut: 5000
         });
         hls.loadSource(ch.url);
         hls.attachMedia(video);
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          hideLoader();
           if (autoPlay) video.play().catch(() => {});
         });
         hls.on(Hls.Events.ERROR, (_, data) => {
-          if (data.fatal) {
-            hideLoader();
-            if (allowFallback) fallbackToNextChannel(ch.id);
-          }
+          if (data.fatal && allowFallback) fallbackToNextChannel(ch.id);
         });
       } else {
         video.src = ch.url;
@@ -530,7 +474,6 @@
       setMode(true);
       renderChannels();
       renderYPlay();
-      showLoaderDelayed(250);
 
       const item = yplayItems[idx];
       vodTitle.textContent = item.title;
@@ -538,11 +481,7 @@
 
       video.src = `${BACKEND_URL}/api/yplay/stream/${idx}`;
       video.load();
-      if (autoPlay) {
-        video.play().catch(() => hideLoader());
-      } else {
-        hideLoader();
-      }
+      if (autoPlay) video.play().catch(() => {});
     }
 
     function triggerEmptyQueueNotice() {
@@ -597,50 +536,21 @@
       video.muted = !video.muted;
     }
 
-    async function enterLandscapeFullscreen() {
+    async function toggleLiveFullscreen() {
       try {
-        if (!document.fullscreenElement && stage.requestFullscreen) {
-          await stage.requestFullscreen();
-        } else if (!document.fullscreenElement && video.webkitEnterFullscreen) {
-          video.webkitEnterFullscreen();
+        if (!document.fullscreenElement) {
+          if (stage.requestFullscreen) await stage.requestFullscreen();
+          else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen();
+          if (screen.orientation && screen.orientation.lock) {
+            await screen.orientation.lock("landscape").catch(() => {});
+          }
+        } else {
+          if (document.exitFullscreen) await document.exitFullscreen();
+          if (screen.orientation && screen.orientation.unlock) {
+            screen.orientation.unlock();
+          }
         }
       } catch (_) {}
-      try {
-        if (screen.orientation && screen.orientation.lock) {
-          await screen.orientation.lock("landscape");
-        }
-      } catch (_) {}
-    }
-
-    async function exitLandscapeFullscreen() {
-      try {
-        if (document.fullscreenElement && document.exitFullscreen) {
-          await document.exitFullscreen();
-        }
-      } catch (_) {}
-      try {
-        if (screen.orientation && screen.orientation.unlock) {
-          screen.orientation.unlock();
-        } else if (screen.orientation && screen.orientation.lock) {
-          await screen.orientation.lock("portrait");
-        }
-      } catch (_) {}
-    }
-
-    async function toggleLiveLandscape() {
-      if (document.fullscreenElement) {
-        await exitLandscapeFullscreen();
-      } else {
-        await enterLandscapeFullscreen();
-      }
-    }
-
-    async function toggleVodLandscape() {
-      if (document.fullscreenElement) {
-        await exitLandscapeFullscreen();
-      } else {
-        await enterLandscapeFullscreen();
-      }
     }
 
     function fmt(t) {
@@ -648,14 +558,8 @@
       return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
     }
 
-    video.addEventListener("waiting", () => showLoaderDelayed(300));
-    video.addEventListener("playing", hideLoader);
-    video.addEventListener("canplay", hideLoader);
     video.addEventListener("error", () => {
-      hideLoader();
-      if (!isVod && activeChannelId) {
-        fallbackToNextChannel(activeChannelId);
-      }
+      if (!isVod && activeChannelId) fallbackToNextChannel(activeChannelId);
     });
     video.addEventListener("play", () => { vodPlayBtn.textContent = "Pause"; });
     video.addEventListener("pause", () => { vodPlayBtn.textContent = "Play"; });
