@@ -27,7 +27,6 @@
       padding-bottom: 48px;
     }
 
-    /* Top Video Player Area */
     .player-stage {
       position: sticky;
       top: 0;
@@ -59,7 +58,6 @@
     .now-title { font-size: 0.9rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .now-sub { font-size: 0.72rem; color: var(--muted); }
 
-    /* VOD Progress Bar (Hidden during Live TV) */
     .vod-seek {
       display: flex;
       align-items: center;
@@ -102,7 +100,6 @@
 
     .container { max-width: 960px; margin: 0 auto; padding: 14px; }
 
-    /* Section Header matching reference */
     .sec-head {
       display: flex;
       align-items: center;
@@ -121,7 +118,6 @@
       border-radius: 7px;
     }
 
-    /* Channel Rows matching reference */
     .channel-list { display: flex; flex-direction: column; gap: 9px; }
     .ch-card {
       background: var(--card);
@@ -164,7 +160,6 @@
     .ch-meta { font-size: 0.76rem; color: var(--muted); margin-top: 2px; }
     .ch-eq { font-size: 0.85rem; color: #60a5fa; font-weight: 800; padding-right: 4px; }
 
-    /* YPlay Movie List */
     .yplay-list { display: flex; flex-direction: column; gap: 8px; }
     .yp-card {
       background: var(--card);
@@ -191,7 +186,7 @@
 </head>
 <body>
   <div class="player-stage" id="stage">
-    <video id="video" playsinline preload="metadata"></video>
+    <video id="video" playsinline preload="auto"></video>
     <div class="player-bar">
       <div class="bar-top">
         <div style="min-width:0;">
@@ -236,9 +231,9 @@
     <div class="sec-head" style="margin-top:22px;">
       <div>
         <div class="sec-title">YPlay Movies</div>
-        <div class="sec-sub">Telegram bot queue (first item auto-loaded)</div>
+        <div id="yplaySub" class="sec-sub">Telegram bot queue (first item auto-loaded)</div>
       </div>
-      <button onclick="fetchYPlay(true)">Refresh</button>
+      <button onclick="fetchYPlay(false)">Refresh</button>
     </div>
     <div id="yplayList" class="yplay-list"></div>
   </div>
@@ -315,6 +310,7 @@
     const seekInput = document.getElementById("seekInput");
     const curTxt = document.getElementById("curTxt");
     const durTxt = document.getElementById("durTxt");
+    const yplaySub = document.getElementById("yplaySub");
 
     let hls = null;
     let shakaPlayer = null;
@@ -323,6 +319,7 @@
     let activeYPlayIdx = -1;
     let isLive = true;
     let seeking = false;
+    let firstMoviePrepared = false;
 
     function setVodMode(vod) {
       isLive = !vod;
@@ -409,8 +406,8 @@
       renderYPlay();
 
       const item = yplayItems[idx];
-      nowTitle.textContent = item.title;
-      nowSub.textContent = item.cached ? "Cached • Ready" : "Pre-caching • Ready";
+      nowTitle.textContent = `#${idx + 1} ${item.title}`;
+      nowSub.textContent = item.cached ? "Cached • Ready to play" : "Pre-caching • Ready";
 
       video.src = `${BACKEND_URL}/api/yplay/stream/${idx}`;
       video.load();
@@ -426,9 +423,18 @@
     }
 
     function togglePlay() {
+      if (!isLive && video.src) {
+        if (video.paused) video.play().catch(() => {});
+        else video.pause();
+        return;
+      }
+      if (yplayItems.length > 0 && isLive && activeYPlayIdx < 0) {
+        loadYPlay(0, true);
+        return;
+      }
       if (!video.src && !hls && !shakaPlayer) {
-        if (yplayItems.length > 0 && activeYPlayIdx >= 0) {
-          loadYPlay(activeYPlayIdx, true);
+        if (yplayItems.length > 0) {
+          loadYPlay(activeYPlayIdx >= 0 ? activeYPlayIdx : 0, true);
         } else {
           const ch = CHANNELS.find((c) => c.id === activeChannelId) || CHANNELS[0];
           playChannel(ch, true);
@@ -518,18 +524,23 @@
 
     function renderYPlay() {
       const box = document.getElementById("yplayList");
+      yplaySub.textContent = yplayItems.length
+        ? `${yplayItems.length} in queue • #1 auto-loaded`
+        : "Telegram bot queue (first item auto-loaded)";
+
       if (!yplayItems.length) {
         box.innerHTML = `<div class="yp-card"><div><div class="yp-title">No movies in queue</div><div class="yp-meta">Forward a movie to your Telegram bot</div></div></div>`;
         return;
       }
       box.innerHTML = yplayItems.map((m, i) => {
         const mb = m.file_size ? `${(m.file_size / (1024 * 1024)).toFixed(0)} MB` : "Video";
+        const state = m.cached ? "Cached" : "Pre-caching";
         const cls = i === activeYPlayIdx ? "yp-card active" : "yp-card";
         return `
           <div class="${cls}" tabindex="0" onclick="loadYPlay(${i}, true)" onkeydown="if(event.key==='Enter')loadYPlay(${i},true)">
             <div>
-              <div class="yp-title">${esc(m.title)}</div>
-              <div class="yp-meta">#${i + 1} • ${mb} • ${m.cached ? "Ready" : "Caching"}</div>
+              <div class="yp-title">#${i + 1} ${esc(m.title)}</div>
+              <div class="yp-meta">${mb} • ${state}</div>
             </div>
             <button class="red" onclick="event.stopPropagation();loadYPlay(${i},true)">Play</button>
           </div>
@@ -537,16 +548,20 @@
       }).join("");
     }
 
-    async function fetchYPlay(forceFirst = false) {
+    async function fetchYPlay(autoSelectFirst = false) {
       try {
-        const res = await fetch(`${BACKEND_URL}/api/yplay/library`);
+        const res = await fetch(`${BACKEND_URL}/api/yplay/library?t=${Date.now()}`, { cache: "no-store" });
         const data = await res.json();
-        const prevFirst = yplayItems[0] ? yplayItems[0].id : null;
-        yplayItems = data.items || [];
+        const nextItems = Array.isArray(data.items) ? data.items : [];
+        const prevFirstId = yplayItems[0] ? yplayItems[0].id : null;
+        yplayItems = nextItems;
         renderYPlay();
 
-        if (yplayItems.length > 0 && (forceFirst || (activeChannelId === "" && activeYPlayIdx < 0) || (prevFirst !== yplayItems[0].id && activeChannelId === ""))) {
-          loadYPlay(0, false);
+        if (yplayItems.length > 0 && (!firstMoviePrepared || (autoSelectFirst && !isLive) || (prevFirstId && prevFirstId !== yplayItems[0].id && !isLive))) {
+          firstMoviePrepared = true;
+          if (!isLive) {
+            loadYPlay(0, false);
+          }
         }
       } catch (_) {}
     }
@@ -557,8 +572,8 @@
 
     renderChannels();
     playChannel(CHANNELS[0], false);
-    fetchYPlay(false);
-    setInterval(() => fetchYPlay(false), 6000);
+    fetchYPlay(true);
+    setInterval(() => fetchYPlay(false), 4000);
   </script>
 </body>
 </html>
