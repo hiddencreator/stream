@@ -223,6 +223,7 @@
       align-items: center;
       justify-content: space-between;
       margin: 14px 0 10px;
+      gap: 8px;
     }
     .sec-title { font-size: 1.08rem; font-weight: 700; }
     .sec-sub { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
@@ -296,6 +297,7 @@
     }
     .yp-title { font-size: 0.9rem; font-weight: 700; word-break: break-word; }
     .yp-meta { font-size: 0.74rem; color: var(--muted); margin-top: 2px; }
+    .yp-btns { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
   </style>
 </head>
 <body>
@@ -350,9 +352,9 @@
     <div class="sec-head" style="margin-top:22px;">
       <div>
         <div class="sec-title">YPlay Movies</div>
-        <div id="yplaySub" class="sec-sub">On-demand instant streaming</div>
+        <div id="yplaySub" class="sec-sub">Checking direct stream route...</div>
       </div>
-      <button onclick="fetchYPlay(true)">Refresh</button>
+      <button onclick="refreshAll()">Refresh</button>
     </div>
     <div id="yplayList" class="yplay-list"></div>
   </div>
@@ -360,6 +362,7 @@
   <script>
     const WORKER_URL = "https://ystream.hiddencreator-account.workers.dev";
     let DIRECT_STREAM_URL = WORKER_URL;
+    let usingDirectTunnel = false;
 
     const CHANNELS = [
       {
@@ -501,8 +504,7 @@
         const delta = pendingSeekDelta;
         pendingSeekDelta = 0;
         if (!isFinite(video.duration) || video.duration <= 0) return;
-        const target = Math.max(0, Math.min(video.duration - 0.5, video.currentTime + delta));
-        video.currentTime = target;
+        video.currentTime = Math.max(0, Math.min(video.duration - 0.5, video.currentTime + delta));
       }, 260);
     }
 
@@ -550,8 +552,17 @@
         const data = await res.json();
         if (data && typeof data.tunnel_url === "string" && data.tunnel_url.startsWith("https://")) {
           DIRECT_STREAM_URL = data.tunnel_url;
+          usingDirectTunnel = true;
+          return;
         }
       } catch (_) {}
+      usingDirectTunnel = false;
+    }
+
+    function getDirectMovieUrl(idx) {
+      const m = yplayItems[idx];
+      const fname = encodeURIComponent((m && m.filename) ? m.filename : "video.mp4");
+      return `${DIRECT_STREAM_URL}/dl/${idx}/${fname}`;
     }
 
     async function playChannel(ch, autoPlay = true) {
@@ -617,18 +628,26 @@
       const item = yplayItems[idx];
       const mb = item.file_size ? `${(item.file_size / (1024 * 1024)).toFixed(0)} MB` : "Video";
       nowTitle.textContent = item.title;
-      nowSub.textContent = `${mb} • Instant Stream`;
+      nowSub.textContent = `${mb} • ${usingDirectTunnel ? "Direct Link" : "Proxy Mode"}`;
 
       const saved = Number(localStorage.getItem(`yp_pos_${item.id}`) || "0");
       pendingResumeTime = saved > 5 ? saved : 0;
 
       video.preload = "auto";
-      video.src = `${DIRECT_STREAM_URL}/api/yplay/stream/${idx}`;
+      video.src = getDirectMovieUrl(idx);
       video.load();
       if (autoPlay) {
         setBuffering(true);
         video.play().catch(() => setBuffering(false));
       }
+    }
+
+    function openDirectLink(idx) {
+      const url = getDirectMovieUrl(idx);
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).catch(() => {});
+      }
+      window.open(url, "_blank");
     }
 
     function playNextYPlay() {
@@ -786,9 +805,10 @@
 
     function renderYPlay() {
       const box = document.getElementById("yplayList");
+      const modeTxt = usingDirectTunnel ? "Direct Tunnel (Fast)" : "Worker Proxy (Slow - check /health)";
       yplaySub.textContent = yplayItems.length
-        ? `${yplayItems.length} in queue • Continuous stream`
-        : "Forward a movie to Telegram bot";
+        ? `${yplayItems.length} in queue • ${modeTxt}`
+        : `Forward a movie to bot • ${modeTxt}`;
 
       if (!yplayItems.length) {
         box.innerHTML = `<div class="yp-card"><div><div class="yp-title">No movies in queue</div><div class="yp-meta">Forward a movie to your Telegram bot</div></div></div>`;
@@ -799,11 +819,14 @@
         const cls = i === activeYPlayIdx ? "yp-card active" : "yp-card";
         return `
           <div class="${cls}" tabindex="0" onclick="loadYPlay(${i}, true)" onkeydown="if(event.key==='Enter')loadYPlay(${i},true)">
-            <div>
+            <div style="min-width:0;">
               <div class="yp-title">${esc(m.title)}</div>
-              <div class="yp-meta">#${i + 1} • ${mb} • Instant Stream</div>
+              <div class="yp-meta">#${i + 1} • ${mb}</div>
             </div>
-            <button class="red" onclick="event.stopPropagation();loadYPlay(${i},true)">Play</button>
+            <div class="yp-btns">
+              <button onclick="event.stopPropagation();openDirectLink(${i})">Link</button>
+              <button class="red" onclick="event.stopPropagation();loadYPlay(${i},true)">Play</button>
+            </div>
           </div>
         `;
       }).join("");
@@ -824,6 +847,11 @@
           }
         }
       } catch (_) {}
+    }
+
+    async function refreshAll() {
+      await resolveDirectTunnel();
+      await fetchYPlay(true);
     }
 
     function esc(s) {
