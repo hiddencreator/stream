@@ -55,7 +55,6 @@
       max-height: 100vh;
     }
 
-    /* Buffering Spinner */
     .buf-spinner {
       position: absolute;
       top: 50%;
@@ -74,7 +73,6 @@
     .buf-spinner.show { display: block; }
     @keyframes spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
 
-    /* Double-tap seek flash */
     .tap-flash {
       position: absolute;
       top: 50%;
@@ -94,7 +92,6 @@
     .tap-flash.right { right: 14%; }
     .tap-flash.show { opacity: 1; }
 
-    /* Live TV icon-only fullscreen button */
     .live-fs-btn {
       position: absolute;
       right: 12px;
@@ -114,7 +111,6 @@
     }
     .live-fs-btn.show { display: inline-flex; }
 
-    /* YouTube-style Inside Video Overlay (YPlay VOD only) */
     .yt-overlay {
       position: absolute;
       inset: 0;
@@ -191,7 +187,6 @@
       justify-content: center;
     }
 
-    /* Clean YouTube-like Title Area Below Video */
     .title-bar {
       background: #0e121b;
       padding: 10px 14px;
@@ -306,7 +301,7 @@
 <body>
   <div class="player-stage" id="stage">
     <div class="video-wrap" id="videoWrap">
-      <video id="video" playsinline preload="auto"></video>
+      <video id="video" playsinline preload="metadata"></video>
       <div id="bufSpinner" class="buf-spinner"></div>
       <div id="flashLeft" class="tap-flash left">-10s</div>
       <div id="flashRight" class="tap-flash right">+10s</div>
@@ -363,7 +358,8 @@
   </div>
 
   <script>
-    const BACKEND_URL = "https://ystream.hiddencreator-account.workers.dev";
+    const WORKER_URL = "https://ystream.hiddencreator-account.workers.dev";
+    let DIRECT_STREAM_URL = WORKER_URL;
 
     const CHANNELS = [
       {
@@ -455,6 +451,7 @@
     let overlayTimer = null;
     let lastTapTime = 0;
     let singleTapTimer = null;
+    let pendingResumeTime = 0;
 
     function setBuffering(active) {
       bufSpinner.classList.toggle("show", active);
@@ -528,10 +525,21 @@
       setBuffering(false);
     }
 
+    async function resolveDirectTunnel() {
+      try {
+        const res = await fetch(`${WORKER_URL}/health?t=${Date.now()}`, { cache: "no-store" });
+        const data = await res.json();
+        if (data && typeof data.tunnel_url === "string" && data.tunnel_url.startsWith("https://")) {
+          DIRECT_STREAM_URL = data.tunnel_url;
+        }
+      } catch (_) {}
+    }
+
     async function playChannel(ch, autoPlay = true) {
       await cleanupPlayers();
       activeChannelId = ch.id;
       activeYPlayIdx = -1;
+      pendingResumeTime = 0;
       setVodMode(false);
       renderChannels();
       renderYPlay();
@@ -588,9 +596,12 @@
 
       const item = yplayItems[idx];
       nowTitle.textContent = item.title;
-      nowSub.textContent = item.cached ? "Cached • Ready" : "Pre-caching • Ready";
+      nowSub.textContent = item.cached ? "Ready 100%" : `Caching ${item.progress_pct || 0}%`;
 
-      video.src = `${BACKEND_URL}/api/yplay/stream/${idx}`;
+      const saved = Number(localStorage.getItem(`yp_pos_${item.id}`) || "0");
+      pendingResumeTime = saved > 5 ? saved : 0;
+
+      video.src = `${DIRECT_STREAM_URL}/api/yplay/stream/${idx}`;
       video.load();
       if (autoPlay) {
         setBuffering(true);
@@ -613,8 +624,7 @@
     function seekOffset(sec) {
       if (isLive || !isFinite(video.duration) || video.duration <= 0) return;
       setBuffering(true);
-      const target = Math.max(0, Math.min(video.duration - 0.5, video.currentTime + sec));
-      video.currentTime = target;
+      video.currentTime = Math.max(0, Math.min(video.duration - 0.5, video.currentTime + sec));
       showOverlayTemporarily();
     }
 
@@ -653,6 +663,12 @@
       return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
     }
 
+    video.addEventListener("loadedmetadata", () => {
+      if (!isLive && pendingResumeTime > 0 && isFinite(video.duration) && pendingResumeTime < video.duration - 2) {
+        video.currentTime = pendingResumeTime;
+        pendingResumeTime = 0;
+      }
+    });
     video.addEventListener("waiting", () => { if (!isLive) setBuffering(true); });
     video.addEventListener("stalled", () => { if (!isLive && !video.paused) setBuffering(true); });
     video.addEventListener("seeking", () => { if (!isLive) setBuffering(true); });
@@ -673,11 +689,33 @@
       seekInput.value = String(Math.round((video.currentTime / video.duration) * 1000));
       curTxt.textContent = fmt(video.currentTime);
       durTxt.textContent = fmt(video.duration);
+      const item = yplayItems[activeYPlayIdx];
+      if (item && video.currentTime > 2) {
+        localStorage.setItem(`yp_pos_${item.id}`, String(Math.floor(video.currentTime)));
+      }
     });
     video.addEventListener("ended", () => {
       setBuffering(false);
+      const item = yplayItems[activeYPlayIdx];
+      if (item) localStorage.removeItem(`yp_pos_${item.id}`);
       if (!isLive && activeYPlayIdx + 1 < yplayItems.length) {
         loadYPlay(activeYPlayIdx + 1, true);
+      }
+    });
+
+    // Release dead HTTP sockets cleanly when leaving browser so reopening won't hang
+    window.addEventListener("pagehide", () => {
+      if (!isLive && yplayItems[activeYPlayIdx] && video.currentTime > 2) {
+        localStorage.setItem(`yp_pos_${yplayItems[activeYPlayIdx].id}`, String(Math.floor(video.currentTime)));
+      }
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+    });
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && !isLive && activeYPlayIdx >= 0 && !video.getAttribute("src")) {
+        loadYPlay(activeYPlayIdx, false);
       }
     });
 
@@ -725,7 +763,7 @@
     function renderYPlay() {
       const box = document.getElementById("yplayList");
       yplaySub.textContent = yplayItems.length
-        ? `${yplayItems.length} in queue • first item auto-loaded`
+        ? `${yplayItems.length} in queue • Wait for Ready 100% for instant seek`
         : "Telegram bot queue (first item auto-loaded)";
 
       if (!yplayItems.length) {
@@ -734,12 +772,13 @@
       }
       box.innerHTML = yplayItems.map((m, i) => {
         const mb = m.file_size ? `${(m.file_size / (1024 * 1024)).toFixed(0)} MB` : "Video";
+        const statusTxt = m.cached ? "Ready 100%" : `Caching ${m.progress_pct || 0}%`;
         const cls = i === activeYPlayIdx ? "yp-card active" : "yp-card";
         return `
           <div class="${cls}" tabindex="0" onclick="loadYPlay(${i}, true)" onkeydown="if(event.key==='Enter')loadYPlay(${i},true)">
             <div>
               <div class="yp-title">${esc(m.title)}</div>
-              <div class="yp-meta">#${i + 1} • ${mb} • ${m.cached ? "Ready" : "Caching"}</div>
+              <div class="yp-meta">#${i + 1} • ${mb} • ${statusTxt}</div>
             </div>
             <button class="red" onclick="event.stopPropagation();loadYPlay(${i},true)">Play</button>
           </div>
@@ -749,11 +788,16 @@
 
     async function fetchYPlay(forceFirst = false) {
       try {
-        const res = await fetch(`${BACKEND_URL}/api/yplay/library?t=${Date.now()}`, { cache: "no-store" });
+        const res = await fetch(`${WORKER_URL}/api/yplay/library?t=${Date.now()}`, { cache: "no-store" });
         const data = await res.json();
         const prevFirst = yplayItems[0] ? yplayItems[0].id : null;
         yplayItems = Array.isArray(data.items) ? data.items : [];
         renderYPlay();
+
+        if (!isLive && activeYPlayIdx >= 0 && yplayItems[activeYPlayIdx]) {
+          const cur = yplayItems[activeYPlayIdx];
+          nowSub.textContent = cur.cached ? "Ready 100%" : `Caching ${cur.progress_pct || 0}%`;
+        }
 
         if (yplayItems.length > 0 && (!firstMoviePrepared || forceFirst || (prevFirst && prevFirst !== yplayItems[0].id && !isLive))) {
           firstMoviePrepared = true;
@@ -770,8 +814,8 @@
 
     renderChannels();
     playChannel(CHANNELS[0], false);
-    fetchYPlay(false);
-    setInterval(() => fetchYPlay(false), 5000);
+    resolveDirectTunnel().then(() => fetchYPlay(false));
+    setInterval(() => fetchYPlay(false), 4000);
   </script>
 </body>
 </html>
