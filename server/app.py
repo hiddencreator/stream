@@ -30,7 +30,7 @@ LIBRARY_FILE = DATA_DIR / "yplay_library.json"
 CHANNELS_FILE = DATA_DIR / "channels.json"
 SESSION_FILE = DATA_DIR / "ystream_bot"
 
-CHUNK_SIZE = 1024 * 1024  # Telegram native 1 MiB chunk
+CHUNK_SIZE = 1024 * 1024  # 1 MiB Telegram chunk
 MAX_CACHE_BYTES = 3 * 1024 * 1024 * 1024  # Keep SSD cache under 3 GB
 
 for d in (DATA_DIR, CACHE_DIR, HLS_DIR):
@@ -66,9 +66,7 @@ tg_client = Client(
 ffmpeg_proc: Optional[subprocess.Popen] = None
 last_error: str = ""
 msg_cache: dict[str, Message] = {}
-block_locks: dict[tuple[str, int], asyncio.Lock] = {}
-lookahead_tasks: dict[tuple[str, int], asyncio.Task] = {}
-lookahead_sem = asyncio.Semaphore(2)
+prewarm_tasks: dict[str, asyncio.Task] = {}
 
 
 def read_json(path: Path, default):
@@ -90,17 +88,17 @@ read_json(CHANNELS_FILE, DEFAULT_CHANNELS)
 
 
 def get_active_tunnel_url() -> str:
-    try:
-        out = subprocess.check_output(
-            ["journalctl", "-u", "ystream-tunnel", "-n", "100", "--no-pager"],
-            text=True,
-            stderr=subprocess.DEVNULL,
-        )
-        matches = re.findall(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", out)
-        if matches:
-            return matches[-1]
-    except Exception:
-        pass
+    for cmd in (
+        ["journalctl", "-u", "ystream-tunnel", "-n", "100", "--no-pager"],
+        ["sudo", "-n", "journalctl", "-u", "ystream-tunnel", "-n", "100", "--no-pager"],
+    ):
+        try:
+            out = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL)
+            matches = re.findall(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", out)
+            if matches:
+                return matches[-1]
+        except Exception:
+            pass
     return ""
 
 
@@ -135,6 +133,14 @@ def block_path(item_id: str, b_idx: int) -> Path:
     return safe_item_dir(item_id) / f"{b_idx}.blk"
 
 
+def write_block_sync(path: Path, data: bytes):
+    if path.exists():
+        return
+    tmp = path.with_suffix(f".{os.getpid()}.{time.monotonic_ns()}.tmp")
+    tmp.write_bytes(data)
+    os.replace(tmp, path)
+
+
 def prune_cache_sync():
     files = list(CACHE_DIR.glob("*/*.blk"))
     total = sum(f.stat().st_size for f in files if f.exists())
@@ -164,75 +170,72 @@ async def get_tg_message(item: dict, force_refresh: bool = False) -> Message:
     return msg
 
 
-async def fetch_block(item: dict, b_idx: int) -> bytes:
-    item_id = item["id"]
-    b_path = block_path(item_id, b_idx)
-    if b_path.exists():
-        return await asyncio.to_thread(b_path.read_bytes)
-
-    key = (item_id, b_idx)
-    lock = block_locks.get(key)
-    if lock is None:
-        lock = asyncio.Lock()
-        block_locks[key] = lock
-
-    async with lock:
-        if b_path.exists():
-            return await asyncio.to_thread(b_path.read_bytes)
-
-        for attempt in range(2):
-            try:
-                msg = await get_tg_message(item, force_refresh=(attempt == 1))
-                data = bytearray()
-                async for chunk in tg_client.stream_media(msg, limit=1, offset=b_idx):
-                    data.extend(chunk)
-                    break
-                raw = bytes(data)
-                if raw:
-                    tmp_path = b_path.with_suffix(".tmp")
-                    await asyncio.to_thread(tmp_path.write_bytes, raw)
-                    await asyncio.to_thread(os.replace, tmp_path, b_path)
-                    asyncio.create_task(asyncio.to_thread(prune_cache_sync))
-                return raw
-            except Exception:
-                msg_cache.pop(item_id, None)
-                if attempt == 1:
-                    raise
-        return b""
-
-
-async def lookahead_worker(item: dict, b_idx: int):
-    key = (item["id"], b_idx)
-    try:
-        async with lookahead_sem:
-            if not block_path(item["id"], b_idx).exists():
-                await fetch_block(item, b_idx)
-    except Exception:
-        pass
-    finally:
-        lookahead_tasks.pop(key, None)
-
-
-def schedule_lookahead(item: dict, start_block: int, total_blocks: int, count: int = 2):
-    item_id = item["id"]
-    for b in range(start_block, min(total_blocks, start_block + count)):
-        key = (item_id, b)
-        if key in lookahead_tasks or block_path(item_id, b).exists():
-            continue
-        if len(lookahead_tasks) >= 4:
+async def cache_span(item: dict, start_block: int, count: int):
+    if count <= 0:
+        return
+    msg = await get_tg_message(item)
+    buf = bytearray()
+    curr_b = start_block
+    end_b = start_block + count - 1
+    async for chunk in tg_client.stream_media(msg, offset=start_block):
+        buf.extend(chunk)
+        while len(buf) >= CHUNK_SIZE and curr_b <= end_b:
+            blk = bytes(buf[:CHUNK_SIZE])
+            del buf[:CHUNK_SIZE]
+            await asyncio.to_thread(write_block_sync, block_path(item["id"], curr_b), blk)
+            curr_b += 1
+        if curr_b > end_b:
             break
-        lookahead_tasks[key] = asyncio.create_task(lookahead_worker(item, b))
+    if buf and curr_b <= end_b:
+        await asyncio.to_thread(write_block_sync, block_path(item["id"], curr_b), bytes(buf))
+
+
+async def prewarm_head_tail(item: dict):
+    item_id = item["id"]
+    try:
+        msg = await get_tg_message(item)
+        media = msg.video or msg.document or msg.animation
+        total_size = int(getattr(media, "file_size", 0) or item.get("file_size") or 0)
+        if total_size <= 0:
+            return
+        total_blocks = (total_size + CHUNK_SIZE - 1) // CHUNK_SIZE
+
+        # Warm first 3 MB for instant start
+        head_count = min(3, total_blocks)
+        if not all(block_path(item_id, b).exists() for b in range(head_count)):
+            await cache_span(item, 0, head_count)
+
+        # Warm last 2 MB for MP4 moov metadata at end of file
+        if total_blocks > 5:
+            tail_start = total_blocks - 2
+            if not all(block_path(item_id, b).exists() for b in range(tail_start, total_blocks)):
+                await cache_span(item, tail_start, 2)
+
+        await asyncio.to_thread(prune_cache_sync)
+    except Exception as exc:
+        print(f"[Prewarm {item_id}] {exc}")
+    finally:
+        prewarm_tasks.pop(item_id, None)
+
+
+def trigger_prewarm(item: dict):
+    item_id = item["id"]
+    if item_id in prewarm_tasks:
+        return
+    if block_path(item_id, 0).exists():
+        return
+    prewarm_tasks[item_id] = asyncio.create_task(prewarm_head_tail(item))
 
 
 def save_media_to_queue(item: dict) -> tuple[bool, int]:
     items = read_json(LIBRARY_FILE, [])
     for row in items:
         if row.get("chat_id") == item["chat_id"] and row.get("message_id") == item["message_id"]:
-            schedule_lookahead(row, 0, 2, count=2)
+            trigger_prewarm(row)
             return False, len(items)
     items.append(item)
     write_json(LIBRARY_FILE, items)
-    schedule_lookahead(item, 0, 2, count=2)
+    trigger_prewarm(item)
     return True, len(items)
 
 
@@ -240,7 +243,7 @@ def save_media_to_queue(item: dict) -> tuple[bool, int]:
 async def cmd_start(_, msg: Message):
     await msg.reply_text(
         "YPlay Ready.\n"
-        "Forward or send movies/episodes — they stream on-demand instantly like YouTube."
+        "Forward or send movies/episodes — instant continuous streaming ready."
     )
 
 
@@ -363,13 +366,13 @@ async def startup():
     await tg_client.start()
     items = read_json(LIBRARY_FILE, [])
     if items:
-        schedule_lookahead(items[0], 0, 2, count=1)
+        trigger_prewarm(items[0])
     asyncio.create_task(relay_watcher())
 
 
 @app.on_event("shutdown")
 async def shutdown():
-    for t in list(lookahead_tasks.values()):
+    for t in list(prewarm_tasks.values()):
         t.cancel()
     if ffmpeg_proc and ffmpeg_proc.poll() is None:
         ffmpeg_proc.terminate()
@@ -410,6 +413,7 @@ async def yplay_stream(index: int, request: Request):
         raise HTTPException(status_code=404, detail="Movie not found in YPlay queue")
 
     item = items[index]
+    item_id = item["id"]
     msg = await get_tg_message(item)
     media = msg.video or msg.document or msg.animation
     total_size = int(getattr(media, "file_size", 0) or item.get("file_size") or 0)
@@ -418,11 +422,9 @@ async def yplay_stream(index: int, request: Request):
     if total_size <= 0:
         raise HTTPException(status_code=500, detail="Unknown media size")
 
-    total_blocks = (total_size + CHUNK_SIZE - 1) // CHUNK_SIZE
     range_header = request.headers.get("range")
-
     start_byte = 0
-    end_byte = min(total_size - 1, (8 * CHUNK_SIZE) - 1)
+    end_byte = total_size - 1
 
     if range_header and "=" in range_header:
         try:
@@ -432,8 +434,6 @@ async def yplay_stream(index: int, request: Request):
                 start_byte = max(0, int(s_part))
             if e_part:
                 end_byte = min(total_size - 1, int(e_part))
-            else:
-                end_byte = min(total_size - 1, start_byte + (8 * CHUNK_SIZE) - 1)
         except Exception:
             raise HTTPException(status_code=416, detail="Invalid range")
 
@@ -442,21 +442,72 @@ async def yplay_stream(index: int, request: Request):
 
     length = end_byte - start_byte + 1
 
-    async def block_stream_gen():
+    async def continuous_gen():
         pos = start_byte
         while pos <= end_byte:
             if await request.is_disconnected():
                 break
+
             b_idx = pos // CHUNK_SIZE
-            b_off = pos % CHUNK_SIZE
-            # Fetch ONLY next 2 MB ahead of playhead (YouTube-style buffer)
-            schedule_lookahead(item, b_idx + 1, total_blocks, count=2)
-            raw = await fetch_block(item, b_idx)
-            if not raw or b_off >= len(raw):
+            b_path = block_path(item_id, b_idx)
+
+            # Serve from SSD immediately if already cached
+            if b_path.exists():
+                raw = await asyncio.to_thread(b_path.read_bytes)
+                b_off = pos % CHUNK_SIZE
+                if b_off < len(raw):
+                    take = min(len(raw) - b_off, end_byte - pos + 1)
+                    yield raw[b_off : b_off + take]
+                    pos += take
+                    continue
+
+            # Open ONE continuous Telegram stream from b_idx (no per-MB reconnect!)
+            stream_block = b_idx
+            buf = bytearray()
+            refresh_msg = await get_tg_message(item)
+
+            try:
+                async for chunk in tg_client.stream_media(refresh_msg, offset=b_idx):
+                    if await request.is_disconnected():
+                        return
+                    buf.extend(chunk)
+                    while len(buf) >= CHUNK_SIZE:
+                        blk_bytes = bytes(buf[:CHUNK_SIZE])
+                        del buf[:CHUNK_SIZE]
+                        await asyncio.to_thread(write_block_sync, block_path(item_id, stream_block), blk_bytes)
+
+                        if pos <= end_byte:
+                            cur_off = pos - (stream_block * CHUNK_SIZE)
+                            if 0 <= cur_off < len(blk_bytes):
+                                take = min(len(blk_bytes) - cur_off, end_byte - pos + 1)
+                                yield blk_bytes[cur_off : cur_off + take]
+                                pos += take
+
+                        stream_block += 1
+                        if pos > end_byte:
+                            asyncio.create_task(asyncio.to_thread(prune_cache_sync))
+                            return
+                        # Switch back to fast SSD loop if subsequent block is already cached
+                        if block_path(item_id, stream_block).exists():
+                            break
+
+                    if block_path(item_id, stream_block).exists():
+                        break
+
+                # Flush final partial tail block at EOF
+                if buf and pos <= end_byte:
+                    tail_bytes = bytes(buf)
+                    await asyncio.to_thread(write_block_sync, block_path(item_id, stream_block), tail_bytes)
+                    cur_off = pos - (stream_block * CHUNK_SIZE)
+                    if 0 <= cur_off < len(tail_bytes):
+                        take = min(len(tail_bytes) - cur_off, end_byte - pos + 1)
+                        yield tail_bytes[cur_off : cur_off + take]
+                        pos += take
+            except Exception:
+                msg_cache.pop(item_id, None)
                 break
-            take = min(len(raw) - b_off, end_byte - pos + 1)
-            yield raw[b_off : b_off + take]
-            pos += take
+
+        asyncio.create_task(asyncio.to_thread(prune_cache_sync))
 
     headers = {
         "Accept-Ranges": "bytes",
@@ -466,9 +517,9 @@ async def yplay_stream(index: int, request: Request):
     }
     if range_header:
         headers["Content-Range"] = f"bytes {start_byte}-{end_byte}/{total_size}"
-        return StreamingResponse(block_stream_gen(), status_code=206, headers=headers, media_type=mime)
+        return StreamingResponse(continuous_gen(), status_code=206, headers=headers, media_type=mime)
 
-    return StreamingResponse(block_stream_gen(), status_code=200, headers=headers, media_type=mime)
+    return StreamingResponse(continuous_gen(), status_code=200, headers=headers, media_type=mime)
 
 
 @app.get("/live/suntv/index.m3u8")
