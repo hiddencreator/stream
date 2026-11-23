@@ -67,7 +67,7 @@
       border-top-color: #fff;
       border-radius: 50%;
       animation: spin 0.75s linear infinite;
-      z-index: 15;
+      z-index: 18;
       display: none;
       pointer-events: none;
     }
@@ -85,7 +85,7 @@
       font-weight: 700;
       padding: 10px 16px;
       border-radius: 24px;
-      z-index: 16;
+      z-index: 17;
       opacity: 0;
       pointer-events: none;
       transition: opacity 0.2s ease;
@@ -148,6 +148,7 @@
       justify-content: center;
       cursor: pointer;
     }
+    .yt-center-btn.hide { display: none; }
 
     .yt-bottom {
       display: flex;
@@ -182,9 +183,12 @@
       border: none;
       padding: 5px 10px;
       border-radius: 6px;
-      font-size: 0.75rem;
+      font-size: 0.82rem;
       font-weight: 600;
       cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
     }
 
     /* Clean YouTube-like Title Area Below Video */
@@ -319,11 +323,10 @@
           <div class="yt-actions">
             <div class="yt-act-grp">
               <button class="yt-btn" onclick="playNextYPlay()">Next</button>
-              <button class="yt-btn" onclick="toggleMute()">Mute</button>
+              <button id="muteBtn" class="yt-btn" title="Mute/Unmute" onclick="toggleMute()">&#128266;</button>
             </div>
             <div class="yt-act-grp">
-              <button class="yt-btn" onclick="toggleRotate()">Rotate</button>
-              <button class="yt-btn" onclick="toggleFullscreen()">&#x26F6;</button>
+              <button class="yt-btn" title="Fullscreen" onclick="toggleFullscreen()">&#x26F6;</button>
             </div>
           </div>
         </div>
@@ -432,6 +435,7 @@
     const liveFsBtn = document.getElementById("liveFsBtn");
     const ytOverlay = document.getElementById("ytOverlay");
     const ytCenterBtn = document.getElementById("ytCenterBtn");
+    const muteBtn = document.getElementById("muteBtn");
     const nowTitle = document.getElementById("nowTitle");
     const nowSub = document.getElementById("nowSub");
     const liveTag = document.getElementById("liveTag");
@@ -451,6 +455,11 @@
     let overlayTimer = null;
     let lastTapTime = 0;
     let singleTapTimer = null;
+
+    function setBuffering(active) {
+      bufSpinner.classList.toggle("show", active);
+      ytCenterBtn.classList.toggle("hide", active);
+    }
 
     function setVodMode(vod) {
       isLive = !vod;
@@ -516,7 +525,7 @@
         try { await shakaPlayer.destroy(); } catch (_) {}
         shakaPlayer = null;
       }
-      bufSpinner.classList.remove("show");
+      setBuffering(false);
     }
 
     async function playChannel(ch, autoPlay = true) {
@@ -584,8 +593,8 @@
       video.src = `${BACKEND_URL}/api/yplay/stream/${idx}`;
       video.load();
       if (autoPlay) {
-        bufSpinner.classList.add("show");
-        video.play().catch(() => {});
+        setBuffering(true);
+        video.play().catch(() => setBuffering(false));
       }
     }
 
@@ -603,57 +612,59 @@
 
     function seekOffset(sec) {
       if (isLive || !isFinite(video.duration) || video.duration <= 0) return;
-      bufSpinner.classList.add("show");
-      video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + sec));
+      setBuffering(true);
+      const target = Math.max(0, Math.min(video.duration - 0.5, video.currentTime + sec));
+      video.currentTime = target;
       showOverlayTemporarily();
     }
 
     function toggleMute() {
       video.muted = !video.muted;
+      muteBtn.innerHTML = video.muted ? "&#128263;" : "&#128266;";
       showOverlayTemporarily();
     }
 
-    function toggleFullscreen() {
-      if (!document.fullscreenElement) {
-        if (stage.requestFullscreen) stage.requestFullscreen().catch(() => {});
-        else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen();
-      } else {
-        if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
-      }
-    }
-
-    async function toggleRotate() {
+    async function toggleFullscreen() {
       try {
-        if (screen.orientation && screen.orientation.lock) {
-          const next = screen.orientation.type.startsWith("landscape") ? "portrait" : "landscape";
-          await screen.orientation.lock(next);
+        if (!document.fullscreenElement) {
+          if (stage.requestFullscreen) await stage.requestFullscreen();
+          else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen();
+          if (screen.orientation && screen.orientation.lock) {
+            await screen.orientation.lock("landscape").catch(() => {});
+          }
+        } else {
+          if (document.exitFullscreen) await document.exitFullscreen();
+          if (screen.orientation && screen.orientation.unlock) {
+            screen.orientation.unlock();
+          }
         }
       } catch (_) {}
     }
 
     function fmt(t) {
       if (!isFinite(t) || t < 0) return "00:00";
-      return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+      const total = Math.floor(t);
+      const hrs = Math.floor(total / 3600);
+      const mins = Math.floor((total % 3600) / 60);
+      const secs = total % 60;
+      if (hrs > 0) {
+        return `${hrs}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+      }
+      return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
     }
 
-    video.addEventListener("waiting", () => {
-      if (!isLive) bufSpinner.classList.add("show");
-    });
-    video.addEventListener("seeking", () => {
-      if (!isLive) bufSpinner.classList.add("show");
-    });
+    video.addEventListener("waiting", () => { if (!isLive) setBuffering(true); });
+    video.addEventListener("stalled", () => { if (!isLive && !video.paused) setBuffering(true); });
+    video.addEventListener("seeking", () => { if (!isLive) setBuffering(true); });
     video.addEventListener("playing", () => {
-      bufSpinner.classList.remove("show");
+      setBuffering(false);
       ytCenterBtn.innerHTML = "&#10074;&#10074;";
       showOverlayTemporarily();
     });
-    video.addEventListener("canplay", () => {
-      bufSpinner.classList.remove("show");
-    });
-    video.addEventListener("seeked", () => {
-      bufSpinner.classList.remove("show");
-    });
+    video.addEventListener("canplay", () => setBuffering(false));
+    video.addEventListener("seeked", () => setBuffering(false));
     video.addEventListener("pause", () => {
+      setBuffering(false);
       ytCenterBtn.innerHTML = "&#9654;";
       if (!isLive) ytOverlay.classList.add("visible");
     });
@@ -664,7 +675,7 @@
       durTxt.textContent = fmt(video.duration);
     });
     video.addEventListener("ended", () => {
-      bufSpinner.classList.remove("show");
+      setBuffering(false);
       if (!isLive && activeYPlayIdx + 1 < yplayItems.length) {
         loadYPlay(activeYPlayIdx + 1, true);
       }
@@ -678,7 +689,7 @@
     });
     seekInput.addEventListener("change", () => {
       if (!isLive && isFinite(video.duration) && video.duration > 0) {
-        bufSpinner.classList.add("show");
+        setBuffering(true);
         video.currentTime = (Number(seekInput.value) / 1000) * video.duration;
       }
       seeking = false;
