@@ -3,20 +3,20 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>YStream — Live TV & YPlay</title>
+  <title>YStream</title>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
   <style>
     :root {
-      --bg: #0b0d12;
-      --surface: #141821;
-      --surface-2: #1c2230;
+      --bg: #07080c;
+      --surface: #12151e;
+      --surface-2: #1a1f2d;
       --accent: #e50914;
-      --accent-soft: rgba(229, 9, 20, 0.16);
-      --text: #f3f5f8;
-      --muted: #9aa3b2;
+      --accent-hover: #f40612;
+      --text: #f5f7fa;
+      --muted: #98a2b3;
       --ok: #22c55e;
       --err: #ef4444;
-      --border: rgba(255, 255, 255, 0.09);
+      --border: rgba(255, 255, 255, 0.1);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -24,201 +24,288 @@
       color: var(--text);
       font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
       min-height: 100vh;
-      padding-bottom: 48px;
+      padding-bottom: 56px;
     }
-    header {
+
+    /* Top Netflix-style header */
+    .topbar {
       position: sticky;
       top: 0;
-      z-index: 20;
-      background: rgba(11, 13, 18, 0.92);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border);
-      padding: 12px 16px;
+      z-index: 30;
+      background: linear-gradient(180deg, rgba(7,8,12,0.96) 0%, rgba(7,8,12,0.78) 100%);
+      backdrop-filter: blur(10px);
+      padding: 12px 18px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 10px;
-      flex-wrap: wrap;
+      gap: 12px;
+      border-bottom: 1px solid var(--border);
     }
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-weight: 800;
-      font-size: 1.1rem;
-      letter-spacing: 0.4px;
-    }
-    .brand span.logo {
+    .logo-wrap { display: flex; align-items: center; gap: 10px; }
+    .logo-badge {
       background: var(--accent);
       color: #fff;
-      padding: 3px 8px;
-      border-radius: 6px;
-      font-size: 0.95rem;
+      font-weight: 900;
+      font-size: 1.05rem;
+      letter-spacing: 1px;
+      padding: 4px 10px;
+      border-radius: 5px;
     }
-    .status-pill {
+    .status-dot {
       font-size: 0.78rem;
-      padding: 5px 10px;
-      border-radius: 999px;
-      background: var(--surface-2);
-      border: 1px solid var(--border);
       color: var(--muted);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 5px 11px;
+      border-radius: 999px;
     }
-    .status-pill.ok { color: var(--ok); border-color: rgba(34, 197, 94, 0.35); }
-    .status-pill.err { color: var(--err); border-color: rgba(239, 68, 68, 0.35); }
+    .status-dot.ok { color: var(--ok); border-color: rgba(34,197,94,0.35); }
+    .status-dot.err { color: var(--err); border-color: rgba(239,68,68,0.35); }
 
-    .container { max-width: 1180px; margin: 0 auto; padding: 14px 16px; }
+    .wrap { max-width: 1240px; margin: 0 auto; padding: 14px 16px; }
 
-    .player-box {
+    /* Netflix-style Player Container */
+    .nf-player {
+      position: relative;
       background: #000;
-      border-radius: 14px;
+      border-radius: 12px;
       overflow: hidden;
       border: 1px solid var(--border);
-      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55);
+      box-shadow: 0 18px 44px rgba(0,0,0,0.7);
     }
     video {
       width: 100%;
-      max-height: 56vh;
+      max-height: 62vh;
       aspect-ratio: 16 / 9;
       display: block;
       background: #000;
     }
-    .player-bar {
-      background: var(--surface);
+    .nf-overlay {
+      background: linear-gradient(180deg, rgba(10,12,18,0.65) 0%, rgba(10,12,18,0.96) 100%);
       padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .nf-meta-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 10px;
       flex-wrap: wrap;
     }
-    .now-playing { font-size: 0.92rem; font-weight: 600; }
-    .sub-status { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
-    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .nf-title { font-size: 0.98rem; font-weight: 700; }
+    .nf-sub { font-size: 0.76rem; color: var(--muted); }
+    .live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.8px;
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
+    .live-badge::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #fff;
+    }
+
+    /* VOD Progress Bar (hidden in Live TV mode) */
+    .seek-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.76rem;
+      color: var(--muted);
+    }
+    .seek-wrap.hidden { display: none; }
+    input[type="range"].seek-bar {
+      flex: 1;
+      accent-color: var(--accent);
+      height: 5px;
+      cursor: pointer;
+    }
+
+    .controls-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .ctrl-group { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+
     button {
       background: var(--surface-2);
       color: var(--text);
       border: 1px solid var(--border);
       padding: 8px 13px;
-      border-radius: 8px;
-      font-size: 0.84rem;
+      border-radius: 7px;
+      font-size: 0.83rem;
       font-weight: 600;
       cursor: pointer;
+      transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease;
     }
     button:hover, button:focus-visible {
-      outline: 2px solid #fff;
-      background: #273043;
+      background: #283146;
+      border-color: #ffffff;
+      outline: 2px solid #ffffff;
+      transform: scale(1.02);
     }
-    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-    button.primary:hover { background: #c40711; }
+    button.play-btn {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      padding: 8px 16px;
+    }
+    button.play-btn:hover, button.play-btn:focus-visible {
+      background: var(--accent-hover);
+    }
 
-    .section-title {
-      margin: 22px 0 10px;
-      font-size: 1.05rem;
-      font-weight: 700;
+    .row-header {
+      margin: 24px 0 11px;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 10px;
     }
-    .grid {
+    .row-title { font-size: 1.06rem; font-weight: 700; }
+
+    /* Horizontal Netflix Shelf + TV Remote Navigation */
+    .shelf {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
       gap: 12px;
     }
-    .card {
+    .tile {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 10px;
-      padding: 12px;
+      padding: 13px;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      gap: 8px;
+      gap: 10px;
+      cursor: pointer;
     }
-    .card.active { border-color: var(--accent); background: var(--accent-soft); }
-    .card-title { font-size: 0.88rem; font-weight: 600; word-break: break-word; line-height: 1.3; }
-    .card-meta { font-size: 0.75rem; color: var(--muted); }
-    .suntv-box {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 12px;
-      margin-bottom: 12px;
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
+    .tile.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent);
+      background: rgba(229, 9, 20, 0.12);
     }
-    input {
-      flex: 1;
-      min-width: 220px;
-      background: var(--bg);
-      color: var(--text);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 8px 11px;
-      font-size: 0.85rem;
+    .tile:focus-visible {
+      outline: 2.5px solid #ffffff;
+      background: var(--surface-2);
     }
+    .tile-name { font-size: 0.9rem; font-weight: 700; line-height: 1.3; word-break: break-word; }
+    .tile-tag { font-size: 0.74rem; color: var(--muted); }
   </style>
 </head>
 <body>
-  <header>
-    <div class="brand">
-      <span class="logo">YSTREAM</span>
-      <span>Live TV & YPlay</span>
+  <div class="topbar">
+    <div class="logo-wrap">
+      <div class="logo-badge">YSTREAM</div>
     </div>
-    <div id="serverStatus" class="status-pill">Checking server...</div>
-  </header>
+    <div id="statusPill" class="status-dot">Connecting...</div>
+  </div>
 
-  <div class="container">
-    <div class="player-box">
-      <video id="video" controls playsinline preload="auto"></video>
-      <div class="player-bar">
-        <div>
-          <div id="nowPlaying" class="now-playing">Select a channel or YPlay movie</div>
-          <div id="playerLog" class="sub-status">Ready</div>
+  <div class="wrap">
+    <div class="nf-player" id="playerContainer">
+      <video id="video" playsinline preload="metadata"></video>
+      <div class="nf-overlay">
+        <div class="nf-meta-row">
+          <div>
+            <div id="nowTitle" class="nf-title">Ready</div>
+            <div id="nowSub" class="nf-sub">Forward a movie to Telegram bot to auto-load</div>
+          </div>
+          <div id="liveBadge" class="live-badge" style="display:none;">LIVE</div>
         </div>
-        <div class="btn-row">
-          <button id="nextBtn" onclick="playNextYPlay()">Next YPlay</button>
-          <button onclick="rotateScreen()">Rotate View</button>
-          <button onclick="toggleFullscreen()">Fullscreen</button>
+
+        <div id="seekWrap" class="seek-wrap">
+          <span id="curTime">00:00</span>
+          <input id="seekBar" class="seek-bar" type="range" min="0" max="1000" value="0" step="1" />
+          <span id="durTime">00:00</span>
+        </div>
+
+        <div class="controls-row">
+          <div class="ctrl-group">
+            <button id="playPauseBtn" class="play-btn" onclick="togglePlay()">Play</button>
+            <button id="rewBtn" onclick="seekBy(-10)">-10s</button>
+            <button id="fwdBtn" onclick="seekBy(10)">+10s</button>
+            <button id="nextBtn" onclick="playNextMovie()">Next</button>
+          </div>
+          <div class="ctrl-group">
+            <button onclick="toggleMute()">Mute</button>
+            <button onclick="toggleRotate()">Rotate</button>
+            <button onclick="toggleFullscreen()">Fullscreen</button>
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="section-title">
-      <span>YPlay Queue (Telegram Movies & Series)</span>
-      <button onclick="loadYPlay()">Refresh Queue</button>
+    <div class="row-header">
+      <div class="row-title">YPlay Queue</div>
+      <button onclick="syncLibrary(true)">Refresh</button>
     </div>
-    <div id="yplayGrid" class="grid"></div>
+    <div id="yplayShelf" class="shelf"></div>
 
-    <div class="section-title">
-      <span>Tamil Live TV</span>
+    <div class="row-header">
+      <div class="row-title">Tamil Live TV</div>
     </div>
-    <div class="suntv-box">
-      <input id="suntvInput" type="text" placeholder="Paste Sun TV .m3u8 source URL here (optional)" />
-      <button class="primary" onclick="saveSunTvSource()">Save Sun TV Source</button>
-    </div>
-    <div id="liveGrid" class="grid"></div>
+    <div id="liveShelf" class="shelf"></div>
   </div>
 
   <script>
     const BACKEND_URL = "https://finances-companies-suspected-simulations.trycloudflare.com";
 
-    const LIVE_CHANNELS = [
-      { id: "suntv", name: "Sun TV (Smooth 25fps Relay)", group: "Tamil", url: `${BACKEND_URL}/live/suntv/index.m3u8` }
+    // Add or update channel stream URLs directly in code here (no frontend URL input box)
+    const TAMIL_CHANNELS = [
+      { id: "suntv", name: "Sun TV", tag: "Tamil • Smooth Relay", url: `${BACKEND_URL}/live/suntv/index.m3u8`, isLive: true },
+      { id: "vijay", name: "Star Vijay", tag: "Tamil Live", url: "", isLive: true },
+      { id: "ktv", name: "KTV", tag: "Tamil Movies Live", url: "", isLive: true },
+      { id: "sunmusic", name: "Sun Music", tag: "Tamil Music Live", url: "", isLive: true },
+      { id: "zeetamil", name: "Zee Tamizh", tag: "Tamil Live", url: "", isLive: true },
+      { id: "ibctamil", name: "IBC Tamil", tag: "Tamil Live", url: "", isLive: true }
     ];
 
-    let yplayItems = [];
-    let currentYPlayIdx = -1;
+    const video = document.getElementById("video");
+    const nowTitle = document.getElementById("nowTitle");
+    const nowSub = document.getElementById("nowSub");
+    const liveBadge = document.getElementById("liveBadge");
+    const seekWrap = document.getElementById("seekWrap");
+    const seekBar = document.getElementById("seekBar");
+    const curTimeEl = document.getElementById("curTime");
+    const durTimeEl = document.getElementById("durTime");
+    const playPauseBtn = document.getElementById("playPauseBtn");
+    const rewBtn = document.getElementById("rewBtn");
+    const fwdBtn = document.getElementById("fwdBtn");
+    const statusPill = document.getElementById("statusPill");
+
+    let queue = [];
+    let activeMovieIdx = -1;
+    let isLiveMode = false;
+    let isSeeking = false;
     let hls = null;
 
-    const video = document.getElementById("video");
-    const nowPlaying = document.getElementById("nowPlaying");
-    const playerLog = document.getElementById("playerLog");
-    const serverStatus = document.getElementById("serverStatus");
+    function fmtTime(sec) {
+      if (!isFinite(sec) || sec < 0) return "00:00";
+      const m = Math.floor(sec / 60);
+      const s = Math.floor(sec % 60);
+      return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    }
 
-    function setLog(msg, isError = false) {
-      playerLog.textContent = msg;
-      playerLog.style.color = isError ? "#ef4444" : "#9aa3b2";
+    function setLiveModeUI(live) {
+      isLiveMode = live;
+      liveBadge.style.display = live ? "inline-flex" : "none";
+      seekWrap.classList.toggle("hidden", live);
+      rewBtn.style.display = live ? "none" : "inline-block";
+      fwdBtn.style.display = live ? "none" : "inline-block";
     }
 
     function destroyHls() {
@@ -228,189 +315,202 @@
       }
     }
 
-    function playStream(url, title) {
+    function loadSource(url, title, sub, live, autoPlay = false) {
       destroyHls();
-      video.pause();
-      nowPlaying.textContent = title;
-      setLog("Loading stream...");
+      setLiveModeUI(live);
+      nowTitle.textContent = title;
+      nowSub.textContent = sub;
 
-      if (url.includes(".m3u8") && window.Hls && window.Hls.isSupported()) {
+      if (!url) {
+        video.removeAttribute("src");
+        video.load();
+        nowSub.textContent = "Stream URL not set in code for this channel yet";
+        return;
+      }
+
+      const useHls = url.includes(".m3u8") && window.Hls && window.Hls.isSupported();
+      if (useHls) {
         hls = new Hls({
           enableWorker: true,
           lowLatencyMode: false,
-          backBufferLength: 15,
-          maxBufferLength: 20,
+          backBufferLength: 10,
+          maxBufferLength: 16,
+          maxMaxBufferLength: 24,
         });
         hls.loadSource(url);
         hls.attachMedia(video);
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          video.play().catch(() => {});
-          setLog("Playing HLS stream");
+          nowSub.textContent = live ? "Live stream ready" : "Ready to play";
+          if (autoPlay) video.play().catch(() => {});
         });
         hls.on(Hls.Events.ERROR, (_, data) => {
           if (data.fatal) {
-            setLog(`HLS Error (${data.type}): ${data.details}`, true);
+            nowSub.textContent = `Stream error: ${data.details}`;
           }
         });
       } else {
         video.src = url;
         video.load();
-        video.play().then(() => {
-          setLog("Playing stream");
-        }).catch((err) => {
-          setLog(`Playback error: ${err.message || err}`, true);
-        });
-      }
-    }
-
-    video.addEventListener("error", () => {
-      const code = video.error ? video.error.code : 0;
-      setLog(`Player error code ${code}. Tap play or try another item.`, true);
-    });
-
-    video.addEventListener("ended", () => {
-      if (currentYPlayIdx >= 0 && currentYPlayIdx + 1 < yplayItems.length) {
-        playYPlayIndex(currentYPlayIdx + 1);
-      }
-    });
-
-    function playYPlayIndex(idx) {
-      if (idx < 0 || idx >= yplayItems.length) return;
-      currentYPlayIdx = idx;
-      const item = yplayItems[idx];
-      renderYPlay();
-      playStream(`${BACKEND_URL}/api/yplay/stream/${idx}`, `YPlay #${idx + 1}: ${item.title}`);
-    }
-
-    function playNextYPlay() {
-      if (!yplayItems.length) {
-        setLog("No YPlay items in queue. Send a movie to Telegram bot first.", true);
-        return;
-      }
-      const nextIdx = currentYPlayIdx + 1 < yplayItems.length ? currentYPlayIdx + 1 : 0;
-      playYPlayIndex(nextIdx);
-    }
-
-    async function checkHealth() {
-      try {
-        const res = await fetch(`${BACKEND_URL}/health`);
-        const data = await res.json();
-        if (res.ok && data.status === "ok") {
-          serverStatus.textContent = `Server Online • Bot: ${data.bot_connected ? "Connected" : "Offline"} • Queue: ${data.yplay_count}`;
-          serverStatus.className = "status-pill ok";
-        } else {
-          serverStatus.textContent = "Server issue";
-          serverStatus.className = "status-pill err";
+        if (autoPlay) {
+          video.play().catch(() => {});
         }
-      } catch (e) {
-        serverStatus.textContent = "Backend unreachable (check URL)";
-        serverStatus.className = "status-pill err";
       }
     }
 
-    async function loadYPlay() {
-      try {
-        const res = await fetch(`${BACKEND_URL}/api/yplay/library`);
-        const data = await res.json();
-        yplayItems = data.items || [];
-        renderYPlay();
-        checkHealth();
-      } catch (e) {
-        setLog("Could not load YPlay queue from server.", true);
-      }
+    function loadMovieAt(idx, autoPlay = false) {
+      if (idx < 0 || idx >= queue.length) return;
+      activeMovieIdx = idx;
+      const item = queue[idx];
+      renderQueue();
+      const cacheState = item.cached ? "Cached & ready" : "Pre-caching chunks";
+      loadSource(
+        `${BACKEND_URL}/api/yplay/stream/${idx}`,
+        `#${idx + 1} ${item.title}`,
+        cacheState,
+        false,
+        autoPlay
+      );
     }
 
-    function renderYPlay() {
-      const grid = document.getElementById("yplayGrid");
-      if (!yplayItems.length) {
-        grid.innerHTML = `<div class="card"><div class="card-title">No movies yet</div><div class="card-meta">Send movies/episodes to your Telegram bot.</div></div>`;
+    function playNextMovie() {
+      if (!queue.length) return;
+      const next = activeMovieIdx + 1 < queue.length ? activeMovieIdx + 1 : 0;
+      loadMovieAt(next, true);
+    }
+
+    function togglePlay() {
+      if (!video.src && !hls) {
+        if (queue.length > 0) {
+          loadMovieAt(activeMovieIdx >= 0 ? activeMovieIdx : 0, true);
+        }
         return;
       }
-      grid.innerHTML = yplayItems.map((item, i) => {
-        const mb = item.file_size ? `${(item.file_size / (1024 * 1024)).toFixed(1)} MB` : "Video";
-        const activeClass = i === currentYPlayIdx ? "card active" : "card";
+      if (video.paused) {
+        video.play().catch(() => {});
+      } else {
+        video.pause();
+      }
+    }
+
+    function seekBy(deltaSec) {
+      if (isLiveMode || !isFinite(video.duration)) return;
+      const target = Math.max(0, Math.min(video.duration, video.currentTime + deltaSec));
+      video.currentTime = target;
+    }
+
+    function toggleMute() {
+      video.muted = !video.muted;
+    }
+
+    function toggleFullscreen() {
+      const target = document.getElementById("playerContainer");
+      if (target.requestFullscreen) target.requestFullscreen().catch(() => {});
+      else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen();
+    }
+
+    async function toggleRotate() {
+      try {
+        if (screen.orientation && screen.orientation.lock) {
+          const next = screen.orientation.type.startsWith("landscape") ? "portrait" : "landscape";
+          await screen.orientation.lock(next);
+        }
+      } catch (_) {}
+    }
+
+    video.addEventListener("play", () => { playPauseBtn.textContent = "Pause"; });
+    video.addEventListener("pause", () => { playPauseBtn.textContent = "Play"; });
+    video.addEventListener("timeupdate", () => {
+      if (isLiveMode || isSeeking || !isFinite(video.duration) || video.duration <= 0) return;
+      seekBar.value = String(Math.round((video.currentTime / video.duration) * 1000));
+      curTimeEl.textContent = fmtTime(video.currentTime);
+      durTimeEl.textContent = fmtTime(video.duration);
+    });
+    video.addEventListener("ended", () => {
+      if (!isLiveMode && activeMovieIdx + 1 < queue.length) {
+        loadMovieAt(activeMovieIdx + 1, true);
+      }
+    });
+
+    seekBar.addEventListener("input", () => { isSeeking = true; });
+    seekBar.addEventListener("change", () => {
+      if (!isLiveMode && isFinite(video.duration) && video.duration > 0) {
+        video.currentTime = (Number(seekBar.value) / 1000) * video.duration;
+      }
+      isSeeking = false;
+    });
+
+    function renderQueue() {
+      const el = document.getElementById("yplayShelf");
+      if (!queue.length) {
+        el.innerHTML = `<div class="tile"><div class="tile-name">Queue Empty</div><div class="tile-tag">Send a movie to Telegram bot</div></div>`;
+        return;
+      }
+      el.innerHTML = queue.map((m, i) => {
+        const mb = m.file_size ? `${(m.file_size / (1024 * 1024)).toFixed(0)} MB` : "Video";
+        const state = m.cached ? "Ready" : "Caching";
+        const active = i === activeMovieIdx ? "tile active" : "tile";
         return `
-          <div class="${activeClass}">
+          <div class="tile ${active}" tabindex="0" onclick="loadMovieAt(${i}, true)" onkeydown="if(event.key==='Enter')loadMovieAt(${i},true)">
             <div>
-              <div class="card-title">#${i + 1} ${escapeHtml(item.title)}</div>
-              <div class="card-meta">${mb}</div>
+              <div class="tile-name">#${i + 1} ${esc(m.title)}</div>
+              <div class="tile-tag">${mb} • ${state}</div>
             </div>
-            <button class="primary" onclick="playYPlayIndex(${i})">Play</button>
+            <button class="play-btn" onclick="event.stopPropagation();loadMovieAt(${i},true)">Play</button>
           </div>
         `;
       }).join("");
     }
 
-    function renderLive() {
-      const grid = document.getElementById("liveGrid");
-      grid.innerHTML = LIVE_CHANNELS.map((ch) => `
-        <div class="card">
+    function renderChannels() {
+      const el = document.getElementById("liveShelf");
+      el.innerHTML = TAMIL_CHANNELS.map((ch) => `
+        <div class="tile" tabindex="0" onclick="loadSource('${ch.url}', '${esc(ch.name)}', 'Live Channel', true, true)" onkeydown="if(event.key==='Enter')loadSource('${ch.url}','${esc(ch.name)}','Live Channel',true,true)">
           <div>
-            <div class="card-title">${escapeHtml(ch.name)}</div>
-            <div class="card-meta">${escapeHtml(ch.group)}</div>
+            <div class="tile-name">${esc(ch.name)}</div>
+            <div class="tile-tag">${esc(ch.tag)}</div>
           </div>
-          <button class="primary" onclick="playStream('${ch.url}', '${escapeHtml(ch.name)}')">Watch Live</button>
+          <button class="play-btn" onclick="event.stopPropagation();loadSource('${ch.url}','${esc(ch.name)}','Live Channel',true,true)">Watch</button>
         </div>
       `).join("");
     }
 
-    async function saveSunTvSource() {
-      const input = document.getElementById("suntvInput");
-      const url = input.value.trim();
-      if (!url) {
-        setLog("Enter a Sun TV stream URL first.", true);
-        return;
-      }
+    async function syncLibrary(keepSelection = true) {
       try {
-        const res = await fetch(`${BACKEND_URL}/api/channels/suntv`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ source_url: url })
-        });
+        const res = await fetch(`${BACKEND_URL}/api/yplay/library`);
         const data = await res.json();
-        if (res.ok && data.ok) {
-          setLog("Sun TV relay started (25fps smooth HLS).");
-        } else {
-          setLog(`Relay message: ${data.error || "Check source URL"}`, true);
+        const prevFirstId = queue[0] ? queue[0].id : null;
+        queue = data.items || [];
+        renderQueue();
+
+        // Auto-load #1 movie as soon as queue has items
+        if (queue.length > 0 && (!keepSelection || activeMovieIdx < 0 || (!isLiveMode && prevFirstId !== queue[0].id && activeMovieIdx === 0))) {
+          loadMovieAt(0, false);
         }
-      } catch (e) {
-        setLog("Failed to save Sun TV source URL.", true);
-      }
+      } catch (_) {}
     }
 
-    function toggleFullscreen() {
-      if (video.requestFullscreen) {
-        video.requestFullscreen().catch(() => {});
-      } else if (video.webkitEnterFullscreen) {
-        video.webkitEnterFullscreen();
-      }
-    }
-
-    async function rotateScreen() {
+    async function checkServer() {
       try {
-        if (screen.orientation && screen.orientation.lock) {
-          const next = screen.orientation.type.startsWith("landscape") ? "portrait" : "landscape";
-          await screen.orientation.lock(next);
-          setLog(`Orientation locked to ${next}`);
-        } else {
-          setLog("Use device auto-rotate or Fullscreen button.");
+        const res = await fetch(`${BACKEND_URL}/health`);
+        const data = await res.json();
+        if (res.ok && data.status === "ok") {
+          statusPill.textContent = `Online • Queue: ${data.yplay_count} • Cached: ${data.yplay_cached}`;
+          statusPill.className = "status-dot ok";
         }
-      } catch (e) {
-        setLog("Browser blocked orientation lock; use Fullscreen.");
+      } catch (_) {
+        statusPill.textContent = "Offline";
+        statusPill.className = "status-dot err";
       }
     }
 
-    function escapeHtml(str) {
-      return String(str || "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
+    function esc(s) {
+      return String(s || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c]));
     }
 
-    renderLive();
-    loadYPlay();
-    setInterval(checkHealth, 15000);
+    renderChannels();
+    syncLibrary(false);
+    checkServer();
+    setInterval(() => { syncLibrary(true); checkServer(); }, 6000);
   </script>
 </body>
 </html>
