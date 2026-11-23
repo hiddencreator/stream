@@ -328,7 +328,10 @@ async def yplay_library():
     for idx, x in enumerate(items):
         row = dict(x)
         row["index"] = idx
-        row["cached"] = cache_file_path(x["id"]).exists()
+        full_p = cache_file_path(x["id"])
+        part_p = full_p.with_suffix(".part")
+        row["cached"] = full_p.exists()
+        row["partial_bytes"] = full_p.stat().st_size if full_p.exists() else (part_p.stat().st_size if part_p.exists() else 0)
         enriched.append(row)
     return {"count": len(enriched), "items": enriched}
 
