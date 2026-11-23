@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -81,6 +82,21 @@ read_json(LIBRARY_FILE, [])
 read_json(CHANNELS_FILE, DEFAULT_CHANNELS)
 
 
+def get_active_tunnel_url() -> str:
+    try:
+        out = subprocess.check_output(
+            ["journalctl", "-u", "ystream-tunnel", "-n", "100", "--no-pager"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+        matches = re.findall(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", out)
+        if matches:
+            return matches[-1]
+    except Exception:
+        pass
+    return ""
+
+
 def get_media_info(msg: Message) -> Optional[dict]:
     media = msg.video or msg.document or msg.animation
     if not media:
@@ -89,9 +105,6 @@ def get_media_info(msg: Message) -> Optional[dict]:
     mime = getattr(media, "mime_type", None) or "video/mp4"
     size = getattr(media, "file_size", None) or 0
     duration = getattr(media, "duration", None) or 0
-    ok_ext = str(name).lower().endswith((".mp4", ".mkv", ".avi", ".mov", ".webm", ".ts", ".m4v"))
-    if not str(mime).startswith("video/") and not ok_ext and not msg.video:
-        return None
     return {
         "id": f"{msg.chat.id}_{msg.id}",
         "chat_id": msg.chat.id,
@@ -164,7 +177,7 @@ def save_media_to_queue(item: dict) -> tuple[bool, int]:
 async def cmd_start(_, msg: Message):
     await msg.reply_text(
         "YPlay Ready.\n"
-        "Send or forward movies/episodes directly — they auto-queue and pre-cache chunks immediately."
+        "Forward or send movies/episodes directly — they auto-queue and pre-cache immediately."
     )
 
 
@@ -316,6 +329,7 @@ async def health():
         "bot_connected": tg_client.is_connected,
         "yplay_count": len(items),
         "yplay_cached": cached_count,
+        "tunnel_url": get_active_tunnel_url(),
         "suntv_active": ffmpeg_proc is not None and ffmpeg_proc.poll() is None,
         "suntv_error": last_error,
     }
