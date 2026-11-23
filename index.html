@@ -18,7 +18,7 @@
       --muted: #8e98a8;
       --border: rgba(255, 255, 255, 0.08);
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     body {
       background: var(--bg);
       color: var(--text);
@@ -34,52 +34,171 @@
       background: #000;
       border-bottom: 1px solid var(--border);
     }
+    .video-wrap {
+      position: relative;
+      width: 100%;
+      background: #000;
+      overflow: hidden;
+      user-select: none;
+    }
     video {
       width: 100%;
-      max-height: 42vh;
+      max-height: 44vh;
       aspect-ratio: 16 / 9;
       display: block;
       background: #000;
     }
-    .player-bar {
-      background: #0e121b;
-      padding: 9px 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      border-top: 1px solid var(--border);
+    .player-stage:fullscreen video,
+    .player-stage:-webkit-full-screen video {
+      width: 100vw;
+      height: 100vh;
+      max-height: 100vh;
     }
-    .bar-top {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-    }
-    .now-title { font-size: 0.9rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .now-sub { font-size: 0.72rem; color: var(--muted); }
 
-    .vod-seek {
+    /* Buffering Spinner */
+    .buf-spinner {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 44px;
+      height: 44px;
+      border: 4px solid rgba(255, 255, 255, 0.22);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+      z-index: 15;
+      display: none;
+      pointer-events: none;
+    }
+    .buf-spinner.show { display: block; }
+    @keyframes spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+
+    /* Double-tap seek flash */
+    .tap-flash {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgba(0, 0, 0, 0.65);
+      color: #fff;
+      font-size: 0.9rem;
+      font-weight: 700;
+      padding: 10px 16px;
+      border-radius: 24px;
+      z-index: 16;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+    .tap-flash.left { left: 14%; }
+    .tap-flash.right { right: 14%; }
+    .tap-flash.show { opacity: 1; }
+
+    /* Live TV icon-only fullscreen button */
+    .live-fs-btn {
+      position: absolute;
+      right: 12px;
+      bottom: 12px;
+      z-index: 14;
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: rgba(10, 13, 20, 0.72);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.05rem;
+      cursor: pointer;
+    }
+    .live-fs-btn.show { display: inline-flex; }
+
+    /* YouTube-style Inside Video Overlay (YPlay VOD only) */
+    .yt-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 14;
+      background: linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.15) 45%, rgba(0,0,0,0.35) 100%);
+      display: none;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 10px 12px;
+      opacity: 0;
+      transition: opacity 0.22s ease;
+      pointer-events: none;
+    }
+    .yt-overlay.enabled { display: flex; }
+    .yt-overlay.visible { opacity: 1; pointer-events: auto; }
+
+    .yt-center-btn {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 54px;
+      height: 54px;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.68);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      font-size: 1.25rem;
       display: flex;
       align-items: center;
-      gap: 8px;
-      font-size: 0.72rem;
-      color: var(--muted);
-    }
-    .vod-seek.hide { display: none; }
-    input[type="range"] {
-      flex: 1;
-      accent-color: var(--accent);
+      justify-content: center;
       cursor: pointer;
     }
 
-    .bar-controls {
+    .yt-bottom {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      width: 100%;
+    }
+    .yt-seek-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.74rem;
+      color: #fff;
+      font-weight: 600;
+    }
+    .yt-seek-row input[type="range"] {
+      flex: 1;
+      accent-color: var(--accent);
+      height: 4px;
+      cursor: pointer;
+    }
+    .yt-actions {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 6px;
-      flex-wrap: wrap;
+      gap: 8px;
     }
-    .ctrl-left, .ctrl-right { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .yt-act-grp { display: flex; align-items: center; gap: 6px; }
+    .yt-btn {
+      background: rgba(255, 255, 255, 0.14);
+      color: #fff;
+      border: none;
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    /* Clean YouTube-like Title Area Below Video */
+    .title-bar {
+      background: #0e121b;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border-top: 1px solid var(--border);
+    }
+    .now-title { font-size: 0.94rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .now-sub { font-size: 0.74rem; color: var(--muted); margin-top: 2px; }
 
     button {
       background: #1a2030;
@@ -116,6 +235,7 @@
       font-weight: 700;
       padding: 4px 10px;
       border-radius: 7px;
+      flex-shrink: 0;
     }
 
     .channel-list { display: flex; flex-direction: column; gap: 9px; }
@@ -150,12 +270,7 @@
       overflow: hidden;
       flex-shrink: 0;
     }
-    .ch-logo-box img {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-      padding: 4px;
-    }
+    .ch-logo-box img { width: 100%; height: 100%; object-fit: contain; padding: 4px; }
     .ch-name { font-size: 0.95rem; font-weight: 700; }
     .ch-meta { font-size: 0.76rem; color: var(--muted); margin-top: 2px; }
     .ch-eq { font-size: 0.85rem; color: #60a5fa; font-weight: 800; padding-right: 4px; }
@@ -186,35 +301,41 @@
 </head>
 <body>
   <div class="player-stage" id="stage">
-    <video id="video" playsinline preload="auto"></video>
-    <div class="player-bar">
-      <div class="bar-top">
-        <div style="min-width:0;">
-          <div id="nowTitle" class="now-title">Sun TV</div>
-          <div id="nowSub" class="now-sub">Tap Play to start</div>
-        </div>
-        <div id="liveTag" class="live-pill">6 LIVE</div>
-      </div>
+    <div class="video-wrap" id="videoWrap">
+      <video id="video" playsinline preload="auto"></video>
+      <div id="bufSpinner" class="buf-spinner"></div>
+      <div id="flashLeft" class="tap-flash left">-10s</div>
+      <div id="flashRight" class="tap-flash right">+10s</div>
+      <button id="liveFsBtn" class="live-fs-btn" title="Fullscreen" onclick="toggleFullscreen()">&#x26F6;</button>
 
-      <div id="vodSeek" class="vod-seek hide">
-        <span id="curTxt">00:00</span>
-        <input id="seekInput" type="range" min="0" max="1000" value="0" step="1" />
-        <span id="durTxt">00:00</span>
+      <div id="ytOverlay" class="yt-overlay">
+        <button id="ytCenterBtn" class="yt-center-btn" onclick="event.stopPropagation(); toggleVodPlay();">&#9654;</button>
+        <div class="yt-bottom" onclick="event.stopPropagation()">
+          <div class="yt-seek-row">
+            <span id="curTxt">00:00</span>
+            <input id="seekInput" type="range" min="0" max="1000" value="0" step="1" />
+            <span id="durTxt">00:00</span>
+          </div>
+          <div class="yt-actions">
+            <div class="yt-act-grp">
+              <button class="yt-btn" onclick="playNextYPlay()">Next</button>
+              <button class="yt-btn" onclick="toggleMute()">Mute</button>
+            </div>
+            <div class="yt-act-grp">
+              <button class="yt-btn" onclick="toggleRotate()">Rotate</button>
+              <button class="yt-btn" onclick="toggleFullscreen()">&#x26F6;</button>
+            </div>
+          </div>
+        </div>
       </div>
+    </div>
 
-      <div class="bar-controls">
-        <div class="ctrl-left">
-          <button id="playBtn" class="red" onclick="togglePlay()">Play</button>
-          <button id="rewBtn" class="vod-seek hide" onclick="seekOffset(-10)">-10s</button>
-          <button id="fwdBtn" class="vod-seek hide" onclick="seekOffset(10)">+10s</button>
-          <button id="nextYpBtn" class="vod-seek hide" onclick="playNextYPlay()">Next Movie</button>
-        </div>
-        <div class="ctrl-right">
-          <button onclick="toggleMute()">Mute</button>
-          <button onclick="toggleRotate()">Rotate</button>
-          <button onclick="toggleFullscreen()">Fullscreen</button>
-        </div>
+    <div class="title-bar">
+      <div style="min-width:0;">
+        <div id="nowTitle" class="now-title">Sun TV</div>
+        <div id="nowSub" class="now-sub">#01 • Entertainment • Live</div>
       </div>
+      <div id="liveTag" class="live-pill">6 LIVE</div>
     </div>
   </div>
 
@@ -302,11 +423,18 @@
       }
     ];
 
+    const stage = document.getElementById("stage");
+    const videoWrap = document.getElementById("videoWrap");
     const video = document.getElementById("video");
+    const bufSpinner = document.getElementById("bufSpinner");
+    const flashLeft = document.getElementById("flashLeft");
+    const flashRight = document.getElementById("flashRight");
+    const liveFsBtn = document.getElementById("liveFsBtn");
+    const ytOverlay = document.getElementById("ytOverlay");
+    const ytCenterBtn = document.getElementById("ytCenterBtn");
     const nowTitle = document.getElementById("nowTitle");
     const nowSub = document.getElementById("nowSub");
     const liveTag = document.getElementById("liveTag");
-    const playBtn = document.getElementById("playBtn");
     const seekInput = document.getElementById("seekInput");
     const curTxt = document.getElementById("curTxt");
     const durTxt = document.getElementById("durTxt");
@@ -320,14 +448,64 @@
     let isLive = true;
     let seeking = false;
     let firstMoviePrepared = false;
+    let overlayTimer = null;
+    let lastTapTime = 0;
+    let singleTapTimer = null;
 
     function setVodMode(vod) {
       isLive = !vod;
       liveTag.style.display = vod ? "none" : "inline-block";
-      document.querySelectorAll(".vod-seek").forEach((el) => {
-        el.classList.toggle("hide", !vod);
-      });
+      liveFsBtn.classList.toggle("show", !vod);
+      ytOverlay.classList.toggle("enabled", vod);
+      if (vod) showOverlayTemporarily();
+      else ytOverlay.classList.remove("visible");
     }
+
+    function showOverlayTemporarily() {
+      if (isLive) return;
+      ytOverlay.classList.add("visible");
+      clearTimeout(overlayTimer);
+      overlayTimer = setTimeout(() => {
+        if (!video.paused) ytOverlay.classList.remove("visible");
+      }, 3000);
+    }
+
+    function flashSeek(side) {
+      const el = side === "left" ? flashLeft : flashRight;
+      el.classList.add("show");
+      setTimeout(() => el.classList.remove("show"), 450);
+    }
+
+    videoWrap.addEventListener("click", (e) => {
+      if (isLive) return;
+      const now = Date.now();
+      const rect = videoWrap.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const isLeft = x < rect.width * 0.45;
+      const isRight = x > rect.width * 0.55;
+
+      if (now - lastTapTime < 280) {
+        clearTimeout(singleTapTimer);
+        lastTapTime = 0;
+        if (isLeft) {
+          seekOffset(-10);
+          flashSeek("left");
+        } else if (isRight) {
+          seekOffset(10);
+          flashSeek("right");
+        }
+        return;
+      }
+
+      lastTapTime = now;
+      singleTapTimer = setTimeout(() => {
+        if (ytOverlay.classList.contains("visible")) {
+          ytOverlay.classList.remove("visible");
+        } else {
+          showOverlayTemporarily();
+        }
+      }, 280);
+    });
 
     async function cleanupPlayers() {
       if (hls) {
@@ -338,6 +516,7 @@
         try { await shakaPlayer.destroy(); } catch (_) {}
         shakaPlayer = null;
       }
+      bufSpinner.classList.remove("show");
     }
 
     async function playChannel(ch, autoPlay = true) {
@@ -361,7 +540,7 @@
         try {
           await shakaPlayer.load(ch.url);
           if (autoPlay) video.play().catch(() => {});
-        } catch (e) {
+        } catch (_) {
           nowSub.textContent = "Unable to start stream";
         }
         return;
@@ -405,6 +584,7 @@
       video.src = `${BACKEND_URL}/api/yplay/stream/${idx}`;
       video.load();
       if (autoPlay) {
+        bufSpinner.classList.add("show");
         video.play().catch(() => {});
       }
     }
@@ -415,42 +595,31 @@
       loadYPlay(next, true);
     }
 
-    function togglePlay() {
-      if (!isLive && video.src) {
-        if (video.paused) video.play().catch(() => {});
-        else video.pause();
-        return;
-      }
-      if (yplayItems.length > 0 && isLive && activeYPlayIdx < 0) {
-        loadYPlay(0, true);
-        return;
-      }
-      if (!video.src && !hls && !shakaPlayer) {
-        if (yplayItems.length > 0) {
-          loadYPlay(activeYPlayIdx >= 0 ? activeYPlayIdx : 0, true);
-        } else {
-          const ch = CHANNELS.find((c) => c.id === activeChannelId) || CHANNELS[0];
-          playChannel(ch, true);
-        }
-        return;
-      }
+    function toggleVodPlay() {
       if (video.paused) video.play().catch(() => {});
       else video.pause();
+      showOverlayTemporarily();
     }
 
     function seekOffset(sec) {
-      if (isLive || !isFinite(video.duration)) return;
+      if (isLive || !isFinite(video.duration) || video.duration <= 0) return;
+      bufSpinner.classList.add("show");
       video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + sec));
+      showOverlayTemporarily();
     }
 
     function toggleMute() {
       video.muted = !video.muted;
+      showOverlayTemporarily();
     }
 
     function toggleFullscreen() {
-      const el = document.getElementById("stage");
-      if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
-      else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen();
+      if (!document.fullscreenElement) {
+        if (stage.requestFullscreen) stage.requestFullscreen().catch(() => {});
+        else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen();
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+      }
     }
 
     async function toggleRotate() {
@@ -467,8 +636,27 @@
       return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
     }
 
-    video.addEventListener("play", () => { playBtn.textContent = "Pause"; });
-    video.addEventListener("pause", () => { playBtn.textContent = "Play"; });
+    video.addEventListener("waiting", () => {
+      if (!isLive) bufSpinner.classList.add("show");
+    });
+    video.addEventListener("seeking", () => {
+      if (!isLive) bufSpinner.classList.add("show");
+    });
+    video.addEventListener("playing", () => {
+      bufSpinner.classList.remove("show");
+      ytCenterBtn.innerHTML = "&#10074;&#10074;";
+      showOverlayTemporarily();
+    });
+    video.addEventListener("canplay", () => {
+      bufSpinner.classList.remove("show");
+    });
+    video.addEventListener("seeked", () => {
+      bufSpinner.classList.remove("show");
+    });
+    video.addEventListener("pause", () => {
+      ytCenterBtn.innerHTML = "&#9654;";
+      if (!isLive) ytOverlay.classList.add("visible");
+    });
     video.addEventListener("timeupdate", () => {
       if (isLive || seeking || !isFinite(video.duration) || video.duration <= 0) return;
       seekInput.value = String(Math.round((video.currentTime / video.duration) * 1000));
@@ -476,17 +664,25 @@
       durTxt.textContent = fmt(video.duration);
     });
     video.addEventListener("ended", () => {
+      bufSpinner.classList.remove("show");
       if (!isLive && activeYPlayIdx + 1 < yplayItems.length) {
         loadYPlay(activeYPlayIdx + 1, true);
       }
     });
 
-    seekInput.addEventListener("input", () => { seeking = true; });
+    seekInput.addEventListener("input", () => {
+      seeking = true;
+      if (isFinite(video.duration) && video.duration > 0) {
+        curTxt.textContent = fmt((Number(seekInput.value) / 1000) * video.duration);
+      }
+    });
     seekInput.addEventListener("change", () => {
       if (!isLive && isFinite(video.duration) && video.duration > 0) {
+        bufSpinner.classList.add("show");
         video.currentTime = (Number(seekInput.value) / 1000) * video.duration;
       }
       seeking = false;
+      showOverlayTemporarily();
     });
 
     function renderChannels() {
