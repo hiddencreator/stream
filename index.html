@@ -143,25 +143,18 @@
       width: 48px;
       height: 48px;
       border-radius: 10px;
-      background: #1b2234;
-      color: #fff;
-      font-weight: 800;
-      font-size: 0.85rem;
+      background: #ffffff;
       display: flex;
       align-items: center;
       justify-content: center;
       overflow: hidden;
       flex-shrink: 0;
-      position: relative;
     }
     .ch-logo-box img {
       width: 100%;
       height: 100%;
       object-fit: contain;
       padding: 4px;
-      background: #ffffff;
-      position: relative;
-      z-index: 2;
     }
     .ch-name { font-size: 0.95rem; font-weight: 700; }
     .ch-meta { font-size: 0.76rem; color: var(--muted); margin-top: 2px; }
@@ -193,7 +186,7 @@
 </head>
 <body>
   <div class="player-stage" id="stage">
-    <video id="video" playsinline preload="auto"></video>
+    <video id="video" playsinline preload="metadata"></video>
     <div class="player-bar">
       <div class="bar-top">
         <div style="min-width:0;">
@@ -238,7 +231,7 @@
     <div class="sec-head" style="margin-top:22px;">
       <div>
         <div class="sec-title">YPlay Movies</div>
-        <div id="yplaySub" class="sec-sub">Telegram bot queue (first item auto-loaded)</div>
+        <div class="sec-sub">Telegram bot queue (first item auto-loaded)</div>
       </div>
       <button onclick="fetchYPlay(true)">Refresh</button>
     </div>
@@ -252,7 +245,6 @@
       {
         id: "suntv",
         num: "#01",
-        badge: "SUN",
         name: "Sun TV",
         cat: "Entertainment • Live",
         type: "hls",
@@ -262,7 +254,6 @@
       {
         id: "zeetamil",
         num: "#02",
-        badge: "ZEE",
         name: "Zee Tamil HD",
         cat: "Entertainment • HD",
         type: "hls",
@@ -272,7 +263,6 @@
       {
         id: "colorstamil",
         num: "#03",
-        badge: "CLR",
         name: "Colors Tamil HD",
         cat: "Entertainment • HD",
         type: "hls",
@@ -282,7 +272,6 @@
       {
         id: "makkaltv",
         num: "#04",
-        badge: "MKL",
         name: "Makkal TV",
         cat: "General • Live",
         type: "hls",
@@ -292,7 +281,6 @@
       {
         id: "historytv18",
         num: "#05",
-        badge: "H18",
         name: "History TV18 HD",
         cat: "Infotainment • HD",
         type: "dash-clearkey",
@@ -304,7 +292,6 @@
       {
         id: "discoverytamil",
         num: "#06",
-        badge: "DSC",
         name: "Discovery Tamil",
         cat: "Infotainment • HD",
         type: "dash-clearkey",
@@ -323,7 +310,6 @@
     const seekInput = document.getElementById("seekInput");
     const curTxt = document.getElementById("curTxt");
     const durTxt = document.getElementById("durTxt");
-    const yplaySub = document.getElementById("yplaySub");
 
     let hls = null;
     let shakaPlayer = null;
@@ -332,7 +318,6 @@
     let activeYPlayIdx = -1;
     let isLive = true;
     let seeking = false;
-    let firstMoviePrepared = false;
 
     function setVodMode(vod) {
       isLive = !vod;
@@ -374,7 +359,7 @@
         try {
           await shakaPlayer.load(ch.url);
           if (autoPlay) video.play().catch(() => {});
-        } catch (_) {
+        } catch (e) {
           nowSub.textContent = "Unable to start stream";
         }
         return;
@@ -412,14 +397,12 @@
       renderYPlay();
 
       const item = yplayItems[idx];
-      nowTitle.textContent = `#${idx + 1} ${item.title}`;
-      nowSub.textContent = item.cached ? "Cached • Ready to play" : "Pre-caching • Ready";
+      nowTitle.textContent = item.title;
+      nowSub.textContent = item.cached ? "Cached • Ready" : "Pre-caching • Ready";
 
       video.src = `${BACKEND_URL}/api/yplay/stream/${idx}`;
       video.load();
-      if (autoPlay) {
-        video.play().catch(() => {});
-      }
+      if (autoPlay) video.play().catch(() => {});
     }
 
     function playNextYPlay() {
@@ -429,18 +412,9 @@
     }
 
     function togglePlay() {
-      if (!isLive && video.src) {
-        if (video.paused) video.play().catch(() => {});
-        else video.pause();
-        return;
-      }
-      if (yplayItems.length > 0 && isLive && activeYPlayIdx < 0) {
-        loadYPlay(0, true);
-        return;
-      }
       if (!video.src && !hls && !shakaPlayer) {
-        if (yplayItems.length > 0) {
-          loadYPlay(activeYPlayIdx >= 0 ? activeYPlayIdx : 0, true);
+        if (yplayItems.length > 0 && activeYPlayIdx >= 0) {
+          loadYPlay(activeYPlayIdx, true);
         } else {
           const ch = CHANNELS.find((c) => c.id === activeChannelId) || CHANNELS[0];
           playChannel(ch, true);
@@ -510,8 +484,7 @@
           <div class="${active}" tabindex="0" onclick='playChannelById("${ch.id}")' onkeydown='if(event.key==="Enter")playChannelById("${ch.id}")'>
             <div class="ch-left">
               <div class="ch-logo-box">
-                <span>${esc(ch.badge)}</span>
-                <img src="${esc(ch.logo)}" alt="${esc(ch.name)}" onload="if(this.previousElementSibling)this.previousElementSibling.style.display='none'" onerror="this.style.display='none'" />
+                <img src="${esc(ch.logo)}" alt="${esc(ch.name)}" onerror="this.style.display='none'" />
               </div>
               <div>
                 <div class="ch-name">${esc(ch.name)}</div>
@@ -531,23 +504,18 @@
 
     function renderYPlay() {
       const box = document.getElementById("yplayList");
-      yplaySub.textContent = yplayItems.length
-        ? `${yplayItems.length} in queue • #1 auto-loaded`
-        : "Telegram bot queue (first item auto-loaded)";
-
       if (!yplayItems.length) {
         box.innerHTML = `<div class="yp-card"><div><div class="yp-title">No movies in queue</div><div class="yp-meta">Forward a movie to your Telegram bot</div></div></div>`;
         return;
       }
       box.innerHTML = yplayItems.map((m, i) => {
         const mb = m.file_size ? `${(m.file_size / (1024 * 1024)).toFixed(0)} MB` : "Video";
-        const state = m.cached ? "Cached" : "Pre-caching";
         const cls = i === activeYPlayIdx ? "yp-card active" : "yp-card";
         return `
           <div class="${cls}" tabindex="0" onclick="loadYPlay(${i}, true)" onkeydown="if(event.key==='Enter')loadYPlay(${i},true)">
             <div>
-              <div class="yp-title">#${i + 1} ${esc(m.title)}</div>
-              <div class="yp-meta">${mb} • ${state}</div>
+              <div class="yp-title">${esc(m.title)}</div>
+              <div class="yp-meta">#${i + 1} • ${mb} • ${m.cached ? "Ready" : "Caching"}</div>
             </div>
             <button class="red" onclick="event.stopPropagation();loadYPlay(${i},true)">Play</button>
           </div>
@@ -555,20 +523,16 @@
       }).join("");
     }
 
-    async function fetchYPlay(autoSelectFirst = false) {
+    async function fetchYPlay(forceFirst = false) {
       try {
         const res = await fetch(`${BACKEND_URL}/api/yplay/library?t=${Date.now()}`, { cache: "no-store" });
         const data = await res.json();
-        const nextItems = Array.isArray(data.items) ? data.items : [];
-        const prevFirstId = yplayItems[0] ? yplayItems[0].id : null;
-        yplayItems = nextItems;
+        const prevFirst = yplayItems[0] ? yplayItems[0].id : null;
+        yplayItems = Array.isArray(data.items) ? data.items : [];
         renderYPlay();
 
-        if (yplayItems.length > 0 && (!firstMoviePrepared || (autoSelectFirst && !isLive) || (prevFirstId && prevFirstId !== yplayItems[0].id && !isLive))) {
-          firstMoviePrepared = true;
-          if (!isLive) {
-            loadYPlay(0, false);
-          }
+        if (yplayItems.length > 0 && (forceFirst || (activeChannelId === "" && activeYPlayIdx < 0) || (prevFirst !== yplayItems[0].id && activeChannelId === ""))) {
+          loadYPlay(0, false);
         }
       } catch (_) {}
     }
@@ -579,8 +543,8 @@
 
     renderChannels();
     playChannel(CHANNELS[0], false);
-    fetchYPlay(true);
-    setInterval(() => fetchYPlay(false), 4000);
+    fetchYPlay(false);
+    setInterval(() => fetchYPlay(false), 6000);
   </script>
 </body>
 </html>
