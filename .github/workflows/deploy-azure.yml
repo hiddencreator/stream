@@ -30,44 +30,43 @@ jobs:
           sshpass -e ssh $SSH_OPTS azureuser@"$AZURE_IP" "mkdir -p ~/ystream/data"
           sshpass -e scp $SSH_OPTS -r server/* azureuser@"$AZURE_IP":~/ystream/
 
-          sshpass -e ssh $SSH_OPTS azureuser@"$AZURE_IP" "
-            set -e
-            if ! command -v python3 >/dev/null 2>&1 || ! command -v ffmpeg >/dev/null 2>&1; then
-              sudo apt-get update -y
-              sudo DEBIAN_FRONTEND=noninteractive apt-get install -y python3 python3-pip python3-venv ffmpeg
-            fi
+          sshpass -e ssh $SSH_OPTS azureuser@"$AZURE_IP" "bash -s" << 'REMOTE_SCRIPT'
+          set -e
+          if ! command -v python3 >/dev/null 2>&1 || ! command -v ffmpeg >/dev/null 2>&1; then
+            sudo apt-get update -y
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y python3 python3-pip python3-venv ffmpeg
+          fi
 
-            if [ ! -d ~/ystream/venv ]; then
-              python3 -m venv ~/ystream/venv
-            fi
+          if [ ! -d ~/ystream/venv ]; then
+            python3 -m venv ~/ystream/venv
+          fi
 
-            ~/ystream/venv/bin/pip install --upgrade pip -q
-            ~/ystream/venv/bin/pip install -r ~/ystream/requirements.txt -q
+          ~/ystream/venv/bin/pip install --upgrade pip -q
+          ~/ystream/venv/bin/pip install -r ~/ystream/requirements.txt -q
 
-            cat <<EOF > ~/ystream/.env
-TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-EOF
+          printf 'TELEGRAM_BOT_TOKEN=%s\n' "__BOT_TOKEN__" > ~/ystream/.env
 
-            sudo tee /etc/systemd/system/ystream.service >/dev/null <<'UNIT'
-[Unit]
-Description=YStream Backend
-After=network-online.target
-Wants=network-online.target
+          sudo tee /etc/systemd/system/ystream.service >/dev/null << 'UNIT'
+          [Unit]
+          Description=YStream Backend
+          After=network-online.target
+          Wants=network-online.target
 
-[Service]
-Type=simple
-User=azureuser
-WorkingDirectory=/home/azureuser/ystream
-EnvironmentFile=/home/azureuser/ystream/.env
-ExecStart=/home/azureuser/ystream/venv/bin/uvicorn app:app --host 0.0.0.0 --port 8000 --workers 1
-Restart=always
-RestartSec=3
+          [Service]
+          Type=simple
+          User=azureuser
+          WorkingDirectory=/home/azureuser/ystream
+          EnvironmentFile=/home/azureuser/ystream/.env
+          ExecStart=/home/azureuser/ystream/venv/bin/uvicorn app:app --host 0.0.0.0 --port 8000 --workers 1
+          Restart=always
+          RestartSec=3
 
-[Install]
-WantedBy=multi-user.target
-UNIT
+          [Install]
+          WantedBy=multi-user.target
+          UNIT
 
-            sudo systemctl daemon-reload
-            sudo systemctl enable ystream
-            sudo systemctl restart ystream
-          "
+          sudo systemctl daemon-reload
+          sudo systemctl enable ystream
+          sudo systemctl restart ystream
+          REMOTE_SCRIPT
+REMOTE_SCRIPT
