@@ -342,7 +342,6 @@
     }
     .yp-title { font-size: 0.9rem; font-weight: 700; word-break: break-word; }
     .yp-meta { font-size: 0.74rem; color: var(--muted); margin-top: 2px; }
-    .yp-btns { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
   </style>
 </head>
 <body>
@@ -414,6 +413,7 @@
     const WORKER_URL = "https://ystream.hiddencreator-account.workers.dev";
     let DIRECT_STREAM_URL = WORKER_URL;
     let usingDirectTunnel = false;
+    let serverOnline = false;
 
     const CHANNELS = [
       {
@@ -511,7 +511,6 @@
     let pendingSeekDelta = 0;
     let seekDebounceTimer = null;
     let flashTimer = null;
-    let errorRetries = 0;
 
     function setBuffering(active) {
       bufSpinner.classList.toggle("show", active);
@@ -587,7 +586,6 @@
       }, 280);
     });
 
-    // Synchronous cleanup so user-gesture stays valid for video.play() on mobile
     function cleanupPlayersSync() {
       if (hls) {
         hls.destroy();
@@ -604,17 +602,26 @@
     async function resolveDirectTunnel() {
       try {
         const res = await fetch(`${WORKER_URL}/health?t=${Date.now()}`, { cache: "no-store" });
+        if (!res.ok) {
+          serverOnline = false;
+          usingDirectTunnel = false;
+          return;
+        }
         const data = await res.json();
+        serverOnline = Boolean(data && data.status === "ok");
         if (data && typeof data.tunnel_url === "string" && data.tunnel_url.startsWith("https://")) {
           DIRECT_STREAM_URL = data.tunnel_url;
           usingDirectTunnel = true;
           return;
         }
-      } catch (_) {}
+      } catch (_) {
+        serverOnline = false;
+      }
+      DIRECT_STREAM_URL = WORKER_URL;
       usingDirectTunnel = false;
     }
 
-    function getDirectMovieUrl(idx) {
+    function getStreamUrl(idx) {
       const m = yplayItems[idx];
       const fname = encodeURIComponent((m && m.filename) ? m.filename : "video.mp4");
       return `${DIRECT_STREAM_URL}/dl/${idx}/${fname}`;
@@ -670,12 +677,11 @@
       }
     }
 
-    function startYPlay(idx, autoPlay = false, isRetry = false) {
+    function startYPlay(idx, autoPlay = false) {
       if (idx < 0 || idx >= yplayItems.length) return;
       cleanupPlayersSync();
       activeChannelId = "";
       activeYPlayIdx = idx;
-      if (!isRetry) errorRetries = 0;
       setVodMode(true);
       renderChannels();
       renderYPlay();
@@ -683,7 +689,7 @@
       const item = yplayItems[idx];
       const mb = item.file_size ? `${(item.file_size / (1024 * 1024)).toFixed(0)} MB` : "Video";
       nowTitle.textContent = item.title;
-      nowSub.textContent = `${mb} • ${usingDirectTunnel ? "Direct Tunnel" : "Proxy Mode"}`;
+      nowSub.textContent = `${mb} • ${usingDirectTunnel ? "Direct Tunnel" : "Worker Proxy"}`;
 
       const saved = Number(localStorage.getItem(`yp_pos_${item.id}`) || "0");
       pendingResumeTime = saved > 5 ? saved : 0;
@@ -692,7 +698,7 @@
       progFill.style.width = "0%";
       seekInput.value = "0";
       video.preload = "auto";
-      video.src = getDirectMovieUrl(idx);
+      video.src = getStreamUrl(idx);
       video.load();
       if (autoPlay) {
         setBuffering(true);
@@ -700,18 +706,10 @@
       }
     }
 
-    function openDirectLink(idx) {
-      const url = getDirectMovieUrl(idx);
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(url).catch(() => {});
-      }
-      window.open(url, "_blank");
-    }
-
     function playNextYPlay() {
       if (!yplayItems.length) return;
       const next = activeYPlayIdx + 1 < yplayItems.length ? activeYPlayIdx + 1 : 0;
-      startYPlay(next, true, false);
+      startYPlay(next, true);
     }
 
     function toggleVodPlay() {
@@ -778,7 +776,6 @@
     video.addEventListener("waiting", () => { if (!isLive) setBuffering(true); });
     video.addEventListener("seeking", () => { if (!isLive) setBuffering(true); });
     video.addEventListener("playing", () => {
-      errorRetries = 0;
       setBuffering(false);
       ytCenterBtn.innerHTML = "&#10074;&#10074;";
       showOverlayTemporarily();
@@ -790,16 +787,20 @@
       ytCenterBtn.innerHTML = "&#9654;";
       if (!isLive) ytOverlay.classList.add("visible");
     });
-    video.addEventListener("error", async () => {
+    video.addEventListener("error", () => {
       setBuffering(false);
-      if (!isLive && activeYPlayIdx >= 0 && errorRetries < 1) {
-        errorRetries += 1;
-        await resolveDirectTunnel();
-        startYPlay(activeYPlayIdx, true, true);
-      } else if (!isLive) {
-        nowSub.textContent = "Stream paused — tap Play or Link";
-        ytOverlay.classList.add("visible");
+      if (isLive) return;
+      const code = video.error ? video.error.code : 0;
+      if (code === 4) {
+        nowSub.textContent = "Format not supported in browser (use MP4 H.264/AAC)";
+      } else if (code === 3) {
+        nowSub.textContent = "Video decode error";
+      } else if (code === 2) {
+        nowSub.textContent = "Network/tunnel error — tap Refresh or check /health";
+      } else {
+        nowSub.textContent = "Unable to play stream";
       }
+      ytOverlay.classList.add("visible");
     });
     video.addEventListener("timeupdate", () => {
       if (isLive || seeking || !isFinite(video.duration) || video.duration <= 0) return;
@@ -819,7 +820,7 @@
       const item = yplayItems[activeYPlayIdx];
       if (item) localStorage.removeItem(`yp_pos_${item.id}`);
       if (!isLive && activeYPlayIdx + 1 < yplayItems.length) {
-        startYPlay(activeYPlayIdx + 1, true, false);
+        startYPlay(activeYPlayIdx + 1, true);
       }
     });
 
@@ -835,7 +836,7 @@
     document.addEventListener("visibilitychange", async () => {
       if (document.visibilityState === "visible" && !isLive && activeYPlayIdx >= 0 && !video.getAttribute("src")) {
         await resolveDirectTunnel();
-        startYPlay(activeYPlayIdx, false, false);
+        startYPlay(activeYPlayIdx, false);
       }
     });
 
@@ -884,7 +885,9 @@
 
     function renderYPlay() {
       const box = document.getElementById("yplayList");
-      const modeTxt = usingDirectTunnel ? "Direct Tunnel (Fast)" : "Worker Proxy";
+      const modeTxt = !serverOnline
+        ? "Backend offline — check Worker /health"
+        : (usingDirectTunnel ? "Direct Tunnel" : "Worker Proxy");
       yplaySub.textContent = yplayItems.length
         ? `${yplayItems.length} in queue • ${modeTxt}`
         : `Forward a movie to bot • ${modeTxt}`;
@@ -897,15 +900,12 @@
         const mb = m.file_size ? `${(m.file_size / (1024 * 1024)).toFixed(0)} MB` : "Video";
         const cls = i === activeYPlayIdx ? "yp-card active" : "yp-card";
         return `
-          <div class="${cls}" tabindex="0" onclick="startYPlay(${i}, true, false)" onkeydown="if(event.key==='Enter')startYPlay(${i},true,false)">
+          <div class="${cls}" tabindex="0" onclick="startYPlay(${i}, true)" onkeydown="if(event.key==='Enter')startYPlay(${i},true)">
             <div style="min-width:0;">
               <div class="yp-title">${esc(m.title)}</div>
               <div class="yp-meta">#${i + 1} • ${mb}</div>
             </div>
-            <div class="yp-btns">
-              <button onclick="event.stopPropagation();openDirectLink(${i})">Link</button>
-              <button class="red" onclick="event.stopPropagation();startYPlay(${i},true,false)">Play</button>
-            </div>
+            <button class="red" onclick="event.stopPropagation();startYPlay(${i},true)">Play</button>
           </div>
         `;
       }).join("");
@@ -914,6 +914,12 @@
     async function fetchYPlay(forceFirst = false) {
       try {
         const res = await fetch(`${WORKER_URL}/api/yplay/library?t=${Date.now()}`, { cache: "no-store" });
+        if (!res.ok) {
+          serverOnline = false;
+          renderYPlay();
+          return;
+        }
+        serverOnline = true;
         const data = await res.json();
         const prevFirst = yplayItems[0] ? yplayItems[0].id : null;
         yplayItems = Array.isArray(data.items) ? data.items : [];
@@ -922,10 +928,13 @@
         if (yplayItems.length > 0 && (!firstMoviePrepared || forceFirst || (prevFirst && prevFirst !== yplayItems[0].id && !isLive))) {
           firstMoviePrepared = true;
           if (!isLive) {
-            startYPlay(0, false, false);
+            startYPlay(0, false);
           }
         }
-      } catch (_) {}
+      } catch (_) {
+        serverOnline = false;
+        renderYPlay();
+      }
     }
 
     async function refreshAll() {
