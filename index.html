@@ -115,7 +115,7 @@
       position: absolute;
       inset: 0;
       z-index: 14;
-      background: linear-gradient(to top, rgba(0,0,0,0.84) 0%, rgba(0,0,0,0.12) 45%, rgba(0,0,0,0.35) 100%);
+      background: linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.15) 45%, rgba(0,0,0,0.35) 100%);
       display: none;
       flex-direction: column;
       justify-content: flex-end;
@@ -160,57 +160,12 @@
       color: #fff;
       font-weight: 600;
     }
-    .yt-track {
-      position: relative;
+    .yt-seek-row input[type="range"] {
       flex: 1;
-      height: 16px;
-      display: flex;
-      align-items: center;
-    }
-    .yt-track-bg {
-      position: absolute;
-      left: 0;
-      right: 0;
+      accent-color: var(--accent);
       height: 4px;
-      background: rgba(255, 255, 255, 0.22);
-      border-radius: 3px;
-      overflow: hidden;
-    }
-    .yt-buf-fill {
-      position: absolute;
-      left: 0;
-      top: 0;
-      bottom: 0;
-      width: 0%;
-      background: rgba(255, 255, 255, 0.45);
-    }
-    .yt-prog-fill {
-      position: absolute;
-      left: 0;
-      top: 0;
-      bottom: 0;
-      width: 0%;
-      background: var(--accent);
-    }
-    .yt-track input[type="range"] {
-      position: relative;
-      z-index: 2;
-      width: 100%;
-      margin: 0;
-      background: transparent;
-      -webkit-appearance: none;
-      appearance: none;
       cursor: pointer;
-      height: 16px;
     }
-    .yt-track input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 13px;
-      height: 13px;
-      border-radius: 50%;
-      background: var(--accent);
-    }
-
     .yt-actions {
       display: flex;
       align-items: center;
@@ -268,7 +223,6 @@
       align-items: center;
       justify-content: space-between;
       margin: 14px 0 10px;
-      gap: 8px;
     }
     .sec-title { font-size: 1.08rem; font-weight: 700; }
     .sec-sub { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
@@ -358,13 +312,7 @@
         <div class="yt-bottom" onclick="event.stopPropagation()">
           <div class="yt-seek-row">
             <span id="curTxt">00:00</span>
-            <div class="yt-track">
-              <div class="yt-track-bg">
-                <div id="bufFill" class="yt-buf-fill"></div>
-                <div id="progFill" class="yt-prog-fill"></div>
-              </div>
-              <input id="seekInput" type="range" min="0" max="1000" value="0" step="1" />
-            </div>
+            <input id="seekInput" type="range" min="0" max="1000" value="0" step="1" />
             <span id="durTxt">00:00</span>
           </div>
           <div class="yt-actions">
@@ -402,9 +350,9 @@
     <div class="sec-head" style="margin-top:22px;">
       <div>
         <div class="sec-title">YPlay Movies</div>
-        <div id="yplaySub" class="sec-sub">Connecting...</div>
+        <div id="yplaySub" class="sec-sub">On-demand instant streaming</div>
       </div>
-      <button onclick="refreshAll()">Refresh</button>
+      <button onclick="fetchYPlay(true)">Refresh</button>
     </div>
     <div id="yplayList" class="yplay-list"></div>
   </div>
@@ -412,8 +360,6 @@
   <script>
     const WORKER_URL = "https://ystream.hiddencreator-account.workers.dev";
     let DIRECT_STREAM_URL = WORKER_URL;
-    let usingDirectTunnel = false;
-    let serverOnline = false;
 
     const CHANNELS = [
       {
@@ -490,8 +436,6 @@
     const nowSub = document.getElementById("nowSub");
     const liveTag = document.getElementById("liveTag");
     const seekInput = document.getElementById("seekInput");
-    const bufFill = document.getElementById("bufFill");
-    const progFill = document.getElementById("progFill");
     const curTxt = document.getElementById("curTxt");
     const durTxt = document.getElementById("durTxt");
     const yplaySub = document.getElementById("yplaySub");
@@ -511,6 +455,7 @@
     let pendingSeekDelta = 0;
     let seekDebounceTimer = null;
     let flashTimer = null;
+    let errorRetries = 0;
 
     function setBuffering(active) {
       bufSpinner.classList.toggle("show", active);
@@ -556,8 +501,9 @@
         const delta = pendingSeekDelta;
         pendingSeekDelta = 0;
         if (!isFinite(video.duration) || video.duration <= 0) return;
-        video.currentTime = Math.max(0, Math.min(video.duration - 0.5, video.currentTime + delta));
-      }, 240);
+        const target = Math.max(0, Math.min(video.duration - 0.5, video.currentTime + delta));
+        video.currentTime = target;
+      }, 260);
     }
 
     videoWrap.addEventListener("click", (e) => {
@@ -586,15 +532,14 @@
       }, 280);
     });
 
-    function cleanupPlayersSync() {
+    async function cleanupPlayers() {
       if (hls) {
         hls.destroy();
         hls = null;
       }
       if (shakaPlayer) {
-        const sp = shakaPlayer;
+        try { await shakaPlayer.destroy(); } catch (_) {}
         shakaPlayer = null;
-        sp.destroy().catch(() => {});
       }
       setBuffering(false);
     }
@@ -602,33 +547,15 @@
     async function resolveDirectTunnel() {
       try {
         const res = await fetch(`${WORKER_URL}/health?t=${Date.now()}`, { cache: "no-store" });
-        if (!res.ok) {
-          serverOnline = false;
-          usingDirectTunnel = false;
-          return;
-        }
         const data = await res.json();
-        serverOnline = Boolean(data && data.status === "ok");
         if (data && typeof data.tunnel_url === "string" && data.tunnel_url.startsWith("https://")) {
           DIRECT_STREAM_URL = data.tunnel_url;
-          usingDirectTunnel = true;
-          return;
         }
-      } catch (_) {
-        serverOnline = false;
-      }
-      DIRECT_STREAM_URL = WORKER_URL;
-      usingDirectTunnel = false;
-    }
-
-    function getStreamUrl(idx) {
-      const m = yplayItems[idx];
-      const fname = encodeURIComponent((m && m.filename) ? m.filename : "video.mp4");
-      return `${DIRECT_STREAM_URL}/dl/${idx}/${fname}`;
+      } catch (_) {}
     }
 
     async function playChannel(ch, autoPlay = true) {
-      cleanupPlayersSync();
+      await cleanupPlayers();
       activeChannelId = ch.id;
       activeYPlayIdx = -1;
       pendingResumeTime = 0;
@@ -677,11 +604,12 @@
       }
     }
 
-    function startYPlay(idx, autoPlay = false) {
+    async function loadYPlay(idx, autoPlay = false) {
       if (idx < 0 || idx >= yplayItems.length) return;
-      cleanupPlayersSync();
+      await cleanupPlayers();
       activeChannelId = "";
       activeYPlayIdx = idx;
+      errorRetries = 0;
       setVodMode(true);
       renderChannels();
       renderYPlay();
@@ -689,16 +617,13 @@
       const item = yplayItems[idx];
       const mb = item.file_size ? `${(item.file_size / (1024 * 1024)).toFixed(0)} MB` : "Video";
       nowTitle.textContent = item.title;
-      nowSub.textContent = `${mb} • ${usingDirectTunnel ? "Direct Tunnel" : "Worker Proxy"}`;
+      nowSub.textContent = `${mb} • Instant Stream`;
 
       const saved = Number(localStorage.getItem(`yp_pos_${item.id}`) || "0");
       pendingResumeTime = saved > 5 ? saved : 0;
 
-      bufFill.style.width = "0%";
-      progFill.style.width = "0%";
-      seekInput.value = "0";
       video.preload = "auto";
-      video.src = getStreamUrl(idx);
+      video.src = `${DIRECT_STREAM_URL}/api/yplay/stream/${idx}`;
       video.load();
       if (autoPlay) {
         setBuffering(true);
@@ -709,7 +634,7 @@
     function playNextYPlay() {
       if (!yplayItems.length) return;
       const next = activeYPlayIdx + 1 < yplayItems.length ? activeYPlayIdx + 1 : 0;
-      startYPlay(next, true);
+      loadYPlay(next, true);
     }
 
     function toggleVodPlay() {
@@ -753,27 +678,14 @@
       return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
     }
 
-    function updateBufferedBar() {
-      if (isLive || !isFinite(video.duration) || video.duration <= 0) return;
-      try {
-        for (let i = 0; i < video.buffered.length; i++) {
-          if (video.buffered.start(i) <= video.currentTime && video.buffered.end(i) >= video.currentTime) {
-            const pct = Math.min(100, (video.buffered.end(i) / video.duration) * 100);
-            bufFill.style.width = `${pct.toFixed(1)}%`;
-            break;
-          }
-        }
-      } catch (_) {}
-    }
-
     video.addEventListener("loadedmetadata", () => {
       if (!isLive && pendingResumeTime > 0 && isFinite(video.duration) && pendingResumeTime < video.duration - 2) {
         video.currentTime = pendingResumeTime;
         pendingResumeTime = 0;
       }
     });
-    video.addEventListener("progress", updateBufferedBar);
     video.addEventListener("waiting", () => { if (!isLive) setBuffering(true); });
+    video.addEventListener("stalled", () => { if (!isLive && !video.paused) setBuffering(true); });
     video.addEventListener("seeking", () => { if (!isLive) setBuffering(true); });
     video.addEventListener("playing", () => {
       setBuffering(false);
@@ -787,29 +699,20 @@
       ytCenterBtn.innerHTML = "&#9654;";
       if (!isLive) ytOverlay.classList.add("visible");
     });
-    video.addEventListener("error", () => {
-      setBuffering(false);
-      if (isLive) return;
-      const code = video.error ? video.error.code : 0;
-      if (code === 4) {
-        nowSub.textContent = "Format not supported in browser (use MP4 H.264/AAC)";
-      } else if (code === 3) {
-        nowSub.textContent = "Video decode error";
-      } else if (code === 2) {
-        nowSub.textContent = "Network/tunnel error — tap Refresh or check /health";
+    video.addEventListener("error", async () => {
+      if (!isLive && activeYPlayIdx >= 0 && errorRetries < 2) {
+        errorRetries += 1;
+        await resolveDirectTunnel();
+        loadYPlay(activeYPlayIdx, true);
       } else {
-        nowSub.textContent = "Unable to play stream";
+        setBuffering(false);
       }
-      ytOverlay.classList.add("visible");
     });
     video.addEventListener("timeupdate", () => {
       if (isLive || seeking || !isFinite(video.duration) || video.duration <= 0) return;
-      const pct = (video.currentTime / video.duration) * 100;
-      seekInput.value = String(Math.round(pct * 10));
-      progFill.style.width = `${pct.toFixed(2)}%`;
+      seekInput.value = String(Math.round((video.currentTime / video.duration) * 1000));
       curTxt.textContent = fmt(video.currentTime);
       durTxt.textContent = fmt(video.duration);
-      updateBufferedBar();
       const item = yplayItems[activeYPlayIdx];
       if (item && video.currentTime > 2) {
         localStorage.setItem(`yp_pos_${item.id}`, String(Math.floor(video.currentTime)));
@@ -820,7 +723,7 @@
       const item = yplayItems[activeYPlayIdx];
       if (item) localStorage.removeItem(`yp_pos_${item.id}`);
       if (!isLive && activeYPlayIdx + 1 < yplayItems.length) {
-        startYPlay(activeYPlayIdx + 1, true);
+        loadYPlay(activeYPlayIdx + 1, true);
       }
     });
 
@@ -836,16 +739,14 @@
     document.addEventListener("visibilitychange", async () => {
       if (document.visibilityState === "visible" && !isLive && activeYPlayIdx >= 0 && !video.getAttribute("src")) {
         await resolveDirectTunnel();
-        startYPlay(activeYPlayIdx, false);
+        loadYPlay(activeYPlayIdx, false);
       }
     });
 
     seekInput.addEventListener("input", () => {
       seeking = true;
-      const pct = Number(seekInput.value) / 10;
-      progFill.style.width = `${pct.toFixed(2)}%`;
       if (isFinite(video.duration) && video.duration > 0) {
-        curTxt.textContent = fmt((pct / 100) * video.duration);
+        curTxt.textContent = fmt((Number(seekInput.value) / 1000) * video.duration);
       }
     });
     seekInput.addEventListener("change", () => {
@@ -885,12 +786,9 @@
 
     function renderYPlay() {
       const box = document.getElementById("yplayList");
-      const modeTxt = !serverOnline
-        ? "Backend offline — check Worker /health"
-        : (usingDirectTunnel ? "Direct Tunnel" : "Worker Proxy");
       yplaySub.textContent = yplayItems.length
-        ? `${yplayItems.length} in queue • ${modeTxt}`
-        : `Forward a movie to bot • ${modeTxt}`;
+        ? `${yplayItems.length} in queue • Continuous stream`
+        : "Forward a movie to Telegram bot";
 
       if (!yplayItems.length) {
         box.innerHTML = `<div class="yp-card"><div><div class="yp-title">No movies in queue</div><div class="yp-meta">Forward a movie to your Telegram bot</div></div></div>`;
@@ -900,12 +798,12 @@
         const mb = m.file_size ? `${(m.file_size / (1024 * 1024)).toFixed(0)} MB` : "Video";
         const cls = i === activeYPlayIdx ? "yp-card active" : "yp-card";
         return `
-          <div class="${cls}" tabindex="0" onclick="startYPlay(${i}, true)" onkeydown="if(event.key==='Enter')startYPlay(${i},true)">
-            <div style="min-width:0;">
+          <div class="${cls}" tabindex="0" onclick="loadYPlay(${i}, true)" onkeydown="if(event.key==='Enter')loadYPlay(${i},true)">
+            <div>
               <div class="yp-title">${esc(m.title)}</div>
-              <div class="yp-meta">#${i + 1} • ${mb}</div>
+              <div class="yp-meta">#${i + 1} • ${mb} • Instant Stream</div>
             </div>
-            <button class="red" onclick="event.stopPropagation();startYPlay(${i},true)">Play</button>
+            <button class="red" onclick="event.stopPropagation();loadYPlay(${i},true)">Play</button>
           </div>
         `;
       }).join("");
@@ -914,12 +812,6 @@
     async function fetchYPlay(forceFirst = false) {
       try {
         const res = await fetch(`${WORKER_URL}/api/yplay/library?t=${Date.now()}`, { cache: "no-store" });
-        if (!res.ok) {
-          serverOnline = false;
-          renderYPlay();
-          return;
-        }
-        serverOnline = true;
         const data = await res.json();
         const prevFirst = yplayItems[0] ? yplayItems[0].id : null;
         yplayItems = Array.isArray(data.items) ? data.items : [];
@@ -928,18 +820,10 @@
         if (yplayItems.length > 0 && (!firstMoviePrepared || forceFirst || (prevFirst && prevFirst !== yplayItems[0].id && !isLive))) {
           firstMoviePrepared = true;
           if (!isLive) {
-            startYPlay(0, false);
+            loadYPlay(0, false);
           }
         }
-      } catch (_) {
-        serverOnline = false;
-        renderYPlay();
-      }
-    }
-
-    async function refreshAll() {
-      await resolveDirectTunnel();
-      await fetchYPlay(true);
+      } catch (_) {}
     }
 
     function esc(s) {
