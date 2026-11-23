@@ -77,16 +77,16 @@
       position: absolute;
       top: 50%;
       transform: translateY(-50%);
-      background: rgba(0, 0, 0, 0.65);
+      background: rgba(0, 0, 0, 0.72);
       color: #fff;
-      font-size: 0.9rem;
+      font-size: 0.92rem;
       font-weight: 700;
       padding: 10px 16px;
       border-radius: 24px;
       z-index: 17;
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.2s ease;
+      transition: opacity 0.18s ease;
     }
     .tap-flash.left { left: 14%; }
     .tap-flash.right { right: 14%; }
@@ -301,7 +301,7 @@
 <body>
   <div class="player-stage" id="stage">
     <div class="video-wrap" id="videoWrap">
-      <video id="video" playsinline preload="metadata"></video>
+      <video id="video" playsinline preload="auto"></video>
       <div id="bufSpinner" class="buf-spinner"></div>
       <div id="flashLeft" class="tap-flash left">-10s</div>
       <div id="flashRight" class="tap-flash right">+10s</div>
@@ -452,6 +452,10 @@
     let lastTapTime = 0;
     let singleTapTimer = null;
     let pendingResumeTime = 0;
+    let pendingSeekDelta = 0;
+    let seekDebounceTimer = null;
+    let flashTimer = null;
+    let errorRetries = 0;
 
     function setBuffering(active) {
       bufSpinner.classList.toggle("show", active);
@@ -476,10 +480,30 @@
       }, 3000);
     }
 
-    function flashSeek(side) {
+    function queueSeekDelta(sec) {
+      if (isLive || !isFinite(video.duration) || video.duration <= 0) return;
+      pendingSeekDelta += sec;
+      const side = pendingSeekDelta < 0 ? "left" : "right";
+      const other = side === "left" ? flashRight : flashLeft;
       const el = side === "left" ? flashLeft : flashRight;
+      other.classList.remove("show");
+      el.textContent = `${pendingSeekDelta > 0 ? "+" : ""}${pendingSeekDelta}s`;
       el.classList.add("show");
-      setTimeout(() => el.classList.remove("show"), 450);
+
+      clearTimeout(flashTimer);
+      flashTimer = setTimeout(() => {
+        flashLeft.classList.remove("show");
+        flashRight.classList.remove("show");
+      }, 550);
+
+      clearTimeout(seekDebounceTimer);
+      seekDebounceTimer = setTimeout(() => {
+        const delta = pendingSeekDelta;
+        pendingSeekDelta = 0;
+        if (!isFinite(video.duration) || video.duration <= 0) return;
+        const target = Math.max(0, Math.min(video.duration - 0.5, video.currentTime + delta));
+        video.currentTime = target;
+      }, 260);
     }
 
     videoWrap.addEventListener("click", (e) => {
@@ -492,14 +516,9 @@
 
       if (now - lastTapTime < 280) {
         clearTimeout(singleTapTimer);
-        lastTapTime = 0;
-        if (isLeft) {
-          seekOffset(-10);
-          flashSeek("left");
-        } else if (isRight) {
-          seekOffset(10);
-          flashSeek("right");
-        }
+        lastTapTime = now;
+        if (isLeft) queueSeekDelta(-10);
+        else if (isRight) queueSeekDelta(10);
         return;
       }
 
@@ -590,6 +609,7 @@
       await cleanupPlayers();
       activeChannelId = "";
       activeYPlayIdx = idx;
+      errorRetries = 0;
       setVodMode(true);
       renderChannels();
       renderYPlay();
@@ -602,6 +622,7 @@
       const saved = Number(localStorage.getItem(`yp_pos_${item.id}`) || "0");
       pendingResumeTime = saved > 5 ? saved : 0;
 
+      video.preload = "auto";
       video.src = `${DIRECT_STREAM_URL}/api/yplay/stream/${idx}`;
       video.load();
       if (autoPlay) {
@@ -619,13 +640,6 @@
     function toggleVodPlay() {
       if (video.paused) video.play().catch(() => {});
       else video.pause();
-      showOverlayTemporarily();
-    }
-
-    function seekOffset(sec) {
-      if (isLive || !isFinite(video.duration) || video.duration <= 0) return;
-      setBuffering(true);
-      video.currentTime = Math.max(0, Math.min(video.duration - 0.5, video.currentTime + sec));
       showOverlayTemporarily();
     }
 
@@ -686,9 +700,12 @@
       if (!isLive) ytOverlay.classList.add("visible");
     });
     video.addEventListener("error", async () => {
-      if (!isLive && activeYPlayIdx >= 0) {
+      if (!isLive && activeYPlayIdx >= 0 && errorRetries < 2) {
+        errorRetries += 1;
         await resolveDirectTunnel();
         loadYPlay(activeYPlayIdx, true);
+      } else {
+        setBuffering(false);
       }
     });
     video.addEventListener("timeupdate", () => {
@@ -770,7 +787,7 @@
     function renderYPlay() {
       const box = document.getElementById("yplayList");
       yplaySub.textContent = yplayItems.length
-        ? `${yplayItems.length} in queue • On-demand instant stream`
+        ? `${yplayItems.length} in queue • Continuous stream`
         : "Forward a movie to Telegram bot";
 
       if (!yplayItems.length) {
