@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import re
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -23,11 +24,14 @@ if not BOT_TOKEN:
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
-CACHE_DIR = Path("/tmp/yplay_cache")
+CACHE_DIR = Path("/tmp/yplay_chunks")
 HLS_DIR = Path("/dev/shm/suntv_hls")
 LIBRARY_FILE = DATA_DIR / "yplay_library.json"
 CHANNELS_FILE = DATA_DIR / "channels.json"
 SESSION_FILE = DATA_DIR / "ystream_bot"
+
+CHUNK_SIZE = 1024 * 1024  # Telegram native 1 MiB chunk
+MAX_CACHE_BYTES = 3 * 1024 * 1024 * 1024  # Keep SSD cache under 3 GB
 
 for d in (DATA_DIR, CACHE_DIR, HLS_DIR):
     d.mkdir(parents=True, exist_ok=True)
@@ -61,7 +65,10 @@ tg_client = Client(
 
 ffmpeg_proc: Optional[subprocess.Popen] = None
 last_error: str = ""
-active_precaches: dict[str, asyncio.Task] = {}
+msg_cache: dict[str, Message] = {}
+block_locks: dict[tuple[str, int], asyncio.Lock] = {}
+lookahead_tasks: dict[tuple[str, int], asyncio.Task] = {}
+lookahead_sem = asyncio.Semaphore(2)
 
 
 def read_json(path: Path, default):
@@ -117,86 +124,115 @@ def get_media_info(msg: Message) -> Optional[dict]:
     }
 
 
-def cache_file_path(item_id: str) -> Path:
+def safe_item_dir(item_id: str) -> Path:
     safe = "".join(c for c in item_id if c.isalnum() or c in ("_", "-"))
-    return CACHE_DIR / f"{safe}.bin"
+    p = CACHE_DIR / safe
+    p.mkdir(parents=True, exist_ok=True)
+    return p
 
 
-def read_slice(path: Path, offset: int, size: int) -> bytes:
-    with open(path, "rb") as fp:
-        fp.seek(offset)
-        return fp.read(size)
+def block_path(item_id: str, b_idx: int) -> Path:
+    return safe_item_dir(item_id) / f"{b_idx}.blk"
 
 
-async def precache_media_background(item: dict):
-    item_id = item["id"]
-    out_path = cache_file_path(item_id)
-    partial_path = out_path.with_suffix(".part")
-    fast_path = out_path.with_suffix(".fast.mp4")
-    done_marker = out_path.with_suffix(".done")
-
-    if out_path.exists() and done_marker.exists():
+def prune_cache_sync():
+    files = list(CACHE_DIR.glob("*/*.blk"))
+    total = sum(f.stat().st_size for f in files if f.exists())
+    if total <= MAX_CACHE_BYTES:
         return
+    files.sort(key=lambda f: f.stat().st_mtime)
+    for f in files:
+        if total <= int(MAX_CACHE_BYTES * 0.75):
+            break
+        try:
+            sz = f.stat().st_size
+            f.unlink()
+            total -= sz
+        except Exception:
+            pass
 
+
+async def get_tg_message(item: dict, force_refresh: bool = False) -> Message:
+    item_id = item["id"]
+    if not force_refresh and item_id in msg_cache:
+        return msg_cache[item_id]
+    msg = await tg_client.get_messages(int(item["chat_id"]), int(item["message_id"]))
+    media = msg.video or msg.document or msg.animation
+    if not media:
+        raise HTTPException(status_code=404, detail="Media missing in Telegram")
+    msg_cache[item_id] = msg
+    return msg
+
+
+async def fetch_block(item: dict, b_idx: int) -> bytes:
+    item_id = item["id"]
+    b_path = block_path(item_id, b_idx)
+    if b_path.exists():
+        return await asyncio.to_thread(b_path.read_bytes)
+
+    key = (item_id, b_idx)
+    lock = block_locks.get(key)
+    if lock is None:
+        lock = asyncio.Lock()
+        block_locks[key] = lock
+
+    async with lock:
+        if b_path.exists():
+            return await asyncio.to_thread(b_path.read_bytes)
+
+        for attempt in range(2):
+            try:
+                msg = await get_tg_message(item, force_refresh=(attempt == 1))
+                data = bytearray()
+                async for chunk in tg_client.stream_media(msg, limit=1, offset=b_idx):
+                    data.extend(chunk)
+                    break
+                raw = bytes(data)
+                if raw:
+                    tmp_path = b_path.with_suffix(".tmp")
+                    await asyncio.to_thread(tmp_path.write_bytes, raw)
+                    await asyncio.to_thread(os.replace, tmp_path, b_path)
+                    asyncio.create_task(asyncio.to_thread(prune_cache_sync))
+                return raw
+            except Exception:
+                msg_cache.pop(item_id, None)
+                if attempt == 1:
+                    raise
+        return b""
+
+
+async def lookahead_worker(item: dict, b_idx: int):
+    key = (item["id"], b_idx)
     try:
-        msg = await tg_client.get_messages(int(item["chat_id"]), int(item["message_id"]))
-        media = msg.video or msg.document or msg.animation
-        if not media:
-            return
-
-        with open(partial_path, "wb") as fp:
-            async for chunk in tg_client.stream_media(msg):
-                await asyncio.to_thread(fp.write, chunk)
-            await asyncio.to_thread(fp.flush)
-
-        # Faststart remux so seeking is instant like YouTube/Netflix (no re-encode)
-        proc = await asyncio.create_subprocess_exec(
-            "ffmpeg", "-y", "-loglevel", "error",
-            "-i", str(partial_path),
-            "-c", "copy", "-movflags", "+faststart",
-            str(fast_path),
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
-        rc = await proc.wait()
-        if rc == 0 and fast_path.exists() and fast_path.stat().st_size > 0:
-            os.replace(fast_path, out_path)
-            if partial_path.exists():
-                partial_path.unlink()
-            done_marker.write_text("video/mp4", encoding="utf-8")
-        else:
-            if fast_path.exists():
-                fast_path.unlink()
-            os.replace(partial_path, out_path)
-            done_marker.write_text(item.get("mime_type") or "video/mp4", encoding="utf-8")
-    except asyncio.CancelledError:
+        async with lookahead_sem:
+            if not block_path(item["id"], b_idx).exists():
+                await fetch_block(item, b_idx)
+    except Exception:
         pass
-    except Exception as exc:
-        print(f"[Pre-cache error {item_id}] {exc}")
     finally:
-        active_precaches.pop(item_id, None)
+        lookahead_tasks.pop(key, None)
 
 
-def trigger_precache(item: dict):
+def schedule_lookahead(item: dict, start_block: int, total_blocks: int, count: int = 2):
     item_id = item["id"]
-    if item_id in active_precaches:
-        return
-    out_path = cache_file_path(item_id)
-    done_marker = out_path.with_suffix(".done")
-    if out_path.exists() and done_marker.exists():
-        return
-    active_precaches[item_id] = asyncio.create_task(precache_media_background(item))
+    for b in range(start_block, min(total_blocks, start_block + count)):
+        key = (item_id, b)
+        if key in lookahead_tasks or block_path(item_id, b).exists():
+            continue
+        if len(lookahead_tasks) >= 4:
+            break
+        lookahead_tasks[key] = asyncio.create_task(lookahead_worker(item, b))
 
 
 def save_media_to_queue(item: dict) -> tuple[bool, int]:
     items = read_json(LIBRARY_FILE, [])
     for row in items:
         if row.get("chat_id") == item["chat_id"] and row.get("message_id") == item["message_id"]:
-            trigger_precache(row)
+            schedule_lookahead(row, 0, 2, count=2)
             return False, len(items)
     items.append(item)
     write_json(LIBRARY_FILE, items)
-    trigger_precache(item)
+    schedule_lookahead(item, 0, 2, count=2)
     return True, len(items)
 
 
@@ -204,7 +240,7 @@ def save_media_to_queue(item: dict) -> tuple[bool, int]:
 async def cmd_start(_, msg: Message):
     await msg.reply_text(
         "YPlay Ready.\n"
-        "Forward or send movies/episodes directly — they auto-queue and pre-cache immediately."
+        "Forward or send movies/episodes — they stream on-demand instantly like YouTube."
     )
 
 
@@ -231,13 +267,8 @@ async def cmd_del(_, msg: Message):
         return
     removed = items.pop(idx)
     write_json(LIBRARY_FILE, items)
-    for ext in (".bin", ".part", ".done", ".fast.mp4"):
-        p = cache_file_path(removed["id"]).with_suffix(ext)
-        if p.exists():
-            try:
-                p.unlink()
-            except Exception:
-                pass
+    msg_cache.pop(removed["id"], None)
+    shutil.rmtree(safe_item_dir(removed["id"]), ignore_errors=True)
     await msg.reply_text(f"Removed: {removed.get('title')}")
 
 
@@ -249,7 +280,7 @@ async def cmd_add(_, msg: Message):
         await msg.reply_text("Reply to a video file with /add.")
         return
     added, total = save_media_to_queue(info)
-    await msg.reply_text(f"{'Queued & pre-caching' if added else 'Already in queue'} #{total}: {info['title']}")
+    await msg.reply_text(f"{'Ready in queue' if added else 'Already in queue'} #{total}: {info['title']}")
 
 
 @tg_client.on_message(filters.video | filters.document | filters.animation)
@@ -259,7 +290,7 @@ async def on_file(_, msg: Message):
         return
     added, total = save_media_to_queue(info)
     if added:
-        await msg.reply_text(f"Queued #{total} (pre-caching): {info['title']}")
+        await msg.reply_text(f"Queued #{total} (Instant Stream Ready): {info['title']}")
 
 
 async def start_suntv_relay():
@@ -330,14 +361,15 @@ async def relay_watcher():
 @app.on_event("startup")
 async def startup():
     await tg_client.start()
-    for item in read_json(LIBRARY_FILE, []):
-        trigger_precache(item)
+    items = read_json(LIBRARY_FILE, [])
+    if items:
+        schedule_lookahead(items[0], 0, 2, count=1)
     asyncio.create_task(relay_watcher())
 
 
 @app.on_event("shutdown")
 async def shutdown():
-    for t in list(active_precaches.values()):
+    for t in list(lookahead_tasks.values()):
         t.cancel()
     if ffmpeg_proc and ffmpeg_proc.poll() is None:
         ffmpeg_proc.terminate()
@@ -350,12 +382,10 @@ async def shutdown():
 @app.get("/health")
 async def health():
     items = read_json(LIBRARY_FILE, [])
-    cached_count = sum(1 for x in items if cache_file_path(x["id"]).with_suffix(".done").exists())
     return {
         "status": "ok",
         "bot_connected": tg_client.is_connected,
         "yplay_count": len(items),
-        "yplay_cached": cached_count,
         "tunnel_url": get_active_tunnel_url(),
         "suntv_active": ffmpeg_proc is not None and ffmpeg_proc.poll() is None,
         "suntv_error": last_error,
@@ -369,38 +399,8 @@ async def yplay_library():
     for idx, x in enumerate(items):
         row = dict(x)
         row["index"] = idx
-        full_p = cache_file_path(x["id"])
-        part_p = full_p.with_suffix(".part")
-        done_p = full_p.with_suffix(".done")
-        is_done = full_p.exists() and done_p.exists()
-        total_sz = int(x.get("file_size") or 0)
-        curr_sz = full_p.stat().st_size if is_done else (part_p.stat().st_size if part_p.exists() else 0)
-        pct = 100 if is_done else (min(99, int((curr_sz / total_sz) * 100)) if total_sz > 0 else 0)
-        row["cached"] = is_done
-        row["progress_pct"] = pct
-        row["partial_bytes"] = curr_sz
         enriched.append(row)
     return {"count": len(enriched), "items": enriched}
-
-
-def parse_range_window(range_header: Optional[str], total_size: int, max_window: int) -> tuple[int, int]:
-    start_byte = 0
-    end_byte = min(total_size - 1, max_window - 1)
-    if range_header and "=" in range_header:
-        try:
-            _, rng = range_header.strip().split("=", 1)
-            s_part, e_part = rng.split("-", 1)
-            if s_part:
-                start_byte = max(0, int(s_part))
-            if e_part:
-                end_byte = min(total_size - 1, int(e_part))
-            else:
-                end_byte = min(total_size - 1, start_byte + max_window - 1)
-        except Exception:
-            raise HTTPException(status_code=416, detail="Invalid range")
-    if start_byte > end_byte or start_byte >= total_size:
-        raise HTTPException(status_code=416, detail="Invalid range bounds")
-    return start_byte, end_byte
 
 
 @app.get("/api/yplay/stream/{index}")
@@ -410,118 +410,65 @@ async def yplay_stream(index: int, request: Request):
         raise HTTPException(status_code=404, detail="Movie not found in YPlay queue")
 
     item = items[index]
-    trigger_precache(item)
-
-    full_path = cache_file_path(item["id"])
-    part_path = full_path.with_suffix(".part")
-    done_path = full_path.with_suffix(".done")
-    range_header = request.headers.get("range")
-
-    # 1. Fully cached + faststart remuxed on SSD -> serve 4MB windowed chunks non-blocking
-    if full_path.exists() and done_path.exists():
-        mime = done_path.read_text(encoding="utf-8").strip() or item.get("mime_type") or "video/mp4"
-        total_size = full_path.stat().st_size
-        start_byte, end_byte = parse_range_window(range_header, total_size, 4 * 1024 * 1024)
-        length = end_byte - start_byte + 1
-
-        async def local_gen():
-            offset = start_byte
-            remaining = length
-            while remaining > 0:
-                if await request.is_disconnected():
-                    break
-                data = await asyncio.to_thread(read_slice, full_path, offset, min(256 * 1024, remaining))
-                if not data:
-                    break
-                offset += len(data)
-                remaining -= len(data)
-                yield data
-
-        headers = {
-            "Accept-Ranges": "bytes",
-            "Content-Type": mime,
-            "Cache-Control": "no-cache",
-            "Content-Range": f"bytes {start_byte}-{end_byte}/{total_size}",
-            "Content-Length": str(length),
-        }
-        return StreamingResponse(local_gen(), status_code=206 if range_header else 200, headers=headers, media_type=mime)
-
-    # 2. Still downloading -> serve from .part if bytes are ready, else small 2MB Telegram fetch
-    msg = await tg_client.get_messages(int(item["chat_id"]), int(item["message_id"]))
+    msg = await get_tg_message(item)
     media = msg.video or msg.document or msg.animation
-    if not media:
-        raise HTTPException(status_code=404, detail="Media missing in Telegram")
-
     total_size = int(getattr(media, "file_size", 0) or item.get("file_size") or 0)
     mime = item.get("mime_type") or getattr(media, "mime_type", None) or "video/mp4"
 
-    if total_size > 0:
-        start_byte, end_byte = parse_range_window(range_header, total_size, 2 * 1024 * 1024)
-    else:
-        start_byte, end_byte = 0, None
+    if total_size <= 0:
+        raise HTTPException(status_code=500, detail="Unknown media size")
 
-    if part_path.exists() and total_size > 0:
-        part_size = part_path.stat().st_size
-        if start_byte + (128 * 1024) < part_size:
-            safe_end = min(end_byte, part_size - 1)
-            length = safe_end - start_byte + 1
+    total_blocks = (total_size + CHUNK_SIZE - 1) // CHUNK_SIZE
+    range_header = request.headers.get("range")
 
-            async def part_gen():
-                offset = start_byte
-                remaining = length
-                while remaining > 0:
-                    if await request.is_disconnected():
-                        break
-                    data = await asyncio.to_thread(read_slice, part_path, offset, min(256 * 1024, remaining))
-                    if not data:
-                        break
-                    offset += len(data)
-                    remaining -= len(data)
-                    yield data
+    start_byte = 0
+    end_byte = min(total_size - 1, (8 * CHUNK_SIZE) - 1)
 
-            headers = {
-                "Accept-Ranges": "bytes",
-                "Content-Type": mime,
-                "Cache-Control": "no-cache",
-                "Content-Range": f"bytes {start_byte}-{safe_end}/{total_size}",
-                "Content-Length": str(length),
-            }
-            return StreamingResponse(part_gen(), status_code=206, headers=headers, media_type=mime)
+    if range_header and "=" in range_header:
+        try:
+            _, rng = range_header.strip().split("=", 1)
+            s_part, e_part = rng.split("-", 1)
+            if s_part:
+                start_byte = max(0, int(s_part))
+            if e_part:
+                end_byte = min(total_size - 1, int(e_part))
+            else:
+                end_byte = min(total_size - 1, start_byte + (8 * CHUNK_SIZE) - 1)
+        except Exception:
+            raise HTTPException(status_code=416, detail="Invalid range")
 
-    chunk_size = 1024 * 1024
-    offset_chunks = start_byte // chunk_size
-    trim_first = start_byte % chunk_size
-    chunks_limit = ((end_byte // chunk_size) - offset_chunks + 1) if end_byte is not None else 0
+    if start_byte > end_byte or start_byte >= total_size:
+        raise HTTPException(status_code=416, detail="Invalid range bounds")
 
-    async def tg_gen():
-        sent = 0
-        limit = (end_byte - start_byte + 1) if end_byte is not None else None
-        first = True
-        async for chunk in tg_client.stream_media(msg, limit=chunks_limit, offset=offset_chunks):
+    length = end_byte - start_byte + 1
+
+    async def block_stream_gen():
+        pos = start_byte
+        while pos <= end_byte:
             if await request.is_disconnected():
                 break
-            if first:
-                first = False
-                if trim_first > 0:
-                    chunk = chunk[trim_first:]
-            if not chunk:
-                continue
-            if limit is not None:
-                rem = limit - sent
-                if rem <= 0:
-                    break
-                if len(chunk) > rem:
-                    chunk = chunk[:rem]
-            sent += len(chunk)
-            yield chunk
+            b_idx = pos // CHUNK_SIZE
+            b_off = pos % CHUNK_SIZE
+            # Fetch ONLY next 2 MB ahead of playhead (YouTube-style buffer)
+            schedule_lookahead(item, b_idx + 1, total_blocks, count=2)
+            raw = await fetch_block(item, b_idx)
+            if not raw or b_off >= len(raw):
+                break
+            take = min(len(raw) - b_off, end_byte - pos + 1)
+            yield raw[b_off : b_off + take]
+            pos += take
 
-    headers = {"Accept-Ranges": "bytes", "Content-Type": mime, "Cache-Control": "no-cache"}
-    if total_size > 0 and end_byte is not None:
+    headers = {
+        "Accept-Ranges": "bytes",
+        "Content-Type": mime,
+        "Cache-Control": "no-cache",
+        "Content-Length": str(length),
+    }
+    if range_header:
         headers["Content-Range"] = f"bytes {start_byte}-{end_byte}/{total_size}"
-        headers["Content-Length"] = str(end_byte - start_byte + 1)
-        return StreamingResponse(tg_gen(), status_code=206 if range_header else 200, headers=headers, media_type=mime)
+        return StreamingResponse(block_stream_gen(), status_code=206, headers=headers, media_type=mime)
 
-    return StreamingResponse(tg_gen(), status_code=200, headers=headers, media_type=mime)
+    return StreamingResponse(block_stream_gen(), status_code=200, headers=headers, media_type=mime)
 
 
 @app.get("/live/suntv/index.m3u8")
