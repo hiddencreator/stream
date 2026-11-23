@@ -59,8 +59,10 @@ jobs:
           sudo systemctl daemon-reload
           sudo systemctl enable ystream ystream-tunnel
           sudo systemctl restart ystream ystream-tunnel
-          sleep 4
-          sudo journalctl -u ystream-tunnel -n 25 --no-pager | grep -oE 'https://[a-zA-Z0-9-]+\.trycloudflare\.com' | tail -n 1 || true
+          sleep 8
+          echo "=== CLOUDFLARE URL ==="
+          sudo journalctl -u ystream-tunnel -n 50 --no-pager | grep -oE 'https://[a-zA-Z0-9-]+\.trycloudflare\.com' | tail -n 1 || true
+          echo "======================"
           SETUP_EOF
 
           ENCODED_SCRIPT=$(base64 -w 0 /tmp/azure_setup.sh)
