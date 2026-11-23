@@ -122,10 +122,17 @@ def cache_file_path(item_id: str) -> Path:
     return CACHE_DIR / f"{safe}.bin"
 
 
+def read_slice(path: Path, offset: int, size: int) -> bytes:
+    with open(path, "rb") as fp:
+        fp.seek(offset)
+        return fp.read(size)
+
+
 async def precache_media_background(item: dict):
     item_id = item["id"]
     out_path = cache_file_path(item_id)
     partial_path = out_path.with_suffix(".part")
+    fast_path = out_path.with_suffix(".fast.mp4")
     done_marker = out_path.with_suffix(".done")
 
     if out_path.exists() and done_marker.exists():
@@ -136,12 +143,32 @@ async def precache_media_background(item: dict):
         media = msg.video or msg.document or msg.animation
         if not media:
             return
+
         with open(partial_path, "wb") as fp:
             async for chunk in tg_client.stream_media(msg):
-                fp.write(chunk)
-                fp.flush()
-        os.replace(partial_path, out_path)
-        done_marker.write_text("ok", encoding="utf-8")
+                await asyncio.to_thread(fp.write, chunk)
+            await asyncio.to_thread(fp.flush)
+
+        # Faststart remux so seeking is instant like YouTube/Netflix (no re-encode)
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-y", "-loglevel", "error",
+            "-i", str(partial_path),
+            "-c", "copy", "-movflags", "+faststart",
+            str(fast_path),
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        rc = await proc.wait()
+        if rc == 0 and fast_path.exists() and fast_path.stat().st_size > 0:
+            os.replace(fast_path, out_path)
+            if partial_path.exists():
+                partial_path.unlink()
+            done_marker.write_text("video/mp4", encoding="utf-8")
+        else:
+            if fast_path.exists():
+                fast_path.unlink()
+            os.replace(partial_path, out_path)
+            done_marker.write_text(item.get("mime_type") or "video/mp4", encoding="utf-8")
     except asyncio.CancelledError:
         pass
     except Exception as exc:
@@ -204,7 +231,7 @@ async def cmd_del(_, msg: Message):
         return
     removed = items.pop(idx)
     write_json(LIBRARY_FILE, items)
-    for ext in (".bin", ".part", ".done"):
+    for ext in (".bin", ".part", ".done", ".fast.mp4"):
         p = cache_file_path(removed["id"]).with_suffix(ext)
         if p.exists():
             try:
@@ -232,7 +259,7 @@ async def on_file(_, msg: Message):
         return
     added, total = save_media_to_queue(info)
     if added:
-        await msg.reply_text(f"Queued #{total} (pre-caching chunks): {info['title']}")
+        await msg.reply_text(f"Queued #{total} (pre-caching): {info['title']}")
 
 
 async def start_suntv_relay():
@@ -323,7 +350,7 @@ async def shutdown():
 @app.get("/health")
 async def health():
     items = read_json(LIBRARY_FILE, [])
-    cached_count = sum(1 for x in items if cache_file_path(x["id"]).exists())
+    cached_count = sum(1 for x in items if cache_file_path(x["id"]).with_suffix(".done").exists())
     return {
         "status": "ok",
         "bot_connected": tg_client.is_connected,
@@ -344,10 +371,36 @@ async def yplay_library():
         row["index"] = idx
         full_p = cache_file_path(x["id"])
         part_p = full_p.with_suffix(".part")
-        row["cached"] = full_p.exists()
-        row["partial_bytes"] = full_p.stat().st_size if full_p.exists() else (part_p.stat().st_size if part_p.exists() else 0)
+        done_p = full_p.with_suffix(".done")
+        is_done = full_p.exists() and done_p.exists()
+        total_sz = int(x.get("file_size") or 0)
+        curr_sz = full_p.stat().st_size if is_done else (part_p.stat().st_size if part_p.exists() else 0)
+        pct = 100 if is_done else (min(99, int((curr_sz / total_sz) * 100)) if total_sz > 0 else 0)
+        row["cached"] = is_done
+        row["progress_pct"] = pct
+        row["partial_bytes"] = curr_sz
         enriched.append(row)
     return {"count": len(enriched), "items": enriched}
+
+
+def parse_range_window(range_header: Optional[str], total_size: int, max_window: int) -> tuple[int, int]:
+    start_byte = 0
+    end_byte = min(total_size - 1, max_window - 1)
+    if range_header and "=" in range_header:
+        try:
+            _, rng = range_header.strip().split("=", 1)
+            s_part, e_part = rng.split("-", 1)
+            if s_part:
+                start_byte = max(0, int(s_part))
+            if e_part:
+                end_byte = min(total_size - 1, int(e_part))
+            else:
+                end_byte = min(total_size - 1, start_byte + max_window - 1)
+        except Exception:
+            raise HTTPException(status_code=416, detail="Invalid range")
+    if start_byte > end_byte or start_byte >= total_size:
+        raise HTTPException(status_code=416, detail="Invalid range bounds")
+    return start_byte, end_byte
 
 
 @app.get("/api/yplay/stream/{index}")
@@ -359,54 +412,41 @@ async def yplay_stream(index: int, request: Request):
     item = items[index]
     trigger_precache(item)
 
-    mime = item.get("mime_type") or "video/mp4"
     full_path = cache_file_path(item["id"])
     part_path = full_path.with_suffix(".part")
+    done_path = full_path.with_suffix(".done")
     range_header = request.headers.get("range")
 
-    if full_path.exists():
+    # 1. Fully cached + faststart remuxed on SSD -> serve 4MB windowed chunks non-blocking
+    if full_path.exists() and done_path.exists():
+        mime = done_path.read_text(encoding="utf-8").strip() or item.get("mime_type") or "video/mp4"
         total_size = full_path.stat().st_size
-        start_byte = 0
-        end_byte = total_size - 1
-
-        if range_header and "=" in range_header:
-            try:
-                _, rng = range_header.strip().split("=", 1)
-                s_part, e_part = rng.split("-", 1)
-                if s_part:
-                    start_byte = max(0, int(s_part))
-                if e_part:
-                    end_byte = min(total_size - 1, int(e_part))
-            except Exception:
-                raise HTTPException(status_code=416, detail="Invalid range")
-
-        if start_byte > end_byte:
-            raise HTTPException(status_code=416, detail="Invalid range bounds")
-
+        start_byte, end_byte = parse_range_window(range_header, total_size, 4 * 1024 * 1024)
         length = end_byte - start_byte + 1
 
         async def local_gen():
-            with open(full_path, "rb") as fp:
-                fp.seek(start_byte)
-                remaining = length
-                while remaining > 0:
-                    if await request.is_disconnected():
-                        break
-                    data = fp.read(min(1024 * 1024, remaining))
-                    if not data:
-                        break
-                    remaining -= len(data)
-                    yield data
+            offset = start_byte
+            remaining = length
+            while remaining > 0:
+                if await request.is_disconnected():
+                    break
+                data = await asyncio.to_thread(read_slice, full_path, offset, min(256 * 1024, remaining))
+                if not data:
+                    break
+                offset += len(data)
+                remaining -= len(data)
+                yield data
 
-        headers = {"Accept-Ranges": "bytes", "Content-Type": mime, "Cache-Control": "no-cache"}
-        if range_header:
-            headers["Content-Range"] = f"bytes {start_byte}-{end_byte}/{total_size}"
-            headers["Content-Length"] = str(length)
-            return StreamingResponse(local_gen(), status_code=206, headers=headers, media_type=mime)
+        headers = {
+            "Accept-Ranges": "bytes",
+            "Content-Type": mime,
+            "Cache-Control": "no-cache",
+            "Content-Range": f"bytes {start_byte}-{end_byte}/{total_size}",
+            "Content-Length": str(length),
+        }
+        return StreamingResponse(local_gen(), status_code=206 if range_header else 200, headers=headers, media_type=mime)
 
-        headers["Content-Length"] = str(total_size)
-        return StreamingResponse(local_gen(), status_code=200, headers=headers, media_type=mime)
-
+    # 2. Still downloading -> serve from .part if bytes are ready, else small 2MB Telegram fetch
     msg = await tg_client.get_messages(int(item["chat_id"]), int(item["message_id"]))
     media = msg.video or msg.document or msg.animation
     if not media:
@@ -415,38 +455,29 @@ async def yplay_stream(index: int, request: Request):
     total_size = int(getattr(media, "file_size", 0) or item.get("file_size") or 0)
     mime = item.get("mime_type") or getattr(media, "mime_type", None) or "video/mp4"
 
-    start_byte = 0
-    end_byte = total_size - 1 if total_size > 0 else None
-
-    if range_header and "=" in range_header and total_size > 0:
-        try:
-            _, rng = range_header.strip().split("=", 1)
-            s_part, e_part = rng.split("-", 1)
-            if s_part:
-                start_byte = max(0, int(s_part))
-            if e_part:
-                end_byte = min(total_size - 1, int(e_part))
-        except Exception:
-            raise HTTPException(status_code=416, detail="Invalid range")
+    if total_size > 0:
+        start_byte, end_byte = parse_range_window(range_header, total_size, 2 * 1024 * 1024)
+    else:
+        start_byte, end_byte = 0, None
 
     if part_path.exists() and total_size > 0:
         part_size = part_path.stat().st_size
-        if start_byte + (512 * 1024) < part_size:
-            safe_end = min(end_byte if end_byte is not None else part_size - 1, part_size - 1)
+        if start_byte + (128 * 1024) < part_size:
+            safe_end = min(end_byte, part_size - 1)
             length = safe_end - start_byte + 1
 
             async def part_gen():
-                with open(part_path, "rb") as fp:
-                    fp.seek(start_byte)
-                    remaining = length
-                    while remaining > 0:
-                        if await request.is_disconnected():
-                            break
-                        data = fp.read(min(1024 * 1024, remaining))
-                        if not data:
-                            break
-                        remaining -= len(data)
-                        yield data
+                offset = start_byte
+                remaining = length
+                while remaining > 0:
+                    if await request.is_disconnected():
+                        break
+                    data = await asyncio.to_thread(read_slice, part_path, offset, min(256 * 1024, remaining))
+                    if not data:
+                        break
+                    offset += len(data)
+                    remaining -= len(data)
+                    yield data
 
             headers = {
                 "Accept-Ranges": "bytes",
@@ -460,17 +491,19 @@ async def yplay_stream(index: int, request: Request):
     chunk_size = 1024 * 1024
     offset_chunks = start_byte // chunk_size
     trim_first = start_byte % chunk_size
+    chunks_limit = ((end_byte // chunk_size) - offset_chunks + 1) if end_byte is not None else 0
 
     async def tg_gen():
         sent = 0
-        limit = (end_byte - start_byte + 1) if (total_size > 0 and end_byte is not None) else None
+        limit = (end_byte - start_byte + 1) if end_byte is not None else None
         first = True
-        async for chunk in tg_client.stream_media(msg, offset=offset_chunks):
+        async for chunk in tg_client.stream_media(msg, limit=chunks_limit, offset=offset_chunks):
             if await request.is_disconnected():
                 break
-            if first and trim_first > 0:
-                chunk = chunk[trim_first:]
+            if first:
                 first = False
+                if trim_first > 0:
+                    chunk = chunk[trim_first:]
             if not chunk:
                 continue
             if limit is not None:
@@ -483,13 +516,11 @@ async def yplay_stream(index: int, request: Request):
             yield chunk
 
     headers = {"Accept-Ranges": "bytes", "Content-Type": mime, "Cache-Control": "no-cache"}
-    if total_size > 0 and end_byte is not None and range_header:
+    if total_size > 0 and end_byte is not None:
         headers["Content-Range"] = f"bytes {start_byte}-{end_byte}/{total_size}"
         headers["Content-Length"] = str(end_byte - start_byte + 1)
-        return StreamingResponse(tg_gen(), status_code=206, headers=headers, media_type=mime)
+        return StreamingResponse(tg_gen(), status_code=206 if range_header else 200, headers=headers, media_type=mime)
 
-    if total_size > 0:
-        headers["Content-Length"] = str(total_size)
     return StreamingResponse(tg_gen(), status_code=200, headers=headers, media_type=mime)
 
 
