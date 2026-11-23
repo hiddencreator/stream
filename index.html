@@ -115,7 +115,7 @@
       position: absolute;
       inset: 0;
       z-index: 14;
-      background: linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.15) 45%, rgba(0,0,0,0.35) 100%);
+      background: linear-gradient(to top, rgba(0,0,0,0.84) 0%, rgba(0,0,0,0.12) 45%, rgba(0,0,0,0.35) 100%);
       display: none;
       flex-direction: column;
       justify-content: flex-end;
@@ -160,12 +160,57 @@
       color: #fff;
       font-weight: 600;
     }
-    .yt-seek-row input[type="range"] {
+    .yt-track {
+      position: relative;
       flex: 1;
-      accent-color: var(--accent);
-      height: 4px;
-      cursor: pointer;
+      height: 16px;
+      display: flex;
+      align-items: center;
     }
+    .yt-track-bg {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.22);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .yt-buf-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 0%;
+      background: rgba(255, 255, 255, 0.45);
+    }
+    .yt-prog-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 0%;
+      background: var(--accent);
+    }
+    .yt-track input[type="range"] {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      margin: 0;
+      background: transparent;
+      -webkit-appearance: none;
+      appearance: none;
+      cursor: pointer;
+      height: 16px;
+    }
+    .yt-track input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
     .yt-actions {
       display: flex;
       align-items: center;
@@ -314,7 +359,13 @@
         <div class="yt-bottom" onclick="event.stopPropagation()">
           <div class="yt-seek-row">
             <span id="curTxt">00:00</span>
-            <input id="seekInput" type="range" min="0" max="1000" value="0" step="1" />
+            <div class="yt-track">
+              <div class="yt-track-bg">
+                <div id="bufFill" class="yt-buf-fill"></div>
+                <div id="progFill" class="yt-prog-fill"></div>
+              </div>
+              <input id="seekInput" type="range" min="0" max="1000" value="0" step="1" />
+            </div>
             <span id="durTxt">00:00</span>
           </div>
           <div class="yt-actions">
@@ -352,7 +403,7 @@
     <div class="sec-head" style="margin-top:22px;">
       <div>
         <div class="sec-title">YPlay Movies</div>
-        <div id="yplaySub" class="sec-sub">Checking direct stream route...</div>
+        <div id="yplaySub" class="sec-sub">Connecting...</div>
       </div>
       <button onclick="refreshAll()">Refresh</button>
     </div>
@@ -439,6 +490,8 @@
     const nowSub = document.getElementById("nowSub");
     const liveTag = document.getElementById("liveTag");
     const seekInput = document.getElementById("seekInput");
+    const bufFill = document.getElementById("bufFill");
+    const progFill = document.getElementById("progFill");
     const curTxt = document.getElementById("curTxt");
     const durTxt = document.getElementById("durTxt");
     const yplaySub = document.getElementById("yplaySub");
@@ -505,7 +558,7 @@
         pendingSeekDelta = 0;
         if (!isFinite(video.duration) || video.duration <= 0) return;
         video.currentTime = Math.max(0, Math.min(video.duration - 0.5, video.currentTime + delta));
-      }, 260);
+      }, 240);
     }
 
     videoWrap.addEventListener("click", (e) => {
@@ -534,14 +587,16 @@
       }, 280);
     });
 
-    async function cleanupPlayers() {
+    // Synchronous cleanup so user-gesture stays valid for video.play() on mobile
+    function cleanupPlayersSync() {
       if (hls) {
         hls.destroy();
         hls = null;
       }
       if (shakaPlayer) {
-        try { await shakaPlayer.destroy(); } catch (_) {}
+        const sp = shakaPlayer;
         shakaPlayer = null;
+        sp.destroy().catch(() => {});
       }
       setBuffering(false);
     }
@@ -566,7 +621,7 @@
     }
 
     async function playChannel(ch, autoPlay = true) {
-      await cleanupPlayers();
+      cleanupPlayersSync();
       activeChannelId = ch.id;
       activeYPlayIdx = -1;
       pendingResumeTime = 0;
@@ -615,12 +670,12 @@
       }
     }
 
-    async function loadYPlay(idx, autoPlay = false) {
+    function startYPlay(idx, autoPlay = false, isRetry = false) {
       if (idx < 0 || idx >= yplayItems.length) return;
-      await cleanupPlayers();
+      cleanupPlayersSync();
       activeChannelId = "";
       activeYPlayIdx = idx;
-      errorRetries = 0;
+      if (!isRetry) errorRetries = 0;
       setVodMode(true);
       renderChannels();
       renderYPlay();
@@ -628,11 +683,14 @@
       const item = yplayItems[idx];
       const mb = item.file_size ? `${(item.file_size / (1024 * 1024)).toFixed(0)} MB` : "Video";
       nowTitle.textContent = item.title;
-      nowSub.textContent = `${mb} • ${usingDirectTunnel ? "Direct Link" : "Proxy Mode"}`;
+      nowSub.textContent = `${mb} • ${usingDirectTunnel ? "Direct Tunnel" : "Proxy Mode"}`;
 
       const saved = Number(localStorage.getItem(`yp_pos_${item.id}`) || "0");
       pendingResumeTime = saved > 5 ? saved : 0;
 
+      bufFill.style.width = "0%";
+      progFill.style.width = "0%";
+      seekInput.value = "0";
       video.preload = "auto";
       video.src = getDirectMovieUrl(idx);
       video.load();
@@ -653,7 +711,7 @@
     function playNextYPlay() {
       if (!yplayItems.length) return;
       const next = activeYPlayIdx + 1 < yplayItems.length ? activeYPlayIdx + 1 : 0;
-      loadYPlay(next, true);
+      startYPlay(next, true, false);
     }
 
     function toggleVodPlay() {
@@ -697,16 +755,30 @@
       return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
     }
 
+    function updateBufferedBar() {
+      if (isLive || !isFinite(video.duration) || video.duration <= 0) return;
+      try {
+        for (let i = 0; i < video.buffered.length; i++) {
+          if (video.buffered.start(i) <= video.currentTime && video.buffered.end(i) >= video.currentTime) {
+            const pct = Math.min(100, (video.buffered.end(i) / video.duration) * 100);
+            bufFill.style.width = `${pct.toFixed(1)}%`;
+            break;
+          }
+        }
+      } catch (_) {}
+    }
+
     video.addEventListener("loadedmetadata", () => {
       if (!isLive && pendingResumeTime > 0 && isFinite(video.duration) && pendingResumeTime < video.duration - 2) {
         video.currentTime = pendingResumeTime;
         pendingResumeTime = 0;
       }
     });
+    video.addEventListener("progress", updateBufferedBar);
     video.addEventListener("waiting", () => { if (!isLive) setBuffering(true); });
-    video.addEventListener("stalled", () => { if (!isLive && !video.paused) setBuffering(true); });
     video.addEventListener("seeking", () => { if (!isLive) setBuffering(true); });
     video.addEventListener("playing", () => {
+      errorRetries = 0;
       setBuffering(false);
       ytCenterBtn.innerHTML = "&#10074;&#10074;";
       showOverlayTemporarily();
@@ -719,19 +791,24 @@
       if (!isLive) ytOverlay.classList.add("visible");
     });
     video.addEventListener("error", async () => {
-      if (!isLive && activeYPlayIdx >= 0 && errorRetries < 2) {
+      setBuffering(false);
+      if (!isLive && activeYPlayIdx >= 0 && errorRetries < 1) {
         errorRetries += 1;
         await resolveDirectTunnel();
-        loadYPlay(activeYPlayIdx, true);
-      } else {
-        setBuffering(false);
+        startYPlay(activeYPlayIdx, true, true);
+      } else if (!isLive) {
+        nowSub.textContent = "Stream paused — tap Play or Link";
+        ytOverlay.classList.add("visible");
       }
     });
     video.addEventListener("timeupdate", () => {
       if (isLive || seeking || !isFinite(video.duration) || video.duration <= 0) return;
-      seekInput.value = String(Math.round((video.currentTime / video.duration) * 1000));
+      const pct = (video.currentTime / video.duration) * 100;
+      seekInput.value = String(Math.round(pct * 10));
+      progFill.style.width = `${pct.toFixed(2)}%`;
       curTxt.textContent = fmt(video.currentTime);
       durTxt.textContent = fmt(video.duration);
+      updateBufferedBar();
       const item = yplayItems[activeYPlayIdx];
       if (item && video.currentTime > 2) {
         localStorage.setItem(`yp_pos_${item.id}`, String(Math.floor(video.currentTime)));
@@ -742,7 +819,7 @@
       const item = yplayItems[activeYPlayIdx];
       if (item) localStorage.removeItem(`yp_pos_${item.id}`);
       if (!isLive && activeYPlayIdx + 1 < yplayItems.length) {
-        loadYPlay(activeYPlayIdx + 1, true);
+        startYPlay(activeYPlayIdx + 1, true, false);
       }
     });
 
@@ -758,14 +835,16 @@
     document.addEventListener("visibilitychange", async () => {
       if (document.visibilityState === "visible" && !isLive && activeYPlayIdx >= 0 && !video.getAttribute("src")) {
         await resolveDirectTunnel();
-        loadYPlay(activeYPlayIdx, false);
+        startYPlay(activeYPlayIdx, false, false);
       }
     });
 
     seekInput.addEventListener("input", () => {
       seeking = true;
+      const pct = Number(seekInput.value) / 10;
+      progFill.style.width = `${pct.toFixed(2)}%`;
       if (isFinite(video.duration) && video.duration > 0) {
-        curTxt.textContent = fmt((Number(seekInput.value) / 1000) * video.duration);
+        curTxt.textContent = fmt((pct / 100) * video.duration);
       }
     });
     seekInput.addEventListener("change", () => {
@@ -805,7 +884,7 @@
 
     function renderYPlay() {
       const box = document.getElementById("yplayList");
-      const modeTxt = usingDirectTunnel ? "Direct Tunnel (Fast)" : "Worker Proxy (Slow - check /health)";
+      const modeTxt = usingDirectTunnel ? "Direct Tunnel (Fast)" : "Worker Proxy";
       yplaySub.textContent = yplayItems.length
         ? `${yplayItems.length} in queue • ${modeTxt}`
         : `Forward a movie to bot • ${modeTxt}`;
@@ -818,14 +897,14 @@
         const mb = m.file_size ? `${(m.file_size / (1024 * 1024)).toFixed(0)} MB` : "Video";
         const cls = i === activeYPlayIdx ? "yp-card active" : "yp-card";
         return `
-          <div class="${cls}" tabindex="0" onclick="loadYPlay(${i}, true)" onkeydown="if(event.key==='Enter')loadYPlay(${i},true)">
+          <div class="${cls}" tabindex="0" onclick="startYPlay(${i}, true, false)" onkeydown="if(event.key==='Enter')startYPlay(${i},true,false)">
             <div style="min-width:0;">
               <div class="yp-title">${esc(m.title)}</div>
               <div class="yp-meta">#${i + 1} • ${mb}</div>
             </div>
             <div class="yp-btns">
               <button onclick="event.stopPropagation();openDirectLink(${i})">Link</button>
-              <button class="red" onclick="event.stopPropagation();loadYPlay(${i},true)">Play</button>
+              <button class="red" onclick="event.stopPropagation();startYPlay(${i},true,false)">Play</button>
             </div>
           </div>
         `;
@@ -843,7 +922,7 @@
         if (yplayItems.length > 0 && (!firstMoviePrepared || forceFirst || (prevFirst && prevFirst !== yplayItems[0].id && !isLive))) {
           firstMoviePrepared = true;
           if (!isLive) {
-            loadYPlay(0, false);
+            startYPlay(0, false, false);
           }
         }
       } catch (_) {}
