@@ -15,6 +15,7 @@ from pyrogram.types import Message
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 API_ID = int(os.getenv("TELEGRAM_API_ID", "6"))
 API_HASH = os.getenv("TELEGRAM_API_HASH", "eb06d4abfb49dc3eeb1aeb98ae0f581e")
+DEFAULT_SUNTV_URL = "https://d2px1d6ssc60fw.cloudfront.net/SunTV/SunTV-HDR10-IN-index.m3u8"
 
 if not BOT_TOKEN:
     raise RuntimeError("TELEGRAM_BOT_TOKEN missing")
@@ -36,7 +37,7 @@ DEFAULT_CHANNELS = [
         "name": "Sun TV",
         "group": "Tamil",
         "mode": "relay",
-        "source_url": os.getenv("SUNTV_SOURCE_URL", ""),
+        "source_url": os.getenv("SUNTV_SOURCE_URL") or DEFAULT_SUNTV_URL,
     }
 ]
 
@@ -109,7 +110,6 @@ def cache_file_path(item_id: str) -> Path:
 
 
 async def precache_media_background(item: dict):
-    """Pre-download media chunks into /dev/shm right after bot receives the file."""
     item_id = item["id"]
     out_path = cache_file_path(item_id)
     partial_path = out_path.with_suffix(".part")
@@ -127,9 +127,6 @@ async def precache_media_background(item: dict):
             async for chunk in tg_client.stream_media(msg):
                 fp.write(chunk)
                 fp.flush()
-                # Once first 24 MB is ready, promote/keep accessible for instant start
-                if partial_path.stat().st_size >= 24 * 1024 * 1024 and not out_path.exists():
-                    os.link(partial_path, out_path) if False else None
         os.replace(partial_path, out_path)
         done_marker.write_text("ok", encoding="utf-8")
     except asyncio.CancelledError:
@@ -167,7 +164,7 @@ def save_media_to_queue(item: dict) -> tuple[bool, int]:
 async def cmd_start(_, msg: Message):
     await msg.reply_text(
         "YPlay Ready.\n"
-        "Forward or send movies/episodes directly — they auto-queue and pre-cache immediately."
+        "Send or forward movies/episodes directly — they auto-queue and pre-cache chunks immediately."
     )
 
 
@@ -229,10 +226,7 @@ async def start_suntv_relay():
     global ffmpeg_proc, last_error
     channels = read_json(CHANNELS_FILE, DEFAULT_CHANNELS)
     suntv = next((c for c in channels if c.get("id") == "suntv"), None)
-    url = (suntv or {}).get("source_url") or os.getenv("SUNTV_SOURCE_URL", "")
-    if not url:
-        last_error = "Sun TV source URL not configured"
-        return False
+    url = (suntv or {}).get("source_url") or os.getenv("SUNTV_SOURCE_URL") or DEFAULT_SUNTV_URL
 
     m3u8 = HLS_DIR / "index.m3u8"
     if ffmpeg_proc and ffmpeg_proc.poll() is None and m3u8.exists() and (time.time() - m3u8.stat().st_mtime) < 10:
@@ -286,14 +280,11 @@ async def start_suntv_relay():
 async def relay_watcher():
     while True:
         try:
-            channels = read_json(CHANNELS_FILE, DEFAULT_CHANNELS)
-            suntv = next((c for c in channels if c.get("id") == "suntv"), None)
-            if suntv and (suntv.get("source_url") or os.getenv("SUNTV_SOURCE_URL")):
-                await start_suntv_relay()
+            await start_suntv_relay()
         except Exception as e:
             global last_error
             last_error = str(e)
-        await asyncio.sleep(5)
+        await asyncio.sleep(6)
 
 
 @app.on_event("startup")
@@ -353,12 +344,9 @@ async def yplay_stream(index: int, request: Request, range_header: Optional[str]
 
     mime = item.get("mime_type") or "video/mp4"
     full_path = cache_file_path(item["id"])
-    part_path = full_path.with_suffix(".part")
 
-    # Fast local disk/RAM seek & stream when cached or partially cached
-    active_file = full_path if full_path.exists() else (part_path if part_path.exists() else None)
-    if active_file is not None and full_path.exists():
-        total_size = active_file.stat().st_size
+    if full_path.exists():
+        total_size = full_path.stat().st_size
         start_byte = 0
         end_byte = total_size - 1
 
@@ -379,7 +367,7 @@ async def yplay_stream(index: int, request: Request, range_header: Optional[str]
         length = end_byte - start_byte + 1
 
         async def local_gen():
-            with open(active_file, "rb") as fp:
+            with open(full_path, "rb") as fp:
                 fp.seek(start_byte)
                 remaining = length
                 while remaining > 0:
@@ -400,7 +388,6 @@ async def yplay_stream(index: int, request: Request, range_header: Optional[str]
         headers["Content-Length"] = str(total_size)
         return StreamingResponse(local_gen(), status_code=200, headers=headers, media_type=mime)
 
-    # Fallback direct Telegram stream while initial pre-cache builds
     msg = await tg_client.get_messages(int(item["chat_id"]), int(item["message_id"]))
     media = msg.video or msg.document or msg.animation
     if not media:
@@ -457,21 +444,6 @@ async def yplay_stream(index: int, request: Request, range_header: Optional[str]
     if total_size > 0:
         headers["Content-Length"] = str(total_size)
     return StreamingResponse(tg_gen(), status_code=200, headers=headers, media_type=mime)
-
-
-@app.post("/api/channels/suntv")
-async def set_suntv(request: Request):
-    body = await request.json()
-    url = (body.get("source_url") or "").strip()
-    if not url:
-        raise HTTPException(status_code=400, detail="source_url required")
-    channels = read_json(CHANNELS_FILE, DEFAULT_CHANNELS)
-    for ch in channels:
-        if ch.get("id") == "suntv":
-            ch["source_url"] = url
-    write_json(CHANNELS_FILE, channels)
-    ok = await start_suntv_relay()
-    return {"ok": ok, "error": last_error}
 
 
 @app.get("/live/suntv/index.m3u8")
