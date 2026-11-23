@@ -143,18 +143,25 @@
       width: 48px;
       height: 48px;
       border-radius: 10px;
-      background: #ffffff;
+      background: #1b2234;
+      color: #fff;
+      font-weight: 800;
+      font-size: 0.85rem;
       display: flex;
       align-items: center;
       justify-content: center;
       overflow: hidden;
       flex-shrink: 0;
+      position: relative;
     }
     .ch-logo-box img {
       width: 100%;
       height: 100%;
       object-fit: contain;
       padding: 4px;
+      background: #ffffff;
+      position: relative;
+      z-index: 2;
     }
     .ch-name { font-size: 0.95rem; font-weight: 700; }
     .ch-meta { font-size: 0.76rem; color: var(--muted); margin-top: 2px; }
@@ -233,7 +240,7 @@
         <div class="sec-title">YPlay Movies</div>
         <div id="yplaySub" class="sec-sub">Telegram bot queue (first item auto-loaded)</div>
       </div>
-      <button onclick="fetchYPlay(false)">Refresh</button>
+      <button onclick="fetchYPlay(true)">Refresh</button>
     </div>
     <div id="yplayList" class="yplay-list"></div>
   </div>
@@ -245,6 +252,7 @@
       {
         id: "suntv",
         num: "#01",
+        badge: "SUN",
         name: "Sun TV",
         cat: "Entertainment • Live",
         type: "hls",
@@ -254,6 +262,7 @@
       {
         id: "zeetamil",
         num: "#02",
+        badge: "ZEE",
         name: "Zee Tamil HD",
         cat: "Entertainment • HD",
         type: "hls",
@@ -263,6 +272,7 @@
       {
         id: "colorstamil",
         num: "#03",
+        badge: "CLR",
         name: "Colors Tamil HD",
         cat: "Entertainment • HD",
         type: "hls",
@@ -272,6 +282,7 @@
       {
         id: "makkaltv",
         num: "#04",
+        badge: "MKL",
         name: "Makkal TV",
         cat: "General • Live",
         type: "hls",
@@ -281,6 +292,7 @@
       {
         id: "historytv18",
         num: "#05",
+        badge: "H18",
         name: "History TV18 HD",
         cat: "Infotainment • HD",
         type: "dash-clearkey",
@@ -292,6 +304,7 @@
       {
         id: "discoverytamil",
         num: "#06",
+        badge: "DSC",
         name: "Discovery Tamil",
         cat: "Infotainment • HD",
         type: "dash-clearkey",
@@ -355,20 +368,13 @@
         shakaPlayer = new shaka.Player();
         await shakaPlayer.attach(video);
         shakaPlayer.configure({
-          drm: {
-            clearKeys: {
-              [ch.kid]: ch.key
-            }
-          },
-          streaming: {
-            bufferingGoal: 12,
-            rebufferingGoal: 2
-          }
+          drm: { clearKeys: { [ch.kid]: ch.key } },
+          streaming: { bufferingGoal: 12, rebufferingGoal: 2 }
         });
         try {
           await shakaPlayer.load(ch.url);
           if (autoPlay) video.play().catch(() => {});
-        } catch (e) {
+        } catch (_) {
           nowSub.textContent = "Unable to start stream";
         }
         return;
@@ -504,7 +510,8 @@
           <div class="${active}" tabindex="0" onclick='playChannelById("${ch.id}")' onkeydown='if(event.key==="Enter")playChannelById("${ch.id}")'>
             <div class="ch-left">
               <div class="ch-logo-box">
-                <img src="${esc(ch.logo)}" alt="${esc(ch.name)}" onerror="this.style.display='none'" />
+                <span>${esc(ch.badge)}</span>
+                <img src="${esc(ch.logo)}" alt="${esc(ch.name)}" onload="if(this.previousElementSibling)this.previousElementSibling.style.display='none'" onerror="this.style.display='none'" />
               </div>
               <div>
                 <div class="ch-name">${esc(ch.name)}</div>
