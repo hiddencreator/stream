@@ -1,15 +1,15 @@
-name: Build YStream Android TV APK
+name: TV APK Builder
 
 on:
   push:
     branches: ["main"]
     paths:
-      - "assets/icon.png"
       - ".github/workflows/build-tv-apk.yml"
+      - "assets/icon.png"
   workflow_dispatch:
 
 jobs:
-  build-tv:
+  build_tv_apk:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,13 +23,13 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Generate Android TV WebView App
+      - name: Build Android TV APK
         run: |
           set -e
-          mkdir -p tv-app/app/src/main/java/com/ystream/tv
-          mkdir -p tv-app/app/src/main/res/layout tv-app/app/src/main/res/values tv-app/app/src/main/res/mipmap-hdpi tv-app/app/src/main/res/mipmap-mdpi tv-app/app/src/main/res/mipmap-xhdpi tv-app/app/src/main/res/mipmap-xxhdpi tv-app/app/src/main/res/mipmap-xxxhdpi
+          mkdir -p tv-build/app/src/main/java/com/ystream/tv
+          mkdir -p tv-build/app/src/main/res/layout tv-build/app/src/main/res/mipmap-hdpi tv-build/app/src/main/res/mipmap-mdpi tv-build/app/src/main/res/mipmap-xhdpi tv-build/app/src/main/res/mipmap-xxhdpi tv-build/app/src/main/res/mipmap-xxxhdpi
 
-          cat << 'GRADLE_ROOT' > tv-app/build.gradle
+          cat << 'ROOT_GRADLE' > tv-build/build.gradle
           buildscript {
             repositories {
               google()
@@ -45,19 +45,19 @@ jobs:
               mavenCentral()
             }
           }
-          GRADLE_ROOT
+          ROOT_GRADLE
 
-          cat << 'GRADLE_PROPS' > tv-app/gradle.properties
+          cat << 'GRADLE_PROP' > tv-build/gradle.properties
           android.useAndroidX=true
           org.gradle.jvmargs=-Xmx2048m
-          GRADLE_PROPS
+          GRADLE_PROP
 
-          cat << 'SETTINGS' > tv-app/settings.gradle
+          cat << 'SETTINGS_GRADLE' > tv-build/settings.gradle
           rootProject.name = "YStreamTV"
           include ':app'
-          SETTINGS
+          SETTINGS_GRADLE
 
-          cat << 'APP_GRADLE' > tv-app/app/build.gradle
+          cat << 'APP_GRADLE' > tv-build/app/build.gradle
           plugins {
             id 'com.android.application'
           }
@@ -82,7 +82,7 @@ jobs:
           }
           APP_GRADLE
 
-          cat << 'MANIFEST' > tv-app/app/src/main/AndroidManifest.xml
+          cat << 'MANIFEST_XML' > tv-build/app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
             <uses-permission android:name="android.permission.INTERNET" />
             <uses-feature android:name="android.software.leanback" android:required="false" />
@@ -107,9 +107,9 @@ jobs:
               </activity>
             </application>
           </manifest>
-          MANIFEST
+          MANIFEST_XML
 
-          cat << 'MAIN_JAVA' > tv-app/app/src/main/java/com/ystream/tv/MainActivity.java
+          cat << 'MAIN_ACTIVITY' > tv-build/app/src/main/java/com/ystream/tv/MainActivity.java
           package com.ystream.tv;
 
           import android.os.Bundle;
@@ -152,9 +152,9 @@ jobs:
               return super.onKeyDown(keyCode, event);
             }
           }
-          MAIN_JAVA
+          MAIN_ACTIVITY
 
-          cat << 'LAYOUT' > tv-app/app/src/main/res/layout/activity_main.xml
+          cat << 'LAYOUT_XML' > tv-build/app/src/main/res/layout/activity_main.xml
           <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
@@ -164,18 +164,18 @@ jobs:
               android:layout_width="match_parent"
               android:layout_height="match_parent" />
           </FrameLayout>
-          LAYOUT
+          LAYOUT_XML
 
           if [ -f assets/icon.png ]; then
-            for dir in mipmap-hdpi mipmap-mdpi mipmap-xhdpi mipmap-xxhdpi mipmap-xxxhdpi; do
-              cp assets/icon.png "tv-app/app/src/main/res/$dir/ic_launcher.png"
+            for d in mipmap-hdpi mipmap-mdpi mipmap-xhdpi mipmap-xxhdpi mipmap-xxxhdpi; do
+              cp assets/icon.png "tv-build/app/src/main/res/$d/ic_launcher.png"
             done
           fi
 
-          gradle -p tv-app assembleDebug --no-daemon
+          gradle -p tv-build assembleDebug --no-daemon
 
-      - name: Upload TV APK Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: YStream-Android-TV-APK
-          path: tv-app/app/build/outputs/apk/debug/*.apk
+          name: YStream-TV-APK
+          path: tv-build/app/build/outputs/apk/debug/*.apk
