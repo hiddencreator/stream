@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pyrogram import Client, filters
@@ -23,7 +23,7 @@ if not BOT_TOKEN:
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
-CACHE_DIR = Path("/dev/shm/yplay_cache")
+CACHE_DIR = Path("/tmp/yplay_cache")
 HLS_DIR = Path("/dev/shm/suntv_hls")
 LIBRARY_FILE = DATA_DIR / "yplay_library.json"
 CHANNELS_FILE = DATA_DIR / "channels.json"
@@ -351,7 +351,7 @@ async def yplay_library():
 
 
 @app.get("/api/yplay/stream/{index}")
-async def yplay_stream(index: int, request: Request, range_header: Optional[str] = Header(default=None)):
+async def yplay_stream(index: int, request: Request):
     items = read_json(LIBRARY_FILE, [])
     if index < 0 or index >= len(items):
         raise HTTPException(status_code=404, detail="Movie not found in YPlay queue")
@@ -361,13 +361,15 @@ async def yplay_stream(index: int, request: Request, range_header: Optional[str]
 
     mime = item.get("mime_type") or "video/mp4"
     full_path = cache_file_path(item["id"])
+    part_path = full_path.with_suffix(".part")
+    range_header = request.headers.get("range")
 
     if full_path.exists():
         total_size = full_path.stat().st_size
         start_byte = 0
         end_byte = total_size - 1
 
-        if range_header:
+        if range_header and "=" in range_header:
             try:
                 _, rng = range_header.strip().split("=", 1)
                 s_part, e_part = rng.split("-", 1)
@@ -416,7 +418,7 @@ async def yplay_stream(index: int, request: Request, range_header: Optional[str]
     start_byte = 0
     end_byte = total_size - 1 if total_size > 0 else None
 
-    if range_header and total_size > 0:
+    if range_header and "=" in range_header and total_size > 0:
         try:
             _, rng = range_header.strip().split("=", 1)
             s_part, e_part = rng.split("-", 1)
@@ -426,6 +428,34 @@ async def yplay_stream(index: int, request: Request, range_header: Optional[str]
                 end_byte = min(total_size - 1, int(e_part))
         except Exception:
             raise HTTPException(status_code=416, detail="Invalid range")
+
+    if part_path.exists() and total_size > 0:
+        part_size = part_path.stat().st_size
+        if start_byte + (512 * 1024) < part_size:
+            safe_end = min(end_byte if end_byte is not None else part_size - 1, part_size - 1)
+            length = safe_end - start_byte + 1
+
+            async def part_gen():
+                with open(part_path, "rb") as fp:
+                    fp.seek(start_byte)
+                    remaining = length
+                    while remaining > 0:
+                        if await request.is_disconnected():
+                            break
+                        data = fp.read(min(1024 * 1024, remaining))
+                        if not data:
+                            break
+                        remaining -= len(data)
+                        yield data
+
+            headers = {
+                "Accept-Ranges": "bytes",
+                "Content-Type": mime,
+                "Cache-Control": "no-cache",
+                "Content-Range": f"bytes {start_byte}-{safe_end}/{total_size}",
+                "Content-Length": str(length),
+            }
+            return StreamingResponse(part_gen(), status_code=206, headers=headers, media_type=mime)
 
     chunk_size = 1024 * 1024
     offset_chunks = start_byte // chunk_size
