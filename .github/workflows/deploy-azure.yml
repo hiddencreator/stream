@@ -30,7 +30,7 @@ jobs:
           sshpass -e ssh $SSH_OPTS azureuser@"$AZURE_IP" "mkdir -p ~/ystream/data"
           sshpass -e scp $SSH_OPTS -r server/* azureuser@"$AZURE_IP":~/ystream/
 
-          sshpass -e ssh $SSH_OPTS azureuser@"$AZURE_IP" "bash -s" << 'REMOTE_SCRIPT'
+          cat << 'SETUP_EOF' > /tmp/azure_setup.sh
           set -e
           if ! command -v python3 >/dev/null 2>&1 || ! command -v ffmpeg >/dev/null 2>&1; then
             sudo apt-get update -y
@@ -44,29 +44,16 @@ jobs:
           ~/ystream/venv/bin/pip install --upgrade pip -q
           ~/ystream/venv/bin/pip install -r ~/ystream/requirements.txt -q
 
-          printf 'TELEGRAM_BOT_TOKEN=%s\n' "__BOT_TOKEN__" > ~/ystream/.env
+          printf 'TELEGRAM_BOT_TOKEN=%s\n' "$BOT_TOKEN_VAL" > ~/ystream/.env
 
-          sudo tee /etc/systemd/system/ystream.service >/dev/null << 'UNIT'
-          [Unit]
-          Description=YStream Backend
-          After=network-online.target
-          Wants=network-online.target
-
-          [Service]
-          Type=simple
-          User=azureuser
-          WorkingDirectory=/home/azureuser/ystream
-          EnvironmentFile=/home/azureuser/ystream/.env
-          ExecStart=/home/azureuser/ystream/venv/bin/uvicorn app:app --host 0.0.0.0 --port 8000 --workers 1
-          Restart=always
-          RestartSec=3
-
-          [Install]
-          WantedBy=multi-user.target
-          UNIT
+          printf '[Unit]\nDescription=YStream Backend\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nType=simple\nUser=azureuser\nWorkingDirectory=/home/azureuser/ystream\nEnvironmentFile=/home/azureuser/ystream/.env\nExecStart=/home/azureuser/ystream/venv/bin/uvicorn app:app --host 0.0.0.0 --port 8000 --workers 1\nRestart=always\nRestartSec=3\n\n[Install]\nWantedBy=multi-user.target\n' | sudo tee /etc/systemd/system/ystream.service >/dev/null
 
           sudo systemctl daemon-reload
           sudo systemctl enable ystream
           sudo systemctl restart ystream
-          REMOTE_SCRIPT
-REMOTE_SCRIPT
+          SETUP_EOF
+
+          ENCODED_SCRIPT=$(base64 -w 0 /tmp/azure_setup.sh)
+          ENCODED_TOKEN=$(printf '%s' "$TELEGRAM_BOT_TOKEN" | base64 -w 0)
+
+          sshpass -e ssh $SSH_OPTS azureuser@"$AZURE_IP" "echo '$ENCODED_TOKEN' | base64 -d > /tmp/tok.b64 && echo '$ENCODED_SCRIPT' | base64 -d > /tmp/run_setup.sh && BOT_TOKEN_VAL=\$(cat /tmp/tok.b64) bash /tmp/run_setup.sh && rm -f /tmp/tok.b64 /tmp/run_setup.sh"
