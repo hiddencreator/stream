@@ -350,7 +350,7 @@
     <div class="sec-head" style="margin-top:22px;">
       <div>
         <div class="sec-title">YPlay Movies</div>
-        <div id="yplaySub" class="sec-sub">Telegram bot queue (first item auto-loaded)</div>
+        <div id="yplaySub" class="sec-sub">On-demand instant streaming</div>
       </div>
       <button onclick="fetchYPlay(true)">Refresh</button>
     </div>
@@ -595,8 +595,9 @@
       renderYPlay();
 
       const item = yplayItems[idx];
+      const mb = item.file_size ? `${(item.file_size / (1024 * 1024)).toFixed(0)} MB` : "Video";
       nowTitle.textContent = item.title;
-      nowSub.textContent = item.cached ? "Ready 100%" : `Caching ${item.progress_pct || 0}%`;
+      nowSub.textContent = `${mb} • Instant Stream`;
 
       const saved = Number(localStorage.getItem(`yp_pos_${item.id}`) || "0");
       pendingResumeTime = saved > 5 ? saved : 0;
@@ -684,6 +685,12 @@
       ytCenterBtn.innerHTML = "&#9654;";
       if (!isLive) ytOverlay.classList.add("visible");
     });
+    video.addEventListener("error", async () => {
+      if (!isLive && activeYPlayIdx >= 0) {
+        await resolveDirectTunnel();
+        loadYPlay(activeYPlayIdx, true);
+      }
+    });
     video.addEventListener("timeupdate", () => {
       if (isLive || seeking || !isFinite(video.duration) || video.duration <= 0) return;
       seekInput.value = String(Math.round((video.currentTime / video.duration) * 1000));
@@ -703,7 +710,6 @@
       }
     });
 
-    // Release dead HTTP sockets cleanly when leaving browser so reopening won't hang
     window.addEventListener("pagehide", () => {
       if (!isLive && yplayItems[activeYPlayIdx] && video.currentTime > 2) {
         localStorage.setItem(`yp_pos_${yplayItems[activeYPlayIdx].id}`, String(Math.floor(video.currentTime)));
@@ -713,8 +719,9 @@
       video.load();
     });
 
-    document.addEventListener("visibilitychange", () => {
+    document.addEventListener("visibilitychange", async () => {
       if (document.visibilityState === "visible" && !isLive && activeYPlayIdx >= 0 && !video.getAttribute("src")) {
+        await resolveDirectTunnel();
         loadYPlay(activeYPlayIdx, false);
       }
     });
@@ -763,8 +770,8 @@
     function renderYPlay() {
       const box = document.getElementById("yplayList");
       yplaySub.textContent = yplayItems.length
-        ? `${yplayItems.length} in queue • Wait for Ready 100% for instant seek`
-        : "Telegram bot queue (first item auto-loaded)";
+        ? `${yplayItems.length} in queue • On-demand instant stream`
+        : "Forward a movie to Telegram bot";
 
       if (!yplayItems.length) {
         box.innerHTML = `<div class="yp-card"><div><div class="yp-title">No movies in queue</div><div class="yp-meta">Forward a movie to your Telegram bot</div></div></div>`;
@@ -772,13 +779,12 @@
       }
       box.innerHTML = yplayItems.map((m, i) => {
         const mb = m.file_size ? `${(m.file_size / (1024 * 1024)).toFixed(0)} MB` : "Video";
-        const statusTxt = m.cached ? "Ready 100%" : `Caching ${m.progress_pct || 0}%`;
         const cls = i === activeYPlayIdx ? "yp-card active" : "yp-card";
         return `
           <div class="${cls}" tabindex="0" onclick="loadYPlay(${i}, true)" onkeydown="if(event.key==='Enter')loadYPlay(${i},true)">
             <div>
               <div class="yp-title">${esc(m.title)}</div>
-              <div class="yp-meta">#${i + 1} • ${mb} • ${statusTxt}</div>
+              <div class="yp-meta">#${i + 1} • ${mb} • Instant Stream</div>
             </div>
             <button class="red" onclick="event.stopPropagation();loadYPlay(${i},true)">Play</button>
           </div>
@@ -793,11 +799,6 @@
         const prevFirst = yplayItems[0] ? yplayItems[0].id : null;
         yplayItems = Array.isArray(data.items) ? data.items : [];
         renderYPlay();
-
-        if (!isLive && activeYPlayIdx >= 0 && yplayItems[activeYPlayIdx]) {
-          const cur = yplayItems[activeYPlayIdx];
-          nowSub.textContent = cur.cached ? "Ready 100%" : `Caching ${cur.progress_pct || 0}%`;
-        }
 
         if (yplayItems.length > 0 && (!firstMoviePrepared || forceFirst || (prevFirst && prevFirst !== yplayItems[0].id && !isLive))) {
           firstMoviePrepared = true;
@@ -815,7 +816,7 @@
     renderChannels();
     playChannel(CHANNELS[0], false);
     resolveDirectTunnel().then(() => fetchYPlay(false));
-    setInterval(() => fetchYPlay(false), 4000);
+    setInterval(() => fetchYPlay(false), 6000);
   </script>
 </body>
 </html>
