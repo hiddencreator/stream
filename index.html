@@ -305,7 +305,7 @@
       <div id="bufSpinner" class="buf-spinner"></div>
       <div id="flashLeft" class="tap-flash left">-10s</div>
       <div id="flashRight" class="tap-flash right">+10s</div>
-      <button id="liveFsBtn" class="live-fs-btn" title="Fullscreen" onclick="toggleFullscreen()">&#x26F6;</button>
+      <button id="liveFsBtn" class="live-fs-btn" title="Fullscreen" onclick="event.stopPropagation(); toggleFullscreen()">&#x26F6;</button>
 
       <div id="ytOverlay" class="yt-overlay">
         <button id="ytCenterBtn" class="yt-center-btn" onclick="event.stopPropagation(); toggleVodPlay();">&#9654;</button>
@@ -369,6 +369,7 @@
         cat: "Entertainment • Live",
         type: "hls",
         url: "https://d2px1d6ssc60fw.cloudfront.net/SunTV/SunTV-HDR10-IN-index.m3u8",
+        relayPath: "/live/suntv/index.m3u8",
         logo: "https://upload.wikimedia.org/wikipedia/en/thumb/3/3e/Sun_TV_logo.svg/240px-Sun_TV_logo.svg.png"
       },
       {
@@ -456,6 +457,7 @@
     let seekDebounceTimer = null;
     let flashTimer = null;
     let errorRetries = 0;
+    let liveStage = 0;
 
     function setBuffering(active) {
       bufSpinner.classList.toggle("show", active);
@@ -507,7 +509,11 @@
     }
 
     videoWrap.addEventListener("click", (e) => {
-      if (isLive) return;
+      if (isLive) {
+        if (video.paused) video.play().catch(() => {});
+        else video.pause();
+        return;
+      }
       const now = Date.now();
       const rect = videoWrap.getBoundingClientRect();
       const x = e.clientX - rect.left;
@@ -554,11 +560,61 @@
       } catch (_) {}
     }
 
+    function startHlsUrl(url, ch, autoPlay, isRelay = false) {
+      if (hls) {
+        hls.destroy();
+        hls = null;
+      }
+      if (window.Hls && window.Hls.isSupported()) {
+        hls = new Hls({
+          enableWorker: true,
+          lowLatencyMode: false,
+          maxBufferLength: 16,
+          backBufferLength: 10
+        });
+        hls.loadSource(url);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          nowSub.textContent = isRelay ? `${ch.num} • ${ch.cat} (Relay)` : `${ch.num} • ${ch.cat}`;
+          if (autoPlay) video.play().catch(() => {});
+        });
+        hls.on(Hls.Events.ERROR, (_, data) => {
+          if (!data.fatal || activeChannelId !== ch.id) return;
+          handleLiveFallback(ch, autoPlay);
+        });
+      } else {
+        video.src = url;
+        video.load();
+        if (autoPlay) video.play().catch(() => {});
+      }
+    }
+
+    async function handleLiveFallback(ch, autoPlay) {
+      if (liveStage === 0 && video.canPlayType("application/vnd.apple.mpegurl")) {
+        liveStage = 1;
+        await cleanupPlayers();
+        nowSub.textContent = `${ch.num} • Direct stream`;
+        video.src = ch.url;
+        video.load();
+        if (autoPlay) video.play().catch(() => {});
+        return;
+      }
+      if (liveStage < 2 && ch.relayPath) {
+        liveStage = 2;
+        await resolveDirectTunnel();
+        nowSub.textContent = `${ch.num} • Switching to Server Relay...`;
+        startHlsUrl(`${DIRECT_STREAM_URL}${ch.relayPath}`, ch, autoPlay, true);
+        return;
+      }
+      nowSub.textContent = "Stream temporarily unavailable";
+    }
+
     async function playChannel(ch, autoPlay = true) {
       await cleanupPlayers();
       activeChannelId = ch.id;
       activeYPlayIdx = -1;
       pendingResumeTime = 0;
+      liveStage = 0;
       setVodMode(false);
       renderChannels();
       renderYPlay();
@@ -582,21 +638,8 @@
         return;
       }
 
-      if (ch.url.includes(".m3u8") && window.Hls && window.Hls.isSupported()) {
-        hls = new Hls({
-          enableWorker: true,
-          lowLatencyMode: false,
-          maxBufferLength: 16,
-          backBufferLength: 10
-        });
-        hls.loadSource(ch.url);
-        hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          if (autoPlay) video.play().catch(() => {});
-        });
-        hls.on(Hls.Events.ERROR, (_, data) => {
-          if (data.fatal) nowSub.textContent = "Stream temporarily unavailable";
-        });
+      if (ch.url.includes(".m3u8")) {
+        startHlsUrl(ch.url, ch, autoPlay, false);
       } else {
         video.src = ch.url;
         video.load();
@@ -700,6 +743,13 @@
       if (!isLive) ytOverlay.classList.add("visible");
     });
     video.addEventListener("error", async () => {
+      if (isLive) {
+        const ch = CHANNELS.find((c) => c.id === activeChannelId);
+        if (ch && ch.relayPath && liveStage < 2) {
+          handleLiveFallback(ch, !video.paused);
+        }
+        return;
+      }
       if (!isLive && activeYPlayIdx >= 0 && errorRetries < 2) {
         errorRetries += 1;
         await resolveDirectTunnel();
@@ -831,8 +881,10 @@
     }
 
     renderChannels();
-    playChannel(CHANNELS[0], false);
-    resolveDirectTunnel().then(() => fetchYPlay(false));
+    resolveDirectTunnel().then(() => {
+      playChannel(CHANNELS[0], false);
+      fetchYPlay(false);
+    });
     setInterval(() => fetchYPlay(false), 6000);
   </script>
 </body>
