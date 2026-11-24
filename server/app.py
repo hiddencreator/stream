@@ -38,7 +38,7 @@ CHANNELS_FILE = DATA_DIR / "channels.json"
 SESSION_FILE = DATA_DIR / "ystream_bot"
 
 CHUNK_SIZE = 1024 * 1024  # 1 MiB
-MAX_CACHE_BYTES = int(1.5 * 1024 * 1024 * 1024)  # 1.5 GB lightweight cap
+MAX_CACHE_BYTES = int(1.5 * 1024 * 1024 * 1024)  # 1.5 GB cap
 RELAY_IDLE_SEC = 45
 START_TIME = time.time()
 
@@ -375,57 +375,19 @@ def save_media_to_queue(item: dict) -> tuple[bool, int]:
     return True, len(items)
 
 
-# --- Minimal Useful Bot UI ---
-def menu_markup() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("📋 Queue", callback_data="cb:list"),
-            InlineKeyboardButton("📊 Status", callback_data="cb:status"),
-        ],
-        [
-            InlineKeyboardButton("🗑️ Clear All", callback_data="cb:clear_ask"),
-        ],
-    ])
-
-
-def clear_confirm_markup() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("✅ Confirm Clear", callback_data="cb:clear_confirm"),
-            InlineKeyboardButton("❌ Cancel", callback_data="cb:menu"),
-        ]
-    ])
-
-
-def build_menu_html() -> str:
-    items = read_json(LIBRARY_FILE, [])
-    return (
-        "<b>YPlay Control</b>\n"
-        f"Queue: <code>{len(items)}</code> movies\n"
-        "Send or forward any movie to add it."
-    )
-
-
-def build_queue_html() -> str:
-    items = read_json(LIBRARY_FILE, [])
-    if not items:
-        return "<b>YPlay Queue Empty</b>\n\nNext video you send starts at <code>#1</code>."
-    lines = [f"<b>YPlay Queue ({len(items)})</b>\n"]
-    for i, x in enumerate(items[-25:], start=max(1, len(items) - 24)):
-        title = html.escape(str(x.get("title", "Video")))
-        q = html.escape(str(x.get("quality") or "HD"))
-        sz = fmt_bytes(int(x.get("file_size") or 0))
-        lines.append(f"<code>#{i}</code> • {title} (<code>{q}</code> • <code>{sz}</code>)")
-    lines.append("\nUse <code>/del 1</code> or <code>/clear</code>.")
-    return "\n".join(lines)
-
-
 async def build_status_html() -> str:
     items = read_json(LIBRARY_FILE, [])
     blk_cnt, blk_bytes = await asyncio.to_thread(get_cache_stats_sync)
     sys = await asyncio.to_thread(get_sys_stats)
     tunnel = get_active_tunnel_url()
     relay_running = ffmpeg_proc is not None and ffmpeg_proc.poll() is None
+
+    if relay_running:
+        relay_state = "Active"
+    elif last_error:
+        relay_state = last_error[:19]
+    else:
+        relay_state = "Idle (Auto)"
 
     rows = [
         ("Bot", "Connected" if tg_client.is_connected else "Offline"),
@@ -434,7 +396,7 @@ async def build_status_html() -> str:
         ("RAM", f"{sys['mem_used_mb']}/{sys['mem_total_mb']} MB"),
         ("Disk", f"{sys['disk_used_gb']:.1f}/{sys['disk_total_gb']:.1f} GB"),
         ("CPU Load", f"{sys['load_1m']:.2f}"),
-        ("Sun Relay", "Active" if relay_running else "Idle (Auto)"),
+        ("Sun Relay", relay_state),
         ("Tunnel", "Online" if tunnel else "Missing"),
         ("Uptime", fmt_uptime(time.time() - START_TIME)),
     ]
@@ -450,22 +412,14 @@ async def build_status_html() -> str:
     out = f"<b>YStream Full Diagnosis</b>\n<pre>{html.escape(table)}</pre>"
     if tunnel:
         out += f"\n\n<b>Tunnel URL:</b>\n<code>{html.escape(tunnel)}</code>"
-    if last_error:
-        out += f"\n\n<b>Last Relay Note:</b> <code>{html.escape(last_error[:140])}</code>"
     return out
 
 
-@tg_client.on_message(filters.command(["start", "menu"]))
-async def cmd_menu(_, msg: Message):
-    await msg.reply_text(build_menu_html(), parse_mode=enums.ParseMode.HTML, reply_markup=menu_markup())
-
-
-@tg_client.on_message(filters.command("list"))
-async def cmd_list(_, msg: Message):
+@tg_client.on_message(filters.command("start"))
+async def cmd_start(_, msg: Message):
     await msg.reply_text(
-        build_queue_html(),
+        "<b>YStream Bot Ready.</b>\nForward any movie to add to YPlay.\nUse /status or /clear.",
         parse_mode=enums.ParseMode.HTML,
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🗑️ Clear All", callback_data="cb:clear_ask")]]),
     )
 
 
@@ -477,27 +431,6 @@ async def cmd_status(_, msg: Message):
         parse_mode=enums.ParseMode.HTML,
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh", callback_data="cb:status")]]),
     )
-
-
-@tg_client.on_message(filters.command("del"))
-async def cmd_del(_, msg: Message):
-    parts = (msg.text or "").strip().split()
-    if len(parts) < 2 or not parts[1].isdigit():
-        await msg.reply_text("Use: <code>/del 1</code>", parse_mode=enums.ParseMode.HTML)
-        return
-    idx = int(parts[1]) - 1
-    items = read_json(LIBRARY_FILE, [])
-    if idx < 0 or idx >= len(items):
-        await msg.reply_text("Invalid number. Check <code>/list</code>.", parse_mode=enums.ParseMode.HTML)
-        return
-    removed = items.pop(idx)
-    write_json(LIBRARY_FILE, items)
-    msg_cache.pop(removed["id"], None)
-    task = prewarm_tasks.pop(removed["id"], None)
-    if task:
-        task.cancel()
-    shutil.rmtree(safe_item_dir(removed["id"]), ignore_errors=True)
-    await msg.reply_text(f"Removed: <b>{html.escape(str(removed.get('title')))}</b>", parse_mode=enums.ParseMode.HTML)
 
 
 @tg_client.on_message(filters.command("clear"))
@@ -524,50 +457,17 @@ async def on_file(_, msg: Message):
 
 @tg_client.on_callback_query()
 async def on_callback(_, cq: CallbackQuery):
-    data = cq.data or ""
-    try:
-        if data == "cb:menu":
-            await cq.answer()
-            await cq.message.edit_text(build_menu_html(), parse_mode=enums.ParseMode.HTML, reply_markup=menu_markup())
-        elif data == "cb:list":
-            await cq.answer()
-            await cq.message.edit_text(
-                build_queue_html(),
-                parse_mode=enums.ParseMode.HTML,
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🗑️ Clear All", callback_data="cb:clear_ask")],
-                    [InlineKeyboardButton("⬅️ Back", callback_data="cb:menu")],
-                ]),
-            )
-        elif data == "cb:status":
+    if cq.data == "cb:status":
+        try:
             await cq.answer("Refreshing...")
             txt = await build_status_html()
             await cq.message.edit_text(
                 txt,
                 parse_mode=enums.ParseMode.HTML,
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔄 Refresh", callback_data="cb:status")],
-                    [InlineKeyboardButton("⬅️ Back", callback_data="cb:menu")],
-                ]),
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh", callback_data="cb:status")]]),
             )
-        elif data == "cb:clear_ask":
-            items = read_json(LIBRARY_FILE, [])
-            await cq.answer()
-            await cq.message.edit_text(
-                f"Clear all <code>{len(items)}</code> movies & cache?\nNext upload starts at <code>#1</code>.",
-                parse_mode=enums.ParseMode.HTML,
-                reply_markup=clear_confirm_markup(),
-            )
-        elif data == "cb:clear_confirm":
-            await clear_queue_and_cache()
-            await cq.answer("Cleared!", show_alert=True)
-            await cq.message.edit_text(
-                "<b>Cleared All Movies & Cache.</b>\nNext upload starts at <code>#1</code>.",
-                parse_mode=enums.ParseMode.HTML,
-                reply_markup=menu_markup(),
-            )
-    except Exception:
-        pass
+        except Exception:
+            pass
 
 
 # --- On-Demand Lightweight Sun TV Relay ---
@@ -587,6 +487,17 @@ def stop_suntv_relay():
             pass
 
 
+def format_ffmpeg_err(raw: str) -> str:
+    low = (raw or "").lower()
+    if "403" in low:
+        return "CDN 403 (IP blocked)"
+    if "404" in low:
+        return "Stream 404"
+    if "timed out" in low or "timeout" in low:
+        return "Source timeout"
+    return "Source offline"
+
+
 async def start_suntv_relay():
     global ffmpeg_proc, last_error, last_relay_hit
     last_relay_hit = time.time()
@@ -597,11 +508,14 @@ async def start_suntv_relay():
 
     m3u8 = HLS_DIR / "index.m3u8"
     if ffmpeg_proc and ffmpeg_proc.poll() is None and m3u8.exists() and (time.time() - m3u8.stat().st_mtime) < 10:
+        last_error = ""
         return True
 
     stop_suntv_relay()
     cmd = [
         "ffmpeg", "-nostdin", "-loglevel", "error",
+        "-user_agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "-headers", "Accept: */*\r\nConnection: keep-alive\r\n",
         "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "2",
         "-i", url,
         "-vf", "fps=25,scale=-2:720,format=yuv420p",
@@ -614,8 +528,8 @@ async def start_suntv_relay():
     ]
     try:
         ffmpeg_proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
-    except Exception as e:
-        last_error = f"FFmpeg start error: {e}"
+    except Exception:
+        last_error = "FFmpeg error"
         return False
 
     for _ in range(28):
@@ -623,12 +537,12 @@ async def start_suntv_relay():
             last_error = ""
             return True
         if ffmpeg_proc.poll() is not None:
-            err = ffmpeg_proc.stderr.read().strip() if ffmpeg_proc.stderr else "FFmpeg stopped"
-            last_error = err
+            err = ffmpeg_proc.stderr.read().strip() if ffmpeg_proc.stderr else ""
+            last_error = format_ffmpeg_err(err)
             return False
         await asyncio.sleep(0.25)
 
-    last_error = "Sun TV stream timeout"
+    last_error = "Source timeout"
     return False
 
 
@@ -645,8 +559,6 @@ async def startup():
     await tg_client.start()
     try:
         await tg_client.set_bot_commands([
-            BotCommand("menu", "Quick Control"),
-            BotCommand("list", "YPlay Queue List"),
             BotCommand("status", "Full Diagnosis Table"),
             BotCommand("clear", "Clear Queue & Cache"),
         ])
