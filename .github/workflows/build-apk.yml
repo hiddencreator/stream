@@ -1,4 +1,4 @@
-name: Download YStream APK
+name: Download YStream TV APK
 
 on:
   workflow_dispatch:
@@ -18,10 +18,11 @@ jobs:
         with:
           gradle-version: "8.7"
 
-      - name: Prepare Android Project
+      - name: Prepare Android TV Project
         run: |
-          mkdir -p "$ANDROID_HOME/licenses"
-          printf "\n24333f8a63b6825ea9c5514f83c2829b004d1fee\n" > "$ANDROID_HOME/licenses/android-sdk-license"
+          SDK_DIR="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          mkdir -p "$SDK_DIR/licenses"
+          printf "\n24333f8a63b6825ea9c5514f83c2829b004d1fee\n" > "$SDK_DIR/licenses/android-sdk-license"
           mkdir -p app/src/main/java/com/ystream/app app/src/main/res/drawable
 
           cat <<'EOF' > settings.gradle
@@ -39,7 +40,7 @@ jobs:
                   mavenCentral()
               }
           }
-          rootProject.name = "YStreamApp"
+          rootProject.name = "YStreamTV"
           include(":app")
           EOF
 
@@ -65,8 +66,8 @@ jobs:
                   applicationId "com.ystream.app"
                   minSdk 23
                   targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
+                  versionCode 2
+                  versionName "2.0-TV"
               }
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
@@ -86,6 +87,18 @@ jobs:
           </vector>
           EOF
 
+          cat <<'EOF' > app/src/main/res/drawable/tv_banner.xml
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="320dp"
+              android:height="180dp"
+              android:viewportWidth="320"
+              android:viewportHeight="180">
+              <path android:fillColor="#080A0F" android:pathData="M0,0h320v180h-320z"/>
+              <path android:fillColor="#14233D" android:pathData="M0,152h320v28h-320z"/>
+              <path android:fillColor="#E50914" android:pathData="M132,48 L196,86 L132,124 Z"/>
+          </vector>
+          EOF
+
           cat <<'EOF' > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
@@ -94,17 +107,19 @@ jobs:
               <application
                   android:label="YStream"
                   android:icon="@drawable/ic_launcher"
+                  android:banner="@drawable/tv_banner"
                   android:hardwareAccelerated="true"
                   android:usesCleartextTraffic="true">
                   <activity
                       android:name=".MainActivity"
                       android:exported="true"
-                      android:theme="@android:style/Theme.Black.NoTitleBar"
-                      android:configChanges="orientation|screenSize|keyboardHidden">
+                      android:screenOrientation="landscape"
+                      android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
+                      android:configChanges="orientation|screenSize|keyboardHidden|uiMode">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
                           <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+                          <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
                   </activity>
               </application>
@@ -136,26 +151,51 @@ jobs:
               private WebChromeClient.CustomViewCallback customViewCallback;
               private WebChromeClient chromeClient;
 
+              private void enableImmersive() {
+                  getWindow().getDecorView().setSystemUiVisibility(
+                          View.SYSTEM_UI_FLAG_FULLSCREEN
+                          | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                          | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+              }
+
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   requestWindowFeature(Window.FEATURE_NO_TITLE);
+                  setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
                   getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                  enableImmersive();
 
                   rootLayout = new FrameLayout(this);
                   rootLayout.setBackgroundColor(Color.BLACK);
 
                   webView = new WebView(this);
+                  webView.setBackgroundColor(Color.BLACK);
+                  webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+                  webView.setFocusable(true);
+                  webView.setFocusableInTouchMode(true);
+
                   WebSettings s = webView.getSettings();
                   s.setJavaScriptEnabled(true);
                   s.setDomStorageEnabled(true);
                   s.setMediaPlaybackRequiresUserGesture(false);
                   s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+                  s.setSupportZoom(false);
+                  s.setBuiltInZoomControls(false);
+                  s.setDisplayZoomControls(false);
                   s.setLoadWithOverviewMode(true);
                   s.setUseWideViewPort(true);
 
-                  webView.setBackgroundColor(Color.BLACK);
-                  webView.setWebViewClient(new WebViewClient());
+                  webView.clearCache(true);
+
+                  webView.setWebViewClient(new WebViewClient() {
+                      @Override
+                      public void onPageFinished(WebView view, String url) {
+                          super.onPageFinished(view, url);
+                          view.requestFocus();
+                      }
+                  });
+
                   chromeClient = new WebChromeClient() {
                       @Override
                       public void onShowCustomView(View view, CustomViewCallback callback) {
@@ -169,11 +209,7 @@ jobs:
                           rootLayout.addView(customView, new FrameLayout.LayoutParams(
                                   ViewGroup.LayoutParams.MATCH_PARENT,
                                   ViewGroup.LayoutParams.MATCH_PARENT));
-                          setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
-                          getWindow().getDecorView().setSystemUiVisibility(
-                                  View.SYSTEM_UI_FLAG_FULLSCREEN
-                                  | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                                  | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+                          enableImmersive();
                       }
 
                       @Override
@@ -186,8 +222,8 @@ jobs:
                               customViewCallback = null;
                           }
                           webView.setVisibility(View.VISIBLE);
-                          setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
-                          getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
+                          webView.requestFocus();
+                          enableImmersive();
                       }
                   };
                   webView.setWebChromeClient(chromeClient);
@@ -197,6 +233,13 @@ jobs:
                           ViewGroup.LayoutParams.MATCH_PARENT));
                   setContentView(rootLayout);
                   webView.loadUrl("https://ystream.pages.dev");
+                  webView.requestFocus();
+              }
+
+              @Override
+              public void onWindowFocusChanged(boolean hasFocus) {
+                  super.onWindowFocusChanged(hasFocus);
+                  if (hasFocus) enableImmersive();
               }
 
               @Override
@@ -216,11 +259,11 @@ jobs:
           }
           EOF
 
-      - name: Build APK
+      - name: Build TV APK
         run: gradle assembleDebug --no-daemon
 
-      - name: Upload YStream APK
+      - name: Upload YStream TV APK
         uses: actions/upload-artifact@v4
         with:
-          name: YStream-APK
+          name: YStream-TV-APK
           path: app/build/outputs/apk/debug/app-debug.apk
