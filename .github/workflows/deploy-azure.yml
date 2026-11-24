@@ -58,8 +58,11 @@ jobs:
 
           sudo systemctl daemon-reload
           sudo systemctl enable ystream ystream-tunnel
-          sudo systemctl restart ystream ystream-tunnel
-          sleep 8
+          sudo systemctl restart ystream
+          if ! sudo systemctl is-active --quiet ystream-tunnel; then
+            sudo systemctl start ystream-tunnel
+            sleep 6
+          fi
           echo "=== CLOUDFLARE URL ==="
           sudo journalctl -u ystream-tunnel -n 50 --no-pager | grep -oE 'https://[a-zA-Z0-9-]+\.trycloudflare\.com' | tail -n 1 || true
           echo "======================"
