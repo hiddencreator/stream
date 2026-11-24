@@ -134,6 +134,7 @@ jobs:
               private FrameLayout rootLayout;
               private View customView;
               private WebChromeClient.CustomViewCallback customViewCallback;
+              private WebChromeClient chromeClient;
 
               @Override
               protected void onCreate(Bundle savedInstanceState) {
@@ -155,7 +156,7 @@ jobs:
 
                   webView.setBackgroundColor(Color.BLACK);
                   webView.setWebViewClient(new WebViewClient());
-                  webView.setWebChromeClient(new WebChromeClient() {
+                  chromeClient = new WebChromeClient() {
                       @Override
                       public void onShowCustomView(View view, CustomViewCallback callback) {
                           if (customView != null) {
@@ -188,7 +189,8 @@ jobs:
                           setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
                           getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
                       }
-                  });
+                  };
+                  webView.setWebChromeClient(chromeClient);
 
                   rootLayout.addView(webView, new FrameLayout.LayoutParams(
                           ViewGroup.LayoutParams.MATCH_PARENT,
@@ -201,7 +203,7 @@ jobs:
               public boolean onKeyDown(int keyCode, KeyEvent event) {
                   if (keyCode == KeyEvent.KEYCODE_BACK) {
                       if (customView != null) {
-                          ((WebChromeClient) null);
+                          chromeClient.onHideCustomView();
                           return true;
                       }
                       if (webView != null && webView.canGoBack()) {
