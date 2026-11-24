@@ -11,7 +11,7 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from pyrogram import Client, enums, filters
 from pyrogram.types import (
     BotCommand,
@@ -41,6 +41,7 @@ CHUNK_SIZE = 1024 * 1024  # 1 MiB
 MAX_CACHE_BYTES = int(1.5 * 1024 * 1024 * 1024)  # 1.5 GB cap
 RELAY_IDLE_SEC = 45
 START_TIME = time.time()
+NATIVE_AUDIO_CODECS = {"aac", "mp3", "opus", "vorbis", "flac"}
 
 for d in (DATA_DIR, CACHE_DIR, HLS_DIR):
     d.mkdir(parents=True, exist_ok=True)
@@ -222,6 +223,8 @@ def get_media_info(msg: Message) -> Optional[dict]:
     duration = getattr(media, "duration", None) or 0
     width = int(getattr(media, "width", 0) or 0)
     height = int(getattr(media, "height", 0) or 0)
+    low = title.lower()
+    likely_compat = bool(re.search(r"\b(ac3|dd5\.1|ddp|eac3|dts|truehd|atmos)\b", low))
     return {
         "id": f"{msg.chat.id}_{msg.id}",
         "chat_id": msg.chat.id,
@@ -233,6 +236,8 @@ def get_media_info(msg: Message) -> Optional[dict]:
         "width": width,
         "height": height,
         "quality": detect_quality(title, width, height),
+        "audio_codec": "",
+        "compat_audio": likely_compat,
         "added_at": int(time.time()),
     }
 
@@ -289,6 +294,80 @@ def prune_cache_sync():
             pass
 
 
+def probe_cached_media_sync(item_id: str) -> Optional[dict]:
+    b0 = block_path(item_id, 0)
+    if not b0.exists():
+        return None
+    b1 = block_path(item_id, 1)
+    tmp_probe = safe_item_dir(item_id) / "probe.tmp"
+    try:
+        with tmp_probe.open("wb") as out:
+            out.write(b0.read_bytes())
+            if b1.exists():
+                out.write(b1.read_bytes())
+        cmd = [
+            "ffprobe", "-v", "error",
+            "-show_entries", "format=duration:stream=codec_type,codec_name,width,height",
+            "-of", "json", str(tmp_probe),
+        ]
+        res = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL, timeout=5)
+        data = json.loads(res)
+        streams = data.get("streams") or []
+        v_stream = next((s for s in streams if s.get("codec_type") == "video"), {})
+        a_stream = next((s for s in streams if s.get("codec_type") == "audio"), {})
+        fmt_info = data.get("format") or {}
+
+        a_codec = str(a_stream.get("codec_name") or "").lower()
+        w = int(v_stream.get("width") or 0)
+        h = int(v_stream.get("height") or 0)
+        dur = 0
+        try:
+            dur = int(float(fmt_info.get("duration") or 0))
+        except Exception:
+            pass
+
+        compat = bool(a_codec and a_codec not in NATIVE_AUDIO_CODECS)
+        return {
+            "audio_codec": a_codec,
+            "compat_audio": compat,
+            "width": w,
+            "height": h,
+            "duration": dur,
+        }
+    except Exception:
+        return None
+    finally:
+        try:
+            tmp_probe.unlink()
+        except Exception:
+            pass
+
+
+def update_library_probe(item_id: str, info: dict):
+    items = read_json(LIBRARY_FILE, [])
+    changed = False
+    for row in items:
+        if row.get("id") == item_id:
+            if info.get("audio_codec"):
+                row["audio_codec"] = info["audio_codec"]
+                row["compat_audio"] = bool(info["compat_audio"])
+            if info.get("width") and not row.get("width"):
+                row["width"] = info["width"]
+            if info.get("height") and not row.get("height"):
+                row["height"] = info["height"]
+            if info.get("duration") and not row.get("duration"):
+                row["duration"] = info["duration"]
+            row["quality"] = detect_quality(
+                row.get("title", ""),
+                int(row.get("width") or 0),
+                int(row.get("height") or 0),
+            )
+            changed = True
+            break
+    if changed:
+        write_json(LIBRARY_FILE, items)
+
+
 async def clear_queue_and_cache():
     for task in list(prewarm_tasks.values()):
         task.cancel()
@@ -302,6 +381,8 @@ async def get_tg_message(item: dict, force_refresh: bool = False) -> Message:
     item_id = item["id"]
     if not force_refresh and item_id in msg_cache:
         return msg_cache[item_id]
+    if len(msg_cache) > 40:
+        msg_cache.clear()
     msg = await tg_client.get_messages(int(item["chat_id"]), int(item["message_id"]))
     media = msg.video or msg.document or msg.animation
     if not media:
@@ -347,6 +428,10 @@ async def prewarm_head_tail(item: dict):
         if total_blocks > 3 and not block_path(item_id, total_blocks - 1).exists():
             await cache_span(item, total_blocks - 1, 1)
 
+        probe_res = await asyncio.to_thread(probe_cached_media_sync, item_id)
+        if probe_res:
+            update_library_probe(item_id, probe_res)
+
         await asyncio.to_thread(prune_cache_sync)
     except asyncio.CancelledError:
         pass
@@ -358,7 +443,9 @@ async def prewarm_head_tail(item: dict):
 
 def trigger_prewarm(item: dict):
     item_id = item["id"]
-    if item_id in prewarm_tasks or block_path(item_id, 0).exists():
+    if item_id in prewarm_tasks:
+        return
+    if block_path(item_id, 0).exists() and item.get("audio_codec"):
         return
     prewarm_tasks[item_id] = asyncio.create_task(prewarm_head_tail(item))
 
@@ -532,7 +619,7 @@ async def start_suntv_relay():
         last_error = "FFmpeg error"
         return False
 
-    for _ in range(28):
+    for _ in range(24):
         if m3u8.exists() and len(list(HLS_DIR.glob("*.ts"))) >= 2:
             last_error = ""
             return True
@@ -601,18 +688,22 @@ async def yplay_library():
     enriched = []
     for idx, x in enumerate(items):
         row = dict(x)
+        if not row.get("audio_codec") and block_path(row["id"], 0).exists():
+            probed = await asyncio.to_thread(probe_cached_media_sync, row["id"])
+            if probed:
+                update_library_probe(row["id"], probed)
+                row.update({k: v for k, v in probed.items() if v or k == "compat_audio"})
         row["index"] = idx
-        if not row.get("quality"):
-            row["quality"] = detect_quality(
-                row.get("title", ""),
-                int(row.get("width") or 0),
-                int(row.get("height") or 0),
-            )
+        row["quality"] = detect_quality(
+            row.get("title", ""),
+            int(row.get("width") or 0),
+            int(row.get("height") or 0),
+        )
         enriched.append(row)
     return {"count": len(enriched), "items": enriched}
 
 
-@app.get("/api/yplay/stream/{index}")
+@app.api_route("/api/yplay/stream/{index}", methods=["GET", "HEAD"])
 async def yplay_stream(index: int, request: Request):
     items = read_json(LIBRARY_FILE, [])
     if index < 0 or index >= len(items):
@@ -647,6 +738,19 @@ async def yplay_stream(index: int, request: Request):
         raise HTTPException(status_code=416, detail="Invalid range bounds")
 
     length = end_byte - start_byte + 1
+    headers = {
+        "Accept-Ranges": "bytes",
+        "Content-Type": mime,
+        "Cache-Control": "no-cache",
+        "Content-Length": str(length),
+    }
+    status_code = 200
+    if range_header:
+        headers["Content-Range"] = f"bytes {start_byte}-{end_byte}/{total_size}"
+        status_code = 206
+
+    if request.method == "HEAD":
+        return Response(status_code=status_code, headers=headers)
 
     async def continuous_gen():
         pos = start_byte
@@ -711,17 +815,60 @@ async def yplay_stream(index: int, request: Request):
 
         asyncio.create_task(asyncio.to_thread(prune_cache_sync))
 
-    headers = {
-        "Accept-Ranges": "bytes",
-        "Content-Type": mime,
-        "Cache-Control": "no-cache",
-        "Content-Length": str(length),
-    }
-    if range_header:
-        headers["Content-Range"] = f"bytes {start_byte}-{end_byte}/{total_size}"
-        return StreamingResponse(continuous_gen(), status_code=206, headers=headers, media_type=mime)
+    return StreamingResponse(continuous_gen(), status_code=status_code, headers=headers, media_type=mime)
 
-    return StreamingResponse(continuous_gen(), status_code=200, headers=headers, media_type=mime)
+
+@app.api_route("/api/yplay/compat/{index}", methods=["GET", "HEAD"])
+async def yplay_compat_stream(index: int, request: Request, t: float = 0.0):
+    items = read_json(LIBRARY_FILE, [])
+    if index < 0 or index >= len(items):
+        raise HTTPException(status_code=404, detail="Movie not found")
+
+    if request.method == "HEAD":
+        return Response(status_code=200, headers={"Content-Type": "video/mp4", "Cache-Control": "no-store"})
+
+    seek_sec = max(0.0, float(t or 0.0))
+    cmd = [
+        "ffmpeg", "-nostdin", "-loglevel", "error",
+        "-ss", f"{seek_sec:.2f}",
+        "-i", f"http://127.0.0.1:8000/api/yplay/stream/{index}",
+        "-map", "0:v:0", "-map", "0:a:0?",
+        "-c:v", "copy",
+        "-c:a", "aac", "-ac", "2", "-b:a", "128k",
+        "-avoid_negative_ts", "make_zero",
+        "-f", "mp4",
+        "-movflags", "frag_keyframe+empty_moov+default_base_moof",
+        "pipe:1",
+    ]
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+
+    async def remux_gen():
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                chunk = await proc.stdout.read(65536)
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            if proc.returncode is None:
+                try:
+                    proc.kill()
+                    await proc.wait()
+                except Exception:
+                    pass
+
+    return StreamingResponse(
+        remux_gen(),
+        status_code=200,
+        media_type="video/mp4",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.get("/live/suntv/index.m3u8")
