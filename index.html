@@ -11,8 +11,8 @@
       --bg: #080a0f;
       --surface: #0e121b;
       --card: #121722;
-      --card-hover: #1b2232;
-      --active-bg: #14233d;
+      --card-hover: #1a2132;
+      --active-bg: #13223b;
       --active-border: #3b82f6;
       --accent: #e50914;
       --text: #f3f5f8;
@@ -28,6 +28,8 @@
     }
 
     html, body {
+      position: fixed;
+      inset: 0;
       width: 100%;
       height: 100dvh;
       overflow: hidden;
@@ -44,7 +46,7 @@
 
     button, [tabindex] {
       outline: none;
-      transition: background-color 0.2s ease, opacity 0.2s ease, transform 0.18s ease, box-shadow 0.2s ease;
+      transition: background-color 0.2s ease, opacity 0.2s ease, transform 0.16s ease;
     }
 
     button {
@@ -67,7 +69,7 @@
       transform: scale(0.97);
     }
 
-    /* Fixed Player Stage */
+    /* Fixed Top Player */
     .player-stage {
       flex-shrink: 0;
       background: #000;
@@ -138,7 +140,7 @@
       position: absolute;
       top: 50%;
       transform: translateY(-50%);
-      background: rgba(0, 0, 0, 0.7);
+      background: rgba(0, 0, 0, 0.72);
       backdrop-filter: blur(6px);
       color: #fff;
       font-size: 0.88rem;
@@ -154,13 +156,13 @@
     .tap-flash.right { right: 14%; }
     .tap-flash.show { opacity: 1; }
 
-    /* Elegant Glass Error Overlay */
+    /* Elegant Error Container */
     .player-error {
       position: absolute;
       inset: 0;
-      z-index: 22;
-      background: rgba(8, 10, 15, 0.82);
-      backdrop-filter: blur(10px);
+      z-index: 25;
+      background: rgba(8, 10, 15, 0.84);
+      backdrop-filter: blur(12px);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -176,12 +178,12 @@
     .err-card {
       max-width: 340px;
       width: 100%;
-      background: rgba(22, 27, 38, 0.92);
+      background: rgba(20, 25, 36, 0.94);
       border: 1px solid rgba(255, 255, 255, 0.12);
       border-radius: 14px;
       padding: 16px 18px;
       text-align: center;
-      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55);
     }
     .err-icon {
       width: 34px;
@@ -201,18 +203,17 @@
       font-size: 0.78rem;
       color: var(--muted);
       margin-top: 4px;
-      line-height: 1.35;
+      line-height: 1.38;
     }
     .err-actions {
       margin-top: 12px;
       display: flex;
       justify-content: center;
-      gap: 8px;
     }
     .err-btn {
       background: var(--accent);
       color: #fff;
-      padding: 7px 16px;
+      padding: 7px 18px;
       border-radius: 8px;
       font-size: 0.8rem;
       font-weight: 600;
@@ -221,12 +222,12 @@
       background: #f41b26;
     }
 
-    /* Live Overlay Controls */
+    /* Live TV Controls Overlay (No Pause) */
     .live-overlay {
       position: absolute;
       inset: 0;
       z-index: 14;
-      background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, transparent 45%);
+      background: linear-gradient(to top, rgba(0,0,0,0.78) 0%, transparent 48%);
       display: none;
       align-items: flex-end;
       justify-content: space-between;
@@ -244,7 +245,7 @@
       font-size: 0.74rem;
       font-weight: 700;
       color: #fff;
-      background: rgba(0, 0, 0, 0.55);
+      background: rgba(0, 0, 0, 0.58);
       padding: 5px 10px;
       border-radius: 6px;
     }
@@ -255,7 +256,7 @@
       background: var(--accent);
     }
 
-    /* YouTube/Netflix Style VOD Overlay */
+    /* YPlay YouTube/Netflix Style Overlay */
     .yt-overlay {
       position: absolute;
       inset: 0;
@@ -280,7 +281,7 @@
       width: 54px;
       height: 54px;
       border-radius: 50%;
-      background: rgba(15, 18, 25, 0.72);
+      background: rgba(15, 18, 25, 0.74);
       backdrop-filter: blur(6px);
       color: #fff;
       display: flex;
@@ -329,7 +330,7 @@
       position: relative;
     }
     .yt-btn {
-      background: rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.13);
       color: #fff;
       padding: 6px 10px;
       border-radius: 7px;
@@ -345,15 +346,13 @@
       background: rgba(255, 255, 255, 0.26);
     }
 
-    /* Speed Menu Popover */
-    .speed-wrap {
-      position: relative;
-    }
-    .speed-menu {
+    /* Shared Popover Menu (Quality & Speed) */
+    .pop-wrap { position: relative; }
+    .pop-menu {
       position: absolute;
       bottom: 40px;
       right: 0;
-      background: rgba(16, 20, 30, 0.96);
+      background: rgba(14, 18, 28, 0.96);
       backdrop-filter: blur(10px);
       border: 1px solid rgba(255, 255, 255, 0.12);
       border-radius: 10px;
@@ -361,19 +360,21 @@
       display: flex;
       flex-direction: column;
       gap: 2px;
-      min-width: 84px;
+      min-width: 96px;
+      max-height: 190px;
+      overflow-y: auto;
       opacity: 0;
       transform: translateY(6px);
       pointer-events: none;
       transition: opacity 0.18s ease, transform 0.18s ease;
       z-index: 30;
     }
-    .speed-menu.open {
+    .pop-menu.open {
       opacity: 1;
       transform: translateY(0);
       pointer-events: auto;
     }
-    .speed-opt {
+    .pop-opt {
       width: 100%;
       text-align: center;
       background: transparent;
@@ -382,12 +383,12 @@
       font-size: 0.78rem;
       color: #d1d5db;
     }
-    .speed-opt.active {
-      background: rgba(229, 9, 20, 0.25);
+    .pop-opt.active {
+      background: rgba(229, 9, 20, 0.28);
       color: #fff;
     }
-    .speed-opt:hover, .speed-opt:focus-visible {
-      background: rgba(255, 255, 255, 0.16);
+    .pop-opt:hover, .pop-opt:focus-visible {
+      background: rgba(255, 255, 255, 0.18);
       color: #fff;
     }
 
@@ -423,13 +424,13 @@
       flex-shrink: 0;
     }
 
-    /* Main Panel & Fixed Tab Bar */
+    /* Main Panel & Fixed 2-Tab Bar */
     .main-panel {
       flex: 1;
       min-height: 0;
       display: flex;
       flex-direction: column;
-      max-width: 1100px;
+      max-width: 1120px;
       width: 100%;
       margin: 0 auto;
     }
@@ -445,7 +446,7 @@
     }
     .tab-btn {
       flex: 1;
-      padding: 10px 12px;
+      padding: 10px 14px;
       border-radius: 10px;
       background: var(--card);
       color: var(--muted);
@@ -476,26 +477,14 @@
       background: rgba(59, 130, 246, 0.3);
       color: #93c5fd;
     }
-    .refresh-btn {
-      padding: 10px 12px;
-      background: var(--card);
-      color: var(--muted);
-      border-radius: 10px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .refresh-btn:hover, .refresh-btn:focus-visible {
-      background: var(--card-hover);
-      color: #fff;
-    }
 
-    /* Scrollable List Only */
+    /* Scrollable List Area Only */
     .scroll-area {
       flex: 1;
       min-height: 0;
       overflow-y: auto;
       overscroll-behavior: contain;
+      touch-action: pan-y;
       -webkit-overflow-scrolling: touch;
       padding: 12px 14px 28px;
     }
@@ -505,13 +494,14 @@
     .channel-list, .yplay-list {
       display: flex;
       flex-direction: column;
-      gap: 9px;
+      gap: 10px;
     }
 
-    .ch-card, .yp-card {
+    /* Live Channel Card */
+    .ch-card {
       background: var(--card);
       border: 1px solid var(--border);
-      border-radius: 12px;
+      border-radius: 13px;
       padding: 10px 12px;
       display: flex;
       align-items: center;
@@ -519,12 +509,11 @@
       gap: 12px;
       cursor: pointer;
     }
-    .ch-card:hover, .ch-card:focus-visible,
-    .yp-card:hover, .yp-card:focus-visible {
+    .ch-card:hover, .ch-card:focus-visible {
       background: var(--card-hover);
       border-color: rgba(255, 255, 255, 0.16);
     }
-    .ch-card.active, .yp-card.active {
+    .ch-card.active {
       background: var(--active-bg);
       border-color: var(--active-border);
     }
@@ -536,13 +525,10 @@
       min-width: 0;
     }
     .ch-logo-box {
-      width: 48px;
-      height: 48px;
-      border-radius: 10px;
-      background: #ffffff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      width: 52px;
+      height: 52px;
+      border-radius: 11px;
+      background: #161c28;
       overflow: hidden;
       flex-shrink: 0;
       position: relative;
@@ -550,8 +536,8 @@
     .ch-logo-box img {
       width: 100%;
       height: 100%;
-      object-fit: contain;
-      padding: 5px;
+      object-fit: cover;
+      display: block;
       position: relative;
       z-index: 2;
     }
@@ -569,27 +555,109 @@
       padding: 4px;
       z-index: 1;
     }
-
     .ch-name { font-size: 0.94rem; font-weight: 700; }
     .ch-meta { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
-    .ch-eq { font-size: 0.85rem; color: #60a5fa; font-weight: 800; padding-right: 4px; }
+    .ch-eq { font-size: 0.78rem; color: #60a5fa; font-weight: 800; padding-right: 4px; }
 
-    .yp-title { font-size: 0.9rem; font-weight: 700; word-break: break-word; }
-    .yp-meta { font-size: 0.74rem; color: var(--muted); margin-top: 2px; }
-    .play-pill {
-      background: var(--accent);
+    /* Beautiful YPlay Card Layout */
+    .yp-card {
+      background: linear-gradient(145deg, #141a27 0%, #0f141f 100%);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+    }
+    .yp-card:hover, .yp-card:focus-visible {
+      background: linear-gradient(145deg, #1a2233 0%, #141a28 100%);
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+    .yp-card.active {
+      background: linear-gradient(145deg, #152542 0%, #101b30 100%);
+      border-color: var(--active-border);
+    }
+    .yp-poster {
+      width: 48px;
+      height: 54px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, rgba(229, 9, 20, 0.24) 0%, rgba(37, 99, 235, 0.22) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
       color: #fff;
-      padding: 6px 12px;
-      border-radius: 7px;
-      font-size: 0.76rem;
+      gap: 2px;
+    }
+    .yp-card.active .yp-poster {
+      background: linear-gradient(135deg, #e50914 0%, #b91c1c 100%);
+      border-color: rgba(255, 255, 255, 0.22);
+    }
+    .yp-num {
+      font-size: 0.68rem;
       font-weight: 700;
+      color: rgba(255, 255, 255, 0.78);
+    }
+    .yp-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .yp-title {
+      font-size: 0.92rem;
+      font-weight: 700;
+      line-height: 1.3;
+      color: #f8fafc;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      word-break: break-word;
+    }
+    .yp-tags {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .yp-tag {
+      font-size: 0.69rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #cbd5e1;
+    }
+    .yp-tag.qual {
+      background: rgba(59, 130, 246, 0.18);
+      color: #93c5fd;
+    }
+    .yp-tag.qual-4k {
+      background: rgba(245, 158, 11, 0.2);
+      color: #fcd34d;
+    }
+    .yp-play-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       flex-shrink: 0;
     }
+    .yp-card.active .yp-play-btn {
+      background: var(--accent);
+    }
 
-    /* Android TV & Wide Screen Accessibility */
+    /* Android TV & Wide Screen */
     @media (min-width: 768px) {
       video {
-        max-height: 48dvh;
+        max-height: 46dvh;
       }
       .channel-list, .yplay-list {
         display: grid;
@@ -604,10 +672,10 @@
       .yp-card:focus-visible,
       .tab-btn:focus-visible,
       .yt-btn:focus-visible,
-      .err-btn:focus-visible,
-      .refresh-btn:focus-visible {
+      .pop-opt:focus-visible,
+      .err-btn:focus-visible {
         background: #232d42;
-        box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.75);
+        box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.78);
       }
     }
 
@@ -644,12 +712,18 @@
         </div>
       </div>
 
-      <!-- Live TV Controls -->
+      <!-- Live TV Controls Overlay (No Pause) -->
       <div id="liveOverlay" class="live-overlay enabled">
         <div class="live-badge"><span class="live-dot"></span> LIVE</div>
-        <div style="display:flex; gap:6px;">
-          <button id="liveMuteBtn" class="yt-btn" title="Mute/Unmute" onclick="event.stopPropagation(); toggleMute();"></button>
-          <button id="liveFsBtn" class="yt-btn" title="Fullscreen" onclick="event.stopPropagation(); toggleFullscreen();"></button>
+        <div style="display:flex; align-items:center; gap:6px;" onclick="event.stopPropagation()">
+          <div class="pop-wrap">
+            <button id="liveQualBtn" class="yt-btn" onclick="toggleLiveQualMenu()">Auto</button>
+            <div id="liveQualMenu" class="pop-menu">
+              <button class="pop-opt active" data-level="-1" onclick="setLiveQuality(-1)">Auto</button>
+            </div>
+          </div>
+          <button id="liveMuteBtn" class="yt-btn" title="Mute/Unmute" onclick="toggleMute()"></button>
+          <button id="liveFsBtn" class="yt-btn" title="Fullscreen" onclick="toggleFullscreen()"></button>
         </div>
       </div>
 
@@ -671,13 +745,13 @@
               <button id="muteBtn" class="yt-btn" title="Mute/Unmute" onclick="toggleMute()"></button>
             </div>
             <div class="yt-act-grp">
-              <div class="speed-wrap">
+              <div class="pop-wrap">
                 <button id="speedBtn" class="yt-btn" onclick="toggleSpeedMenu()">1x</button>
-                <div id="speedMenu" class="speed-menu">
-                  <button class="speed-opt active" data-rate="1" onclick="setSpeed(1)">1x</button>
-                  <button class="speed-opt" data-rate="1.15" onclick="setSpeed(1.15)">1.15x</button>
-                  <button class="speed-opt" data-rate="1.25" onclick="setSpeed(1.25)">1.25x</button>
-                  <button class="speed-opt" data-rate="1.5" onclick="setSpeed(1.5)">1.5x</button>
+                <div id="speedMenu" class="pop-menu">
+                  <button class="pop-opt active" data-rate="1" onclick="setSpeed(1)">1x</button>
+                  <button class="pop-opt" data-rate="1.15" onclick="setSpeed(1.15)">1.15x</button>
+                  <button class="pop-opt" data-rate="1.25" onclick="setSpeed(1.25)">1.25x</button>
+                  <button class="pop-opt" data-rate="1.5" onclick="setSpeed(1.5)">1.5x</button>
                 </div>
               </div>
               <button id="vodFsBtn" class="yt-btn" title="Fullscreen" onclick="toggleFullscreen()"></button>
@@ -706,12 +780,6 @@
         <span>YPlay</span>
         <span id="yplayCountBadge" class="tab-badge">0</span>
       </button>
-      <button class="refresh-btn" title="Refresh YPlay" onclick="fetchYPlay(true)">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="23 4 23 10 17 10"></polyline>
-          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-        </svg>
-      </button>
     </div>
 
     <div class="scroll-area" id="scrollArea">
@@ -730,11 +798,13 @@
 
     const ICONS = {
       play: `<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`,
+      playSm: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`,
       pause: `<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`,
       volOn: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>`,
       volOff: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>`,
       fsEnter: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>`,
-      fsExit: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>`
+      fsExit: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>`,
+      film: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.5"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg>`
     };
 
     const CHANNELS = [
@@ -748,7 +818,7 @@
         type: "hls",
         url: "https://d2px1d6ssc60fw.cloudfront.net/SunTV/SunTV-HDR10-IN-index.m3u8",
         relayPath: "/live/suntv/index.m3u8",
-        logo: "https://tamilradios.org/wp-content/uploads/2025/04/suntv.png"
+        logo: "assets/suntv.webp"
       },
       {
         id: "zeetamil",
@@ -759,7 +829,7 @@
         cat: "Entertainment • HD",
         type: "hls",
         url: "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:zeetamil1.smil/playlist.m3u8",
-        logo: "https://upload.wikimedia.org/wikipedia/en/thumb/5/51/Zee_Tamil_logo.svg/240px-Zee_Tamil_logo.svg.png"
+        logo: "assets/zeetamil.webp"
       },
       {
         id: "colorstamil",
@@ -770,7 +840,7 @@
         cat: "Entertainment • HD",
         type: "hls",
         url: "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:colorstamilhd11.smil/playlist.m3u8",
-        logo: "https://upload.wikimedia.org/wikipedia/en/thumb/2/2f/Colors_Tamil_logo.svg/240px-Colors_Tamil_logo.svg.png"
+        logo: "assets/colorstamil.webp"
       },
       {
         id: "makkaltv",
@@ -781,7 +851,7 @@
         cat: "General • Live",
         type: "hls",
         url: "https://5k8q87azdy4v-hls-live.wmncdn.net/MAKKAL/271ddf829afeece44d8732757fba1a66.sdp/playlist.m3u8",
-        logo: "https://upload.wikimedia.org/wikipedia/en/thumb/8/87/Makkal_TV_logo.png/240px-Makkal_TV_logo.png"
+        logo: "assets/makkaltv.webp"
       },
       {
         id: "historytv18",
@@ -794,7 +864,7 @@
         url: "https://login.bheem.tv/bpk-tv/22652/output/index.mpd",
         kid: "c6cb0bcbeac25fb286fed851e41de38c",
         key: "955c54f2cac8783fafccae5e5f9cdf8d",
-        logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a3/History_Channel_logo.svg/240px-History_Channel_logo.svg.png"
+        logo: "assets/historytv18.webp"
       },
       {
         id: "discoverytamil",
@@ -807,7 +877,7 @@
         url: "https://login.bheem.tv/bpk-tv/22652/output/index.mpd",
         kid: "c6cb0bcbeac25fb286fed851e41de38c",
         key: "955c54f2cac8783fafccae5e5f9cdf8d",
-        logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/2/27/Discovery_Channel_logo_2019.svg/240px-Discovery_Channel_logo_2019.svg.png"
+        logo: "assets/discoverytamil.webp"
       }
     ];
 
@@ -821,6 +891,8 @@
     const errTitle = document.getElementById("errTitle");
     const errMsg = document.getElementById("errMsg");
     const liveOverlay = document.getElementById("liveOverlay");
+    const liveQualBtn = document.getElementById("liveQualBtn");
+    const liveQualMenu = document.getElementById("liveQualMenu");
     const liveMuteBtn = document.getElementById("liveMuteBtn");
     const liveFsBtn = document.getElementById("liveFsBtn");
     const ytOverlay = document.getElementById("ytOverlay");
@@ -855,6 +927,7 @@
     let liveStage = 0;
     let currentSpeed = 1;
     let shuttingDown = false;
+    let selectedLiveQuality = "auto"; // "auto" or height number
 
     function syncPlayerIcons() {
       ytCenterBtn.innerHTML = video.paused ? ICONS.play : ICONS.pause;
@@ -898,6 +971,7 @@
       liveOverlay.classList.toggle("enabled", !vod);
       ytOverlay.classList.toggle("enabled", vod);
       speedMenu.classList.remove("open");
+      liveQualMenu.classList.remove("open");
       if (vod) showOverlayTemporarily();
       else {
         ytOverlay.classList.remove("visible");
@@ -910,8 +984,10 @@
       liveOverlay.classList.add("visible");
       clearTimeout(overlayTimer);
       overlayTimer = setTimeout(() => {
-        if (!video.paused) liveOverlay.classList.remove("visible");
-      }, 3000);
+        if (!liveQualMenu.classList.contains("open")) {
+          liveOverlay.classList.remove("visible");
+        }
+      }, 3500);
     }
 
     function showOverlayTemporarily() {
@@ -932,8 +1008,67 @@
       document.getElementById("paneLive").classList.toggle("active", tab === "live");
       document.getElementById("paneYPlay").classList.toggle("active", tab === "yplay");
       document.getElementById("scrollArea").scrollTop = 0;
+      if (tab === "yplay") fetchYPlay(false);
     }
 
+    /* Live Quality Control */
+    function renderLiveQualityOptions(heights) {
+      const unique = Array.from(new Set(heights.filter((h) => h > 0))).sort((a, b) => b - a);
+      const opts = [
+        `<button class="pop-opt ${selectedLiveQuality === "auto" ? "active" : ""}" data-q="auto" onclick="setLiveQuality('auto')">Auto</button>`
+      ];
+      for (const h of unique) {
+        const label = h >= 2160 ? "4K" : `${h}p`;
+        const isAct = selectedLiveQuality === h;
+        opts.push(`<button class="pop-opt ${isAct ? "active" : ""}" data-q="${h}" onclick="setLiveQuality(${h})">${label}</button>`);
+      }
+      liveQualMenu.innerHTML = opts.join("");
+      liveQualBtn.textContent = selectedLiveQuality === "auto"
+        ? "Auto"
+        : (selectedLiveQuality >= 2160 ? "4K" : `${selectedLiveQuality}p`);
+    }
+
+    function toggleLiveQualMenu() {
+      liveQualMenu.classList.toggle("open");
+      showLiveOverlayTemporarily();
+    }
+
+    function setLiveQuality(q) {
+      selectedLiveQuality = q;
+      if (hls && hls.levels && hls.levels.length) {
+        if (q === "auto") {
+          hls.currentLevel = -1;
+        } else {
+          let bestIdx = -1;
+          let bestBr = -1;
+          hls.levels.forEach((lv, i) => {
+            if (lv.height === q && (lv.bitrate || 0) >= bestBr) {
+              bestBr = lv.bitrate || 0;
+              bestIdx = i;
+            }
+          });
+          if (bestIdx >= 0) hls.currentLevel = bestIdx;
+        }
+      } else if (shakaPlayer) {
+        if (q === "auto") {
+          shakaPlayer.configure({ abr: { enabled: true } });
+        } else {
+          shakaPlayer.configure({ abr: { enabled: false } });
+          const tracks = shakaPlayer.getVariantTracks().filter((t) => t.height === q);
+          tracks.sort((a, b) => (b.bandwidth || 0) - (a.bandwidth || 0));
+          if (tracks.length) shakaPlayer.selectVariantTrack(tracks[0], true);
+        }
+      }
+
+      liveQualMenu.querySelectorAll(".pop-opt").forEach((b) => {
+        b.classList.toggle("active", String(b.dataset.q) === String(q));
+      });
+      liveQualBtn.textContent = q === "auto" ? "Auto" : (q >= 2160 ? "4K" : `${q}p`);
+      liveQualMenu.classList.remove("open");
+      showLiveOverlayTemporarily();
+    }
+
+    /* YPlay Speed Control */
     function toggleSpeedMenu() {
       speedMenu.classList.toggle("open");
       showOverlayTemporarily();
@@ -943,7 +1078,7 @@
       currentSpeed = rate;
       video.playbackRate = rate;
       speedBtn.textContent = `${rate}x`;
-      document.querySelectorAll(".speed-opt").forEach((btn) => {
+      speedMenu.querySelectorAll(".pop-opt").forEach((btn) => {
         btn.classList.toggle("active", Number(btn.dataset.rate) === rate);
       });
       speedMenu.classList.remove("open");
@@ -978,10 +1113,16 @@
 
     videoWrap.addEventListener("click", (e) => {
       if (playerError.classList.contains("show")) return;
+
+      /* Live TV: never pause, only toggle overlay or start if stopped */
       if (isLive) {
+        if (video.paused) video.play().catch(() => {});
+        if (liveQualMenu.classList.contains("open")) {
+          liveQualMenu.classList.remove("open");
+          return;
+        }
         if (liveOverlay.classList.contains("visible")) {
-          if (video.paused) video.play().catch(() => {});
-          else video.pause();
+          liveOverlay.classList.remove("visible");
         } else {
           showLiveOverlayTemporarily();
         }
@@ -1056,6 +1197,9 @@
         hls.attachMedia(video);
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           hideError();
+          const heights = (hls.levels || []).map((lv) => lv.height || 0);
+          renderLiveQualityOptions(heights);
+          hls.currentLevel = -1; // Default Auto ABR
           nowSub.textContent = isRelay ? `${ch.num} • ${ch.cat} (Relay)` : `${ch.num} • ${ch.cat}`;
           if (autoPlay) video.play().catch(() => {});
         });
@@ -1064,6 +1208,7 @@
           handleLiveFallback(ch, autoPlay, data.details || "Network error");
         });
       } else {
+        renderLiveQualityOptions([]);
         video.src = url;
         video.load();
         if (autoPlay) video.play().catch(() => {});
@@ -1074,6 +1219,7 @@
       if (liveStage === 0 && video.canPlayType("application/vnd.apple.mpegurl")) {
         liveStage = 1;
         await cleanupPlayers();
+        renderLiveQualityOptions([]);
         nowSub.textContent = `${ch.num} • Direct stream`;
         video.src = ch.url;
         video.load();
@@ -1097,6 +1243,8 @@
       activeYPlayIdx = -1;
       pendingResumeTime = 0;
       liveStage = 0;
+      selectedLiveQuality = "auto";
+      renderLiveQualityOptions([]);
       video.playbackRate = 1;
       setVodMode(false);
       renderChannels();
@@ -1110,6 +1258,7 @@
         await shakaPlayer.attach(video);
         shakaPlayer.configure({
           drm: { clearKeys: { [ch.kid]: ch.key } },
+          abr: { enabled: true },
           streaming: { bufferingGoal: 12, rebufferingGoal: 2 }
         });
         shakaPlayer.addEventListener("error", (ev) => {
@@ -1119,10 +1268,12 @@
         try {
           await shakaPlayer.load(ch.url);
           hideError();
+          const heights = shakaPlayer.getVariantTracks().map((t) => t.height || 0);
+          renderLiveQualityOptions(heights);
           if (autoPlay) video.play().catch(() => {});
         } catch (_) {
           nowSub.textContent = "Unable to start stream";
-          showError(`${ch.name} Offline`, "Failed to load DASH stream. Tap Retry to try again.");
+          showError(`${ch.name} Offline`, "Failed to load stream. Tap Retry to try again.");
         }
         return;
       }
@@ -1147,9 +1298,10 @@
       renderYPlay();
 
       const item = yplayItems[idx];
-      const mb = item.file_size ? `${(item.file_size / (1024 * 1024)).toFixed(0)} MB` : "Video";
+      const gbStr = fmtGB(item.file_size);
+      const qStr = item.quality || "HD";
       nowTitle.textContent = item.title;
-      nowSub.textContent = `${mb} • Instant Stream`;
+      nowSub.textContent = `${qStr} • ${gbStr} • Instant Stream`;
 
       const saved = Number(localStorage.getItem(`yp_pos_${item.id}`) || "0");
       pendingResumeTime = saved > 5 ? saved : 0;
@@ -1171,6 +1323,7 @@
     }
 
     function toggleVodPlay() {
+      if (isLive) return;
       if (video.paused) video.play().catch(() => {});
       else video.pause();
       showOverlayTemporarily();
@@ -1215,6 +1368,20 @@
       return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
     }
 
+    function fmtGB(bytes) {
+      if (!bytes || bytes <= 0) return "Stream";
+      const gb = bytes / (1024 * 1024 * 1024);
+      return gb >= 10 ? `${gb.toFixed(1)} GB` : `${gb.toFixed(2)} GB`;
+    }
+
+    function fmtDurShort(sec) {
+      if (!sec || sec <= 0) return "";
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      if (h > 0) return `${h}h ${m}m`;
+      return `${Math.max(1, m)}m`;
+    }
+
     video.addEventListener("loadedmetadata", () => {
       hideError();
       if (!isLive) {
@@ -1243,8 +1410,7 @@
     video.addEventListener("pause", () => {
       setBuffering(false);
       syncPlayerIcons();
-      if (isLive) liveOverlay.classList.add("visible");
-      else ytOverlay.classList.add("visible");
+      if (!isLive) ytOverlay.classList.add("visible");
     });
 
     video.addEventListener("error", async () => {
@@ -1252,7 +1418,7 @@
       if (isLive) {
         const ch = CHANNELS.find((c) => c.id === activeChannelId);
         if (ch && ch.relayPath && liveStage < 2) {
-          handleLiveFallback(ch, !video.paused, "Stream failed");
+          handleLiveFallback(ch, true, "Stream failed");
         } else if (ch) {
           showError(`${ch.name} Error`, "Live channel failed to load. Check network or try another channel.");
         }
@@ -1303,6 +1469,8 @@
         if (!isLive && activeYPlayIdx >= 0 && !video.getAttribute("src")) {
           await resolveDirectTunnel();
           loadYPlay(activeYPlayIdx, false);
+        } else if (isLive && video.paused) {
+          video.play().catch(() => {});
         }
       }
     });
@@ -1322,16 +1490,21 @@
       showOverlayTemporarily();
     });
 
-    // Android TV Remote / Keyboard D-Pad Navigation
+    // Android TV Remote / D-Pad Navigation
     document.addEventListener("keydown", (e) => {
       const k = e.key;
       const active = document.activeElement;
 
-      if (k === "MediaPlayPause" || k === " ") {
+      if (k === "Escape") {
+        liveQualMenu.classList.remove("open");
+        speedMenu.classList.remove("open");
+        return;
+      }
+
+      if ((k === "MediaPlayPause" || k === " ") && !isLive) {
         if (active && active.tagName === "BUTTON") return;
         e.preventDefault();
-        if (video.paused) video.play().catch(() => {});
-        else video.pause();
+        toggleVodPlay();
         return;
       }
       if (k === "MediaFastForward" && !isLive) {
@@ -1345,7 +1518,6 @@
         return;
       }
 
-      // Remote controls when focused on videoWrap
       if (active === videoWrap) {
         if (k === "Enter") {
           e.preventDefault();
@@ -1353,7 +1525,8 @@
             retryCurrentMedia();
           } else if (isLive) {
             if (video.paused) video.play().catch(() => {});
-            else video.pause();
+            showLiveOverlayTemporarily();
+            liveQualBtn.focus();
           } else {
             toggleVodPlay();
           }
@@ -1369,6 +1542,9 @@
           if (!isLive && !ytOverlay.classList.contains("visible")) {
             showOverlayTemporarily();
             ytCenterBtn.focus();
+          } else if (isLive && !liveOverlay.classList.contains("visible")) {
+            showLiveOverlayTemporarily();
+            liveQualBtn.focus();
           } else {
             document.getElementById(activeTab === "live" ? "tabLive" : "tabYPlay").focus();
           }
@@ -1376,11 +1552,10 @@
         }
       }
 
-      // Spatial D-pad Navigation across focusable elements
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(k)) {
         if (active === seekInput && (k === "ArrowLeft" || k === "ArrowRight")) return;
         const focusables = Array.from(document.querySelectorAll(
-          "#videoWrap, .player-error.show button, .live-overlay.enabled button, .yt-overlay.enabled button, .yt-overlay.enabled input, .tab-bar button, .tab-pane.active [tabindex='0'], .tab-pane.active button"
+          "#videoWrap, .player-error.show button, .live-overlay.enabled button, .yt-overlay.enabled button, .yt-overlay.enabled input, .pop-menu.open button, .tab-bar button, .tab-pane.active [tabindex='0']"
         )).filter((el) => el.offsetParent !== null && getComputedStyle(el).pointerEvents !== "none");
 
         if (!focusables.length) return;
@@ -1436,7 +1611,7 @@
             <div class="ch-left">
               <div class="ch-logo-box">
                 <div class="ch-logo-fallback" style="background:${ch.bg};">${esc(ch.short)}</div>
-                <img src="${esc(ch.logo)}" alt="${esc(ch.name)}" referrerpolicy="no-referrer" onerror="this.style.display='none'" />
+                <img src="${esc(ch.logo)}" alt="${esc(ch.name)}" onload="if(this.previousElementSibling)this.previousElementSibling.style.display='none'" onerror="this.style.display='none'" />
               </div>
               <div style="min-width:0;">
                 <div class="ch-name">${esc(ch.name)}</div>
@@ -1460,23 +1635,38 @@
       if (!yplayItems.length) {
         box.innerHTML = `
           <div class="yp-card" tabindex="0">
-            <div>
-              <div class="yp-title">No movies in queue</div>
-              <div class="yp-meta">Forward a movie to your Telegram bot</div>
+            <div class="yp-poster">${ICONS.film}</div>
+            <div class="yp-info">
+              <div class="yp-title">Queue is Empty</div>
+              <div class="yp-tags"><span class="yp-tag">Forward a movie to your Telegram bot</span></div>
             </div>
           </div>`;
         return;
       }
+
       box.innerHTML = yplayItems.map((m, i) => {
-        const mb = m.file_size ? `${(m.file_size / (1024 * 1024)).toFixed(0)} MB` : "Video";
+        const gbStr = fmtGB(m.file_size);
+        const qStr = m.quality || "HD";
+        const durStr = fmtDurShort(m.duration);
+        const qCls = qStr === "4K" ? "yp-tag qual-4k" : "yp-tag qual";
         const cls = i === activeYPlayIdx ? "yp-card active" : "yp-card";
+        const num = String(i + 1).padStart(2, "0");
+
         return `
           <div class="${cls}" tabindex="0" onclick="loadYPlay(${i}, true)" onkeydown="if(event.key==='Enter'){event.preventDefault();loadYPlay(${i},true);}">
-            <div style="min-width:0;">
-              <div class="yp-title">${esc(m.title)}</div>
-              <div class="yp-meta">#${i + 1} • ${mb} • Instant Stream</div>
+            <div class="yp-poster">
+              ${ICONS.film}
+              <span class="yp-num">#${num}</span>
             </div>
-            <span class="play-pill">Play</span>
+            <div class="yp-info">
+              <div class="yp-title">${esc(m.title)}</div>
+              <div class="yp-tags">
+                <span class="${qCls}">${esc(qStr)}</span>
+                <span class="yp-tag">${esc(gbStr)}</span>
+                ${durStr ? `<span class="yp-tag">${esc(durStr)}</span>` : ""}
+              </div>
+            </div>
+            <div class="yp-play-btn">${ICONS.playSm}</div>
           </div>
         `;
       }).join("");
