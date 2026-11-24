@@ -12,7 +12,13 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pyrogram import Client, filters
-from pyrogram.types import Message
+from pyrogram.types import (
+    BotCommand,
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+)
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 API_ID = int(os.getenv("TELEGRAM_API_ID", "6"))
@@ -28,10 +34,10 @@ CACHE_DIR = Path("/tmp/yplay_chunks")
 HLS_DIR = Path("/dev/shm/suntv_hls")
 LIBRARY_FILE = DATA_DIR / "yplay_library.json"
 CHANNELS_FILE = DATA_DIR / "channels.json"
+SETTINGS_FILE = DATA_DIR / "settings.json"
 SESSION_FILE = DATA_DIR / "ystream_bot"
 
 CHUNK_SIZE = 1024 * 1024  # 1 MiB Telegram chunk
-MAX_CACHE_BYTES = 3 * 1024 * 1024 * 1024  # Keep SSD cache under 3 GB
 
 for d in (DATA_DIR, CACHE_DIR, HLS_DIR):
     d.mkdir(parents=True, exist_ok=True)
@@ -45,6 +51,12 @@ DEFAULT_CHANNELS = [
         "source_url": os.getenv("SUNTV_SOURCE_URL") or DEFAULT_SUNTV_URL,
     }
 ]
+
+DEFAULT_SETTINGS = {
+    "prewarm": True,
+    "max_cache_gb": 3,
+    "auto_reply": True,
+}
 
 app = FastAPI(title="YStream Server")
 app.add_middleware(
@@ -83,8 +95,24 @@ def write_json(path: Path, data):
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+def get_settings() -> dict:
+    data = read_json(SETTINGS_FILE, DEFAULT_SETTINGS)
+    merged = dict(DEFAULT_SETTINGS)
+    if isinstance(data, dict):
+        merged.update(data)
+    return merged
+
+
+def update_settings(**kwargs) -> dict:
+    s = get_settings()
+    s.update(kwargs)
+    write_json(SETTINGS_FILE, s)
+    return s
+
+
 read_json(LIBRARY_FILE, [])
 read_json(CHANNELS_FILE, DEFAULT_CHANNELS)
+read_json(SETTINGS_FILE, DEFAULT_SETTINGS)
 
 
 def get_active_tunnel_url() -> str:
@@ -132,6 +160,16 @@ def detect_quality(title: str, width: int = 0, height: int = 0) -> str:
     return "HD"
 
 
+def fmt_bytes(size: int) -> str:
+    if not size or size <= 0:
+        return "0 MB"
+    gb = size / (1024 * 1024 * 1024)
+    if gb >= 1.0:
+        return f"{gb:.2f} GB"
+    mb = size / (1024 * 1024)
+    return f"{mb:.1f} MB"
+
+
 def get_media_info(msg: Message) -> Optional[dict]:
     media = msg.video or msg.document or msg.animation
     if not media:
@@ -177,6 +215,12 @@ def write_block_sync(path: Path, data: bytes):
     os.replace(tmp, path)
 
 
+def get_cache_stats_sync() -> tuple[int, int]:
+    files = [f for f in CACHE_DIR.glob("*/*.blk") if f.exists()]
+    total = sum(f.stat().st_size for f in files)
+    return len(files), total
+
+
 def clear_all_cache_sync():
     for child in CACHE_DIR.iterdir():
         try:
@@ -189,13 +233,15 @@ def clear_all_cache_sync():
 
 
 def prune_cache_sync():
+    max_gb = int(get_settings().get("max_cache_gb", 3) or 3)
+    max_bytes = max_gb * 1024 * 1024 * 1024
     files = list(CACHE_DIR.glob("*/*.blk"))
     total = sum(f.stat().st_size for f in files if f.exists())
-    if total <= MAX_CACHE_BYTES:
+    if total <= max_bytes:
         return
     files.sort(key=lambda f: f.stat().st_mtime)
     for f in files:
-        if total <= int(MAX_CACHE_BYTES * 0.75):
+        if total <= int(max_bytes * 0.75):
             break
         try:
             sz = f.stat().st_size
@@ -203,6 +249,15 @@ def prune_cache_sync():
             total -= sz
         except Exception:
             pass
+
+
+async def clear_queue_and_cache():
+    for task in list(prewarm_tasks.values()):
+        task.cancel()
+    prewarm_tasks.clear()
+    msg_cache.clear()
+    write_json(LIBRARY_FILE, [])
+    await asyncio.to_thread(clear_all_cache_sync)
 
 
 async def get_tg_message(item: dict, force_refresh: bool = False) -> Message:
@@ -266,6 +321,8 @@ async def prewarm_head_tail(item: dict):
 
 
 def trigger_prewarm(item: dict):
+    if not get_settings().get("prewarm", True):
+        return
     item_id = item["id"]
     if item_id in prewarm_tasks:
         return
@@ -286,35 +343,153 @@ def save_media_to_queue(item: dict) -> tuple[bool, int]:
     return True, len(items)
 
 
-@tg_client.on_message(filters.command("start"))
-async def cmd_start(_, msg: Message):
+# --- Telegram Bot Menus & Keyboards ---
+def main_menu_markup() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("📋 Queue List", callback_data="cb:list"),
+            InlineKeyboardButton("⚙️ Settings", callback_data="cb:settings"),
+        ],
+        [
+            InlineKeyboardButton("📊 Server Status", callback_data="cb:status"),
+            InlineKeyboardButton("🗑️ Clear All", callback_data="cb:clear_ask"),
+        ],
+    ])
+
+
+def settings_menu_markup() -> InlineKeyboardMarkup:
+    s = get_settings()
+    prewarm_lbl = "⚡ Pre-warm: ON" if s.get("prewarm", True) else "⚡ Pre-warm: OFF"
+    reply_lbl = "💬 Upload Reply: ON" if s.get("auto_reply", True) else "💬 Upload Reply: OFF"
+    cache_gb = int(s.get("max_cache_gb", 3) or 3)
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(prewarm_lbl, callback_data="cb:toggle_prewarm"),
+            InlineKeyboardButton(f"💾 Cache Limit: {cache_gb} GB", callback_data="cb:cycle_cache"),
+        ],
+        [
+            InlineKeyboardButton(reply_lbl, callback_data="cb:toggle_reply"),
+            InlineKeyboardButton("🧹 Clear Cache Only", callback_data="cb:clear_cache_only"),
+        ],
+        [
+            InlineKeyboardButton("🔄 Restart Sun TV Relay", callback_data="cb:restart_relay"),
+        ],
+        [
+            InlineKeyboardButton("⬅️ Back to Menu", callback_data="cb:menu"),
+        ],
+    ])
+
+
+def clear_confirm_markup() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Yes, Delete All", callback_data="cb:clear_confirm"),
+            InlineKeyboardButton("❌ Cancel", callback_data="cb:menu"),
+        ]
+    ])
+
+
+def back_menu_markup(extra_btn: Optional[InlineKeyboardButton] = None) -> InlineKeyboardMarkup:
+    rows = []
+    if extra_btn:
+        rows.append([extra_btn])
+    rows.append([InlineKeyboardButton("⬅️ Back to Menu", callback_data="cb:menu")])
+    return InlineKeyboardMarkup(rows)
+
+
+def build_queue_text() -> str:
+    items = read_json(LIBRARY_FILE, [])
+    if not items:
+        return "📋 **YPlay Queue is Empty**\n\nForward or send any video/movie to add it to `#1`."
+    lines = []
+    start_idx = max(0, len(items) - 20)
+    for i in range(start_idx, len(items)):
+        x = items[i]
+        q = x.get("quality") or detect_quality(x.get("title", ""), int(x.get("width") or 0), int(x.get("height") or 0))
+        sz = fmt_bytes(int(x.get("file_size") or 0))
+        lines.append(f"`#{i + 1}` • **{x.get('title')}** (`{q}` • `{sz}`)")
+    return f"📋 **YPlay Queue ({len(items)} items)**\n\n" + "\n".join(lines) + "\n\nUse `/del <number>` to remove one, or `/clear` to wipe all."
+
+
+async def build_status_text() -> str:
+    items = read_json(LIBRARY_FILE, [])
+    s = get_settings()
+    blk_cnt, blk_bytes = await asyncio.to_thread(get_cache_stats_sync)
+    tunnel = get_active_tunnel_url() or "Starting / Not detected"
+    relay_ok = ffmpeg_proc is not None and ffmpeg_proc.poll() is None
+    return (
+        "📊 **YStream Server Status**\n\n"
+        f"• **Bot:** Connected\n"
+        f"• **YPlay Queue:** `{len(items)}` movies\n"
+        f"• **SSD Cache:** `{fmt_bytes(blk_bytes)}` (`{blk_cnt}` chunks / `{s.get('max_cache_gb', 3)} GB` limit)\n"
+        f"• **Pre-warm (5 MB):** `{'ON' if s.get('prewarm', True) else 'OFF'}`\n"
+        f"• **Sun TV Relay:** `{'Active' if relay_ok else 'Inactive'}`\n"
+        f"• **Tunnel:** `{tunnel}`"
+    )
+
+
+def build_settings_text() -> str:
+    return (
+        "⚙️ **YStream Bot Settings & Options**\n\n"
+        "• **Pre-warm:** Automatically caches first 3 MB + last 2 MB on upload for fast start.\n"
+        "• **Cache Limit:** Auto-cleans oldest chunks once SSD limit is reached.\n"
+        "• **Upload Reply:** Send confirmation reply whenever a video is queued."
+    )
+
+
+def build_menu_text() -> str:
+    items = read_json(LIBRARY_FILE, [])
+    return (
+        "🎬 **YPlay Control Menu**\n\n"
+        f"Movies in queue: `{len(items)}`\n"
+        "Forward any movie or video directly here to stream on `ystream.pages.dev` & TV App."
+    )
+
+
+async def safe_edit_msg(msg: Message, text: str, reply_markup: InlineKeyboardMarkup):
+    try:
+        await msg.edit_text(text, reply_markup=reply_markup)
+    except Exception:
+        pass
+
+
+@tg_client.on_message(filters.command(["start", "menu"]))
+async def cmd_menu(_, msg: Message):
+    await msg.reply_text(build_menu_text(), reply_markup=main_menu_markup())
+
+
+@tg_client.on_message(filters.command("settings"))
+async def cmd_settings(_, msg: Message):
+    await msg.reply_text(build_settings_text(), reply_markup=settings_menu_markup())
+
+
+@tg_client.on_message(filters.command("status"))
+async def cmd_status(_, msg: Message):
+    txt = await build_status_text()
     await msg.reply_text(
-        "YPlay Ready.\n"
-        "Forward or send movies/episodes directly.\n"
-        "Commands: /list, /del <number>, /clear"
+        txt,
+        reply_markup=back_menu_markup(InlineKeyboardButton("🔄 Refresh Status", callback_data="cb:status")),
     )
 
 
 @tg_client.on_message(filters.command("list"))
 async def cmd_list(_, msg: Message):
-    items = read_json(LIBRARY_FILE, [])
-    if not items:
-        await msg.reply_text("YPlay queue is empty.")
-        return
-    lines = [f"{i + 1}. {x.get('title')}" for i, x in enumerate(items)]
-    await msg.reply_text("YPlay Queue:\n" + "\n".join(lines[-25:]))
+    await msg.reply_text(
+        build_queue_text(),
+        reply_markup=back_menu_markup(InlineKeyboardButton("🗑️ Clear All", callback_data="cb:clear_ask")),
+    )
 
 
 @tg_client.on_message(filters.command("del"))
 async def cmd_del(_, msg: Message):
     parts = (msg.text or "").strip().split()
     if len(parts) < 2 or not parts[1].isdigit():
-        await msg.reply_text("Use: /del <number>")
+        await msg.reply_text("Use: `/del <number>` (example: `/del 1`)")
         return
     idx = int(parts[1]) - 1
     items = read_json(LIBRARY_FILE, [])
     if idx < 0 or idx >= len(items):
-        await msg.reply_text("Invalid number.")
+        await msg.reply_text("Invalid number. Check `/list`.")
         return
     removed = items.pop(idx)
     write_json(LIBRARY_FILE, items)
@@ -323,18 +498,16 @@ async def cmd_del(_, msg: Message):
     if task:
         task.cancel()
     shutil.rmtree(safe_item_dir(removed["id"]), ignore_errors=True)
-    await msg.reply_text(f"Removed: {removed.get('title')}")
+    await msg.reply_text(f"🗑️ Removed: **{removed.get('title')}**", reply_markup=main_menu_markup())
 
 
 @tg_client.on_message(filters.command("clear"))
 async def cmd_clear(_, msg: Message):
-    for task in list(prewarm_tasks.values()):
-        task.cancel()
-    prewarm_tasks.clear()
-    msg_cache.clear()
-    write_json(LIBRARY_FILE, [])
-    await asyncio.to_thread(clear_all_cache_sync)
-    await msg.reply_text("YPlay queue & cache completely cleared. Next upload will start from #1.")
+    await clear_queue_and_cache()
+    await msg.reply_text(
+        "✅ **All Old Videos & Cache Cleared!**\n\nQueue is now empty. Next video you send will start at `#1`.",
+        reply_markup=main_menu_markup(),
+    )
 
 
 @tg_client.on_message(filters.command("add"))
@@ -342,10 +515,12 @@ async def cmd_add(_, msg: Message):
     target = msg.reply_to_message or msg
     info = get_media_info(target)
     if not info:
-        await msg.reply_text("Reply to a video file with /add.")
+        await msg.reply_text("Reply to a video file with `/add`.")
         return
     added, total = save_media_to_queue(info)
-    await msg.reply_text(f"{'Ready in queue' if added else 'Already in queue'} #{total}: {info['title']}")
+    await msg.reply_text(
+        f"{'✅ Queued' if added else 'Already in queue'} `#{total}` (`{info['quality']}` • `{fmt_bytes(info['file_size'])}`):\n**{info['title']}**"
+    )
 
 
 @tg_client.on_message(filters.video | filters.document | filters.animation)
@@ -354,8 +529,85 @@ async def on_file(_, msg: Message):
     if not info:
         return
     added, total = save_media_to_queue(info)
-    if added:
-        await msg.reply_text(f"Queued #{total} ({info['quality']}): {info['title']}")
+    if added and get_settings().get("auto_reply", True):
+        await msg.reply_text(
+            f"✅ Queued `#{total}` • `{info['quality']}` • `{fmt_bytes(info['file_size'])}`\n**{info['title']}**"
+        )
+
+
+@tg_client.on_callback_query()
+async def on_callback(_, cq: CallbackQuery):
+    data = cq.data or ""
+    if data == "cb:menu":
+        await cq.answer()
+        await safe_edit_msg(cq.message, build_menu_text(), main_menu_markup())
+    elif data == "cb:list":
+        await cq.answer()
+        await safe_edit_msg(
+            cq.message,
+            build_queue_text(),
+            back_menu_markup(InlineKeyboardButton("🗑️ Clear All", callback_data="cb:clear_ask")),
+        )
+    elif data == "cb:settings":
+        await cq.answer()
+        await safe_edit_msg(cq.message, build_settings_text(), settings_menu_markup())
+    elif data == "cb:status":
+        await cq.answer("Refreshing status...")
+        txt = await build_status_text()
+        await safe_edit_msg(
+            cq.message,
+            txt,
+            back_menu_markup(InlineKeyboardButton("🔄 Refresh Status", callback_data="cb:status")),
+        )
+    elif data == "cb:toggle_prewarm":
+        cur = bool(get_settings().get("prewarm", True))
+        update_settings(prewarm=not cur)
+        await cq.answer(f"Pre-warm {'OFF' if cur else 'ON'}")
+        await safe_edit_msg(cq.message, build_settings_text(), settings_menu_markup())
+    elif data == "cb:toggle_reply":
+        cur = bool(get_settings().get("auto_reply", True))
+        update_settings(auto_reply=not cur)
+        await cq.answer(f"Upload Reply {'OFF' if cur else 'ON'}")
+        await safe_edit_msg(cq.message, build_settings_text(), settings_menu_markup())
+    elif data == "cb:cycle_cache":
+        cur_gb = int(get_settings().get("max_cache_gb", 3) or 3)
+        next_gb = 3 if cur_gb == 1 else (5 if cur_gb == 3 else 1)
+        update_settings(max_cache_gb=next_gb)
+        await asyncio.to_thread(prune_cache_sync)
+        await cq.answer(f"Cache limit set to {next_gb} GB")
+        await safe_edit_msg(cq.message, build_settings_text(), settings_menu_markup())
+    elif data == "cb:clear_cache_only":
+        await asyncio.to_thread(clear_all_cache_sync)
+        await cq.answer("SSD cache cleared (queue kept)!", show_alert=True)
+        await safe_edit_msg(cq.message, build_settings_text(), settings_menu_markup())
+    elif data == "cb:restart_relay":
+        await cq.answer("Restarting Sun TV relay...")
+        global ffmpeg_proc
+        if ffmpeg_proc and ffmpeg_proc.poll() is None:
+            ffmpeg_proc.terminate()
+        ok = await start_suntv_relay()
+        txt = await build_status_text()
+        await safe_edit_msg(
+            cq.message,
+            txt + f"\n\nRelay restart: {'✅ Ready' if ok else '⚠️ Source blocked/error'}",
+            back_menu_markup(InlineKeyboardButton("⚙️ Settings", callback_data="cb:settings")),
+        )
+    elif data == "cb:clear_ask":
+        items = read_json(LIBRARY_FILE, [])
+        await cq.answer()
+        await safe_edit_msg(
+            cq.message,
+            f"⚠️ **Clear All `{len(items)}` Movies & Cache?**\n\nThis will delete every queued movie and cached chunk. Next upload will start from `#1`.",
+            clear_confirm_markup(),
+        )
+    elif data == "cb:clear_confirm":
+        await clear_queue_and_cache()
+        await cq.answer("All videos & cache cleared!", show_alert=True)
+        await safe_edit_msg(
+            cq.message,
+            "✅ **YPlay Queue & Cache Cleared!**\n\nNext upload will start from `#1`.",
+            main_menu_markup(),
+        )
 
 
 async def start_suntv_relay():
@@ -426,6 +678,17 @@ async def relay_watcher():
 @app.on_event("startup")
 async def startup():
     await tg_client.start()
+    try:
+        await tg_client.set_bot_commands([
+            BotCommand("menu", "Open Bot Menu & Options"),
+            BotCommand("list", "Show YPlay Movie Queue"),
+            BotCommand("clear", "Delete All Movies & Clear Cache"),
+            BotCommand("settings", "Bot & Cache Settings"),
+            BotCommand("status", "Server & SSD Status"),
+        ])
+    except Exception as exc:
+        print(f"[Bot commands error] {exc}")
+
     items = read_json(LIBRARY_FILE, [])
     if items:
         trigger_prewarm(items[0])
