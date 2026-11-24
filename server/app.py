@@ -102,22 +102,58 @@ def get_active_tunnel_url() -> str:
     return ""
 
 
+def detect_quality(title: str, width: int = 0, height: int = 0) -> str:
+    if width >= 3800 or height >= 2100:
+        return "4K"
+    if width >= 2500 or height >= 1400:
+        return "2K"
+    if width >= 1900 or height >= 1040:
+        return "1080p"
+    if width >= 1260 or height >= 700:
+        return "720p"
+    if width >= 800 or height >= 460:
+        return "480p"
+    if height > 0:
+        return f"{height}p"
+
+    low = (title or "").lower()
+    if re.search(r"\b(2160p|4k|uhd)\b", low):
+        return "4K"
+    if re.search(r"\b(1440p|2k|qhd)\b", low):
+        return "2K"
+    if re.search(r"\b(1080p|fhd)\b", low):
+        return "1080p"
+    if re.search(r"\b(720p|hd)\b", low):
+        return "720p"
+    if re.search(r"\b(480p|sd)\b", low):
+        return "480p"
+    if re.search(r"\b360p\b", low):
+        return "360p"
+    return "HD"
+
+
 def get_media_info(msg: Message) -> Optional[dict]:
     media = msg.video or msg.document or msg.animation
     if not media:
         return None
     name = getattr(media, "file_name", None) or msg.caption or f"Movie_{msg.id}.mp4"
+    title = str(name).strip()
     mime = getattr(media, "mime_type", None) or "video/mp4"
     size = getattr(media, "file_size", None) or 0
     duration = getattr(media, "duration", None) or 0
+    width = int(getattr(media, "width", 0) or 0)
+    height = int(getattr(media, "height", 0) or 0)
     return {
         "id": f"{msg.chat.id}_{msg.id}",
         "chat_id": msg.chat.id,
         "message_id": msg.id,
-        "title": str(name).strip(),
+        "title": title,
         "mime_type": mime,
         "file_size": int(size),
         "duration": int(duration),
+        "width": width,
+        "height": height,
+        "quality": detect_quality(title, width, height),
         "added_at": int(time.time()),
     }
 
@@ -139,6 +175,17 @@ def write_block_sync(path: Path, data: bytes):
     tmp = path.with_suffix(f".{os.getpid()}.{time.monotonic_ns()}.tmp")
     tmp.write_bytes(data)
     os.replace(tmp, path)
+
+
+def clear_all_cache_sync():
+    for child in CACHE_DIR.iterdir():
+        try:
+            if child.is_dir():
+                shutil.rmtree(child, ignore_errors=True)
+            else:
+                child.unlink()
+        except Exception:
+            pass
 
 
 def prune_cache_sync():
@@ -200,18 +247,18 @@ async def prewarm_head_tail(item: dict):
             return
         total_blocks = (total_size + CHUNK_SIZE - 1) // CHUNK_SIZE
 
-        # Warm first 3 MB for instant start
         head_count = min(3, total_blocks)
         if not all(block_path(item_id, b).exists() for b in range(head_count)):
             await cache_span(item, 0, head_count)
 
-        # Warm last 2 MB for MP4 moov metadata at end of file
         if total_blocks > 5:
             tail_start = total_blocks - 2
             if not all(block_path(item_id, b).exists() for b in range(tail_start, total_blocks)):
                 await cache_span(item, tail_start, 2)
 
         await asyncio.to_thread(prune_cache_sync)
+    except asyncio.CancelledError:
+        pass
     except Exception as exc:
         print(f"[Prewarm {item_id}] {exc}")
     finally:
@@ -243,7 +290,8 @@ def save_media_to_queue(item: dict) -> tuple[bool, int]:
 async def cmd_start(_, msg: Message):
     await msg.reply_text(
         "YPlay Ready.\n"
-        "Forward or send movies/episodes — instant continuous streaming ready."
+        "Forward or send movies/episodes directly.\n"
+        "Commands: /list, /del <number>, /clear"
     )
 
 
@@ -271,8 +319,22 @@ async def cmd_del(_, msg: Message):
     removed = items.pop(idx)
     write_json(LIBRARY_FILE, items)
     msg_cache.pop(removed["id"], None)
+    task = prewarm_tasks.pop(removed["id"], None)
+    if task:
+        task.cancel()
     shutil.rmtree(safe_item_dir(removed["id"]), ignore_errors=True)
     await msg.reply_text(f"Removed: {removed.get('title')}")
+
+
+@tg_client.on_message(filters.command("clear"))
+async def cmd_clear(_, msg: Message):
+    for task in list(prewarm_tasks.values()):
+        task.cancel()
+    prewarm_tasks.clear()
+    msg_cache.clear()
+    write_json(LIBRARY_FILE, [])
+    await asyncio.to_thread(clear_all_cache_sync)
+    await msg.reply_text("YPlay queue & cache completely cleared. Next upload will start from #1.")
 
 
 @tg_client.on_message(filters.command("add"))
@@ -293,7 +355,7 @@ async def on_file(_, msg: Message):
         return
     added, total = save_media_to_queue(info)
     if added:
-        await msg.reply_text(f"Queued #{total} (Instant Stream Ready): {info['title']}")
+        await msg.reply_text(f"Queued #{total} ({info['quality']}): {info['title']}")
 
 
 async def start_suntv_relay():
@@ -402,6 +464,12 @@ async def yplay_library():
     for idx, x in enumerate(items):
         row = dict(x)
         row["index"] = idx
+        if not row.get("quality"):
+            row["quality"] = detect_quality(
+                row.get("title", ""),
+                int(row.get("width") or 0),
+                int(row.get("height") or 0),
+            )
         enriched.append(row)
     return {"count": len(enriched), "items": enriched}
 
@@ -451,7 +519,6 @@ async def yplay_stream(index: int, request: Request):
             b_idx = pos // CHUNK_SIZE
             b_path = block_path(item_id, b_idx)
 
-            # Serve from SSD immediately if already cached
             if b_path.exists():
                 raw = await asyncio.to_thread(b_path.read_bytes)
                 b_off = pos % CHUNK_SIZE
@@ -461,7 +528,6 @@ async def yplay_stream(index: int, request: Request):
                     pos += take
                     continue
 
-            # Open ONE continuous Telegram stream from b_idx (no per-MB reconnect!)
             stream_block = b_idx
             buf = bytearray()
             refresh_msg = await get_tg_message(item)
@@ -487,14 +553,12 @@ async def yplay_stream(index: int, request: Request):
                         if pos > end_byte:
                             asyncio.create_task(asyncio.to_thread(prune_cache_sync))
                             return
-                        # Switch back to fast SSD loop if subsequent block is already cached
                         if block_path(item_id, stream_block).exists():
                             break
 
                     if block_path(item_id, stream_block).exists():
                         break
 
-                # Flush final partial tail block at EOF
                 if buf and pos <= end_byte:
                     tail_bytes = bytes(buf)
                     await asyncio.to_thread(write_block_sync, block_path(item_id, stream_block), tail_bytes)
