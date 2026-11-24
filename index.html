@@ -123,9 +123,9 @@
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      width: 42px;
-      height: 42px;
-      border: 3.5px solid rgba(255, 255, 255, 0.2);
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(255, 255, 255, 0.2);
       border-top-color: #fff;
       border-radius: 50%;
       animation: spin 0.75s linear infinite;
@@ -162,14 +162,14 @@
       inset: 0;
       z-index: 25;
       background: rgba(8, 10, 15, 0.84);
-      backdrop-filter: blur(12px);
+      backdrop-filter: blur(10px);
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 16px;
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.25s ease;
+      transition: opacity 0.22s ease;
     }
     .player-error.show {
       opacity: 1;
@@ -186,30 +186,17 @@
       box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55);
     }
     .err-icon {
-      width: 34px;
-      height: 34px;
+      width: 32px;
+      height: 32px;
       margin: 0 auto 8px;
       color: #f87171;
       display: flex;
       align-items: center;
       justify-content: center;
     }
-    .err-title {
-      font-size: 0.94rem;
-      font-weight: 700;
-      color: #fff;
-    }
-    .err-msg {
-      font-size: 0.78rem;
-      color: var(--muted);
-      margin-top: 4px;
-      line-height: 1.38;
-    }
-    .err-actions {
-      margin-top: 12px;
-      display: flex;
-      justify-content: center;
-    }
+    .err-title { font-size: 0.94rem; font-weight: 700; color: #fff; }
+    .err-msg { font-size: 0.78rem; color: var(--muted); margin-top: 4px; line-height: 1.38; }
+    .err-actions { margin-top: 12px; display: flex; justify-content: center; }
     .err-btn {
       background: var(--accent);
       color: #fff;
@@ -218,9 +205,7 @@
       font-size: 0.8rem;
       font-weight: 600;
     }
-    .err-btn:hover, .err-btn:focus-visible {
-      background: #f41b26;
-    }
+    .err-btn:hover, .err-btn:focus-visible { background: #f41b26; }
 
     /* Live TV Controls Overlay (No Pause) */
     .live-overlay {
@@ -234,7 +219,7 @@
       padding: 10px 12px;
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.25s ease;
+      transition: opacity 0.22s ease;
     }
     .live-overlay.enabled { display: flex; }
     .live-overlay.visible { opacity: 1; pointer-events: auto; }
@@ -249,14 +234,9 @@
       padding: 5px 10px;
       border-radius: 6px;
     }
-    .live-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--accent);
-    }
+    .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 
-    /* YPlay YouTube/Netflix Style Overlay */
+    /* YPlay Overlay */
     .yt-overlay {
       position: absolute;
       inset: 0;
@@ -267,7 +247,7 @@
       justify-content: flex-end;
       padding: 10px 14px;
       opacity: 0;
-      transition: opacity 0.24s ease;
+      transition: opacity 0.22s ease;
       pointer-events: none;
     }
     .yt-overlay.enabled { display: flex; }
@@ -293,14 +273,9 @@
       background: rgba(255, 255, 255, 0.24);
       transform: translate(-50%, -50%) scale(1.06);
     }
-    .yt-center-btn.hide { display: none; }
+    .yt-center-btn.hide { opacity: 0; pointer-events: none; }
 
-    .yt-bottom {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      width: 100%;
-    }
+    .yt-bottom { display: flex; flex-direction: column; gap: 8px; width: 100%; }
     .yt-seek-row {
       display: flex;
       align-items: center;
@@ -317,18 +292,8 @@
       cursor: pointer;
       outline: none;
     }
-    .yt-actions {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-    }
-    .yt-act-grp {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      position: relative;
-    }
+    .yt-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .yt-act-grp { display: flex; align-items: center; gap: 6px; position: relative; }
     .yt-btn {
       background: rgba(255, 255, 255, 0.13);
       color: #fff;
@@ -342,11 +307,9 @@
       gap: 5px;
       min-height: 32px;
     }
-    .yt-btn:hover, .yt-btn:focus-visible {
-      background: rgba(255, 255, 255, 0.26);
-    }
+    .yt-btn:hover, .yt-btn:focus-visible { background: rgba(255, 255, 255, 0.26); }
 
-    /* Shared Popover Menu (Quality & Speed) */
+    /* Shared Popover Menu */
     .pop-wrap { position: relative; }
     .pop-menu {
       position: absolute;
@@ -369,11 +332,7 @@
       transition: opacity 0.18s ease, transform 0.18s ease;
       z-index: 30;
     }
-    .pop-menu.open {
-      opacity: 1;
-      transform: translateY(0);
-      pointer-events: auto;
-    }
+    .pop-menu.open { opacity: 1; transform: translateY(0); pointer-events: auto; }
     .pop-opt {
       width: 100%;
       text-align: center;
@@ -383,14 +342,8 @@
       font-size: 0.78rem;
       color: #d1d5db;
     }
-    .pop-opt.active {
-      background: rgba(229, 9, 20, 0.28);
-      color: #fff;
-    }
-    .pop-opt:hover, .pop-opt:focus-visible {
-      background: rgba(255, 255, 255, 0.18);
-      color: #fff;
-    }
+    .pop-opt.active { background: rgba(229, 9, 20, 0.28); color: #fff; }
+    .pop-opt:hover, .pop-opt:focus-visible { background: rgba(255, 255, 255, 0.18); color: #fff; }
 
     /* Now Playing Bar */
     .title-bar {
@@ -409,11 +362,7 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .now-sub {
-      font-size: 0.73rem;
-      color: var(--muted);
-      margin-top: 2px;
-    }
+    .now-sub { font-size: 0.73rem; color: var(--muted); margin-top: 2px; }
     .live-pill {
       background: rgba(37, 99, 235, 0.16);
       color: #60a5fa;
@@ -457,10 +406,7 @@
       justify-content: center;
       gap: 7px;
     }
-    .tab-btn:hover, .tab-btn:focus-visible {
-      background: var(--card-hover);
-      color: #fff;
-    }
+    .tab-btn:hover, .tab-btn:focus-visible { background: var(--card-hover); color: #fff; }
     .tab-btn.active {
       background: var(--active-bg);
       color: #fff;
@@ -473,12 +419,9 @@
       padding: 2px 7px;
       border-radius: 12px;
     }
-    .tab-btn.active .tab-badge {
-      background: rgba(59, 130, 246, 0.3);
-      color: #93c5fd;
-    }
+    .tab-btn.active .tab-badge { background: rgba(59, 130, 246, 0.3); color: #93c5fd; }
 
-    /* Scrollable List Area Only */
+    /* Scrollable List Only */
     .scroll-area {
       flex: 1;
       min-height: 0;
@@ -491,11 +434,7 @@
     .tab-pane { display: none; }
     .tab-pane.active { display: block; }
 
-    .channel-list, .yplay-list {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
+    .channel-list, .yplay-list { display: flex; flex-direction: column; gap: 10px; }
 
     /* Live Channel Card */
     .ch-card {
@@ -513,17 +452,9 @@
       background: var(--card-hover);
       border-color: rgba(255, 255, 255, 0.16);
     }
-    .ch-card.active {
-      background: var(--active-bg);
-      border-color: var(--active-border);
-    }
+    .ch-card.active { background: var(--active-bg); border-color: var(--active-border); }
 
-    .ch-left {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      min-width: 0;
-    }
+    .ch-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
     .ch-logo-box {
       width: 52px;
       height: 52px;
@@ -559,7 +490,7 @@
     .ch-meta { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
     .ch-eq { font-size: 0.78rem; color: #60a5fa; font-weight: 800; padding-right: 4px; }
 
-    /* Beautiful YPlay Card Layout */
+    /* YPlay Card */
     .yp-card {
       background: linear-gradient(145deg, #141a27 0%, #0f141f 100%);
       border: 1px solid rgba(255, 255, 255, 0.08);
@@ -596,15 +527,8 @@
       background: linear-gradient(135deg, #e50914 0%, #b91c1c 100%);
       border-color: rgba(255, 255, 255, 0.22);
     }
-    .yp-num {
-      font-size: 0.68rem;
-      font-weight: 700;
-      color: rgba(255, 255, 255, 0.78);
-    }
-    .yp-info {
-      flex: 1;
-      min-width: 0;
-    }
+    .yp-num { font-size: 0.68rem; font-weight: 700; color: rgba(255, 255, 255, 0.78); }
+    .yp-info { flex: 1; min-width: 0; }
     .yp-title {
       font-size: 0.92rem;
       font-weight: 700;
@@ -616,13 +540,7 @@
       overflow: hidden;
       word-break: break-word;
     }
-    .yp-tags {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-top: 6px;
-    }
+    .yp-tags { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
     .yp-tag {
       font-size: 0.69rem;
       font-weight: 700;
@@ -631,14 +549,8 @@
       background: rgba(255, 255, 255, 0.08);
       color: #cbd5e1;
     }
-    .yp-tag.qual {
-      background: rgba(59, 130, 246, 0.18);
-      color: #93c5fd;
-    }
-    .yp-tag.qual-4k {
-      background: rgba(245, 158, 11, 0.2);
-      color: #fcd34d;
-    }
+    .yp-tag.qual { background: rgba(59, 130, 246, 0.18); color: #93c5fd; }
+    .yp-tag.qual-4k { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
     .yp-play-btn {
       width: 36px;
       height: 36px;
@@ -650,24 +562,16 @@
       justify-content: center;
       flex-shrink: 0;
     }
-    .yp-card.active .yp-play-btn {
-      background: var(--accent);
-    }
+    .yp-card.active .yp-play-btn { background: var(--accent); }
 
-    /* Android TV & Wide Screen */
     @media (min-width: 768px) {
-      video {
-        max-height: 46dvh;
-      }
+      video { max-height: 46dvh; }
       .channel-list, .yplay-list {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 12px;
       }
-      .tab-btn {
-        max-width: 240px;
-        flex: initial;
-      }
+      .tab-btn { max-width: 240px; flex: initial; }
       .ch-card:focus-visible,
       .yp-card:focus-visible,
       .tab-btn:focus-visible,
@@ -680,9 +584,7 @@
     }
 
     @media (min-width: 1120px) {
-      .channel-list, .yplay-list {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }
+      .channel-list, .yplay-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     }
   </style>
 </head>
@@ -694,7 +596,6 @@
       <div id="flashLeft" class="tap-flash left">-10s</div>
       <div id="flashRight" class="tap-flash right">+10s</div>
 
-      <!-- Error Container -->
       <div id="playerError" class="player-error">
         <div class="err-card">
           <div class="err-icon">
@@ -719,7 +620,7 @@
           <div class="pop-wrap">
             <button id="liveQualBtn" class="yt-btn" onclick="toggleLiveQualMenu()">Auto</button>
             <div id="liveQualMenu" class="pop-menu">
-              <button class="pop-opt active" data-level="-1" onclick="setLiveQuality(-1)">Auto</button>
+              <button class="pop-opt active" data-q="auto" onclick="setLiveQuality('auto')">Auto</button>
             </div>
           </div>
           <button id="liveMuteBtn" class="yt-btn" title="Mute/Unmute" onclick="toggleMute()"></button>
@@ -912,11 +813,13 @@
     let shakaPlayer = null;
     let activeChannelId = "suntv";
     let yplayItems = [];
+    let yplaySig = "";
     let activeYPlayIdx = -1;
     let activeTab = "live";
     let isLive = true;
     let seeking = false;
     let overlayTimer = null;
+    let bufTimer = null;
     let lastTapTime = 0;
     let singleTapTimer = null;
     let pendingResumeTime = 0;
@@ -925,9 +828,15 @@
     let flashTimer = null;
     let errorRetries = 0;
     let liveStage = 0;
+    let liveFailCount = 0;
+    let liveFailTimer = null;
     let currentSpeed = 1;
     let shuttingDown = false;
-    let selectedLiveQuality = "auto"; // "auto" or height number
+    let selectedLiveQuality = "auto";
+    let compatMode = false;
+    let compatBaseOffset = 0;
+    let lastSavedPosTime = 0;
+    let audioAutoChecked = false;
 
     function syncPlayerIcons() {
       ytCenterBtn.innerHTML = video.paused ? ICONS.play : ICONS.pause;
@@ -940,7 +849,7 @@
     }
 
     function showError(title, message) {
-      setBuffering(false);
+      setBuffering(false, true);
       errTitle.textContent = title;
       errMsg.textContent = message;
       playerError.classList.add("show");
@@ -953,16 +862,34 @@
     function retryCurrentMedia() {
       hideError();
       if (isLive) {
+        liveFailCount = 0;
         const ch = CHANNELS.find((c) => c.id === activeChannelId) || CHANNELS[0];
         playChannel(ch, true);
       } else if (activeYPlayIdx >= 0) {
+        errorRetries = 0;
         loadYPlay(activeYPlayIdx, true);
       }
     }
 
-    function setBuffering(active) {
-      bufSpinner.classList.toggle("show", active);
-      ytCenterBtn.classList.toggle("hide", active);
+    function setBuffering(active, immediate = false) {
+      clearTimeout(bufTimer);
+      if (!active) {
+        bufSpinner.classList.remove("show");
+        ytCenterBtn.classList.remove("hide");
+        return;
+      }
+      if (immediate) {
+        bufSpinner.classList.add("show");
+        ytCenterBtn.classList.add("hide");
+        return;
+      }
+      /* 260ms debounce prevents spinner & pause button flickering */
+      bufTimer = setTimeout(() => {
+        if (!video.paused && !playerError.classList.contains("show")) {
+          bufSpinner.classList.add("show");
+          ytCenterBtn.classList.add("hide");
+        }
+      }, 260);
     }
 
     function setVodMode(vod) {
@@ -972,7 +899,7 @@
       ytOverlay.classList.toggle("enabled", vod);
       speedMenu.classList.remove("open");
       liveQualMenu.classList.remove("open");
-      if (vod) showOverlayTemporarily();
+      if (vod) showOverlayTemporarily(2500);
       else {
         ytOverlay.classList.remove("visible");
         showLiveOverlayTemporarily();
@@ -987,10 +914,10 @@
         if (!liveQualMenu.classList.contains("open")) {
           liveOverlay.classList.remove("visible");
         }
-      }, 3500);
+      }, 3200);
     }
 
-    function showOverlayTemporarily() {
+    function showOverlayTemporarily(ms = 3200) {
       if (isLive) return;
       ytOverlay.classList.add("visible");
       clearTimeout(overlayTimer);
@@ -998,7 +925,7 @@
         if (!video.paused && !speedMenu.classList.contains("open")) {
           ytOverlay.classList.remove("visible");
         }
-      }, 3500);
+      }, ms);
     }
 
     function switchTab(tab) {
@@ -1009,6 +936,37 @@
       document.getElementById("paneYPlay").classList.toggle("active", tab === "yplay");
       document.getElementById("scrollArea").scrollTop = 0;
       if (tab === "yplay") fetchYPlay(false);
+    }
+
+    function getEffectiveDuration() {
+      if (compatMode) {
+        const item = yplayItems[activeYPlayIdx];
+        if (item && item.duration > 0) return Number(item.duration);
+        return isFinite(video.duration) && video.duration > 0 ? compatBaseOffset + video.duration : 0;
+      }
+      return isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
+    }
+
+    function getEffectiveTime() {
+      const cur = video.currentTime || 0;
+      return compatMode ? compatBaseOffset + cur : cur;
+    }
+
+    function seekYPlayTo(targetSec) {
+      if (isLive) return;
+      const dur = getEffectiveDuration();
+      const clamped = Math.max(0, dur > 1 ? Math.min(dur - 1, targetSec) : targetSec);
+      if (compatMode) {
+        compatBaseOffset = Math.floor(clamped);
+        setBuffering(true, true);
+        video.src = `${DIRECT_STREAM_URL}/api/yplay/compat/${activeYPlayIdx}?t=${compatBaseOffset}`;
+        video.load();
+        video.playbackRate = currentSpeed;
+        video.play().catch(() => setBuffering(false));
+      } else if (dur > 0) {
+        setBuffering(true);
+        video.currentTime = clamped;
+      }
     }
 
     /* Live Quality Control */
@@ -1086,7 +1044,10 @@
     }
 
     function queueSeekDelta(sec) {
-      if (isLive || !isFinite(video.duration) || video.duration <= 0) return;
+      if (isLive) return;
+      const dur = getEffectiveDuration();
+      if (dur <= 0) return;
+
       pendingSeekDelta += sec;
       const side = pendingSeekDelta < 0 ? "left" : "right";
       const other = side === "left" ? flashRight : flashLeft;
@@ -1105,16 +1066,13 @@
       seekDebounceTimer = setTimeout(() => {
         const delta = pendingSeekDelta;
         pendingSeekDelta = 0;
-        if (!isFinite(video.duration) || video.duration <= 0) return;
-        const target = Math.max(0, Math.min(video.duration - 0.5, video.currentTime + delta));
-        video.currentTime = target;
-      }, 260);
+        seekYPlayTo(getEffectiveTime() + delta);
+      }, 280);
     }
 
     videoWrap.addEventListener("click", (e) => {
       if (playerError.classList.contains("show")) return;
 
-      /* Live TV: never pause, only toggle overlay or start if stopped */
       if (isLive) {
         if (video.paused) video.play().catch(() => {});
         if (liveQualMenu.classList.contains("open")) {
@@ -1159,6 +1117,7 @@
     });
 
     async function cleanupPlayers() {
+      clearTimeout(liveFailTimer);
       hideError();
       if (hls) {
         hls.destroy();
@@ -1199,7 +1158,7 @@
           hideError();
           const heights = (hls.levels || []).map((lv) => lv.height || 0);
           renderLiveQualityOptions(heights);
-          hls.currentLevel = -1; // Default Auto ABR
+          hls.currentLevel = -1;
           nowSub.textContent = isRelay ? `${ch.num} • ${ch.cat} (Relay)` : `${ch.num} • ${ch.cat}`;
           if (autoPlay) video.play().catch(() => {});
         });
@@ -1215,7 +1174,9 @@
       }
     }
 
-    async function handleLiveFallback(ch, autoPlay, reason = "Stream network error") {
+    async function handleLiveFallback(ch, autoPlay, reason = "Stream offline") {
+      if (activeChannelId !== ch.id || !isLive) return;
+
       if (liveStage === 0 && video.canPlayType("application/vnd.apple.mpegurl")) {
         liveStage = 1;
         await cleanupPlayers();
@@ -1229,19 +1190,38 @@
       if (liveStage < 2 && ch.relayPath) {
         liveStage = 2;
         await resolveDirectTunnel();
-        nowSub.textContent = `${ch.num} • Trying server relay...`;
+        nowSub.textContent = `${ch.num} • Trying relay...`;
         startHlsUrl(`${DIRECT_STREAM_URL}${ch.relayPath}`, ch, autoPlay, true);
         return;
       }
+
+      /* Auto switch to next working Live TV channel */
+      if (liveFailCount < CHANNELS.length - 1) {
+        liveFailCount += 1;
+        const curIdx = CHANNELS.findIndex((c) => c.id === ch.id);
+        const nextCh = CHANNELS[(curIdx + 1) % CHANNELS.length];
+        nowSub.textContent = `${ch.name} offline — switching to ${nextCh.name}...`;
+        clearTimeout(liveFailTimer);
+        liveFailTimer = setTimeout(() => {
+          if (isLive && activeChannelId === ch.id) {
+            playChannel(nextCh, true, false);
+          }
+        }, 900);
+        return;
+      }
+
       nowSub.textContent = `${ch.num} • Stream unavailable`;
-      showError(`${ch.name} Unavailable`, `Source stream is blocked or offline (${reason}).`);
+      showError("Live TV Unavailable", `All channels failed to load (${reason}). Check internet and tap Retry.`);
     }
 
-    async function playChannel(ch, autoPlay = true) {
+    async function playChannel(ch, autoPlay = true, resetFail = true) {
       await cleanupPlayers();
+      if (resetFail) liveFailCount = 0;
       activeChannelId = ch.id;
       activeYPlayIdx = -1;
       pendingResumeTime = 0;
+      compatMode = false;
+      compatBaseOffset = 0;
       liveStage = 0;
       selectedLiveQuality = "auto";
       renderLiveQualityOptions([]);
@@ -1263,7 +1243,7 @@
         });
         shakaPlayer.addEventListener("error", (ev) => {
           const code = ev && ev.detail ? ev.detail.code : "Network";
-          showError(`${ch.name} Error`, `Unable to load stream (Code: ${code}).`);
+          handleLiveFallback(ch, autoPlay, `Code ${code}`);
         });
         try {
           await shakaPlayer.load(ch.url);
@@ -1272,8 +1252,7 @@
           renderLiveQualityOptions(heights);
           if (autoPlay) video.play().catch(() => {});
         } catch (_) {
-          nowSub.textContent = "Unable to start stream";
-          showError(`${ch.name} Offline`, "Failed to load stream. Tap Retry to try again.");
+          handleLiveFallback(ch, autoPlay, "Stream offline");
         }
         return;
       }
@@ -1287,12 +1266,13 @@
       }
     }
 
-    async function loadYPlay(idx, autoPlay = false) {
+    async function loadYPlay(idx, autoPlay = false, forceCompatOffset = null) {
       if (idx < 0 || idx >= yplayItems.length) return;
       await cleanupPlayers();
       activeChannelId = "";
       activeYPlayIdx = idx;
       errorRetries = 0;
+      audioAutoChecked = false;
       setVodMode(true);
       renderChannels();
       renderYPlay();
@@ -1300,18 +1280,36 @@
       const item = yplayItems[idx];
       const gbStr = fmtGB(item.file_size);
       const qStr = item.quality || "HD";
+      compatMode = Boolean(item.compat_audio) || forceCompatOffset !== null;
+
       nowTitle.textContent = item.title;
-      nowSub.textContent = `${qStr} • ${gbStr} • Instant Stream`;
+      nowSub.textContent = `${qStr} • ${gbStr} • ${compatMode ? "Audio Boost" : "Instant Stream"}`;
 
-      const saved = Number(localStorage.getItem(`yp_pos_${item.id}`) || "0");
-      pendingResumeTime = saved > 5 ? saved : 0;
+      const saved = forceCompatOffset !== null
+        ? forceCompatOffset
+        : Number(localStorage.getItem(`yp_pos_${item.id}`) || "0");
 
-      video.preload = "auto";
-      video.src = `${DIRECT_STREAM_URL}/api/yplay/stream/${idx}`;
+      if (compatMode) {
+        compatBaseOffset = saved > 5 ? Math.floor(saved) : 0;
+        pendingResumeTime = 0;
+        video.preload = "auto";
+        video.src = `${DIRECT_STREAM_URL}/api/yplay/compat/${idx}?t=${compatBaseOffset}`;
+      } else {
+        compatBaseOffset = 0;
+        pendingResumeTime = saved > 5 ? saved : 0;
+        video.preload = "auto";
+        video.src = `${DIRECT_STREAM_URL}/api/yplay/stream/${idx}`;
+      }
+
+      const initDur = Number(item.duration || 0);
+      durTxt.textContent = initDur > 0 ? fmt(initDur) : "00:00";
+      curTxt.textContent = fmt(saved > 5 ? saved : 0);
+      seekInput.value = (initDur > 0 && saved > 5) ? String(Math.round((saved / initDur) * 1000)) : "0";
+
       video.load();
       video.playbackRate = currentSpeed;
       if (autoPlay) {
-        setBuffering(true);
+        setBuffering(true, true);
         video.play().catch(() => setBuffering(false));
       }
     }
@@ -1324,9 +1322,13 @@
 
     function toggleVodPlay() {
       if (isLive) return;
-      if (video.paused) video.play().catch(() => {});
-      else video.pause();
-      showOverlayTemporarily();
+      if (video.paused) {
+        video.play().catch(() => {});
+        showOverlayTemporarily(1800);
+      } else {
+        video.pause();
+        showOverlayTemporarily(4000);
+      }
     }
 
     function toggleMute() {
@@ -1386,21 +1388,32 @@
       hideError();
       if (!isLive) {
         video.playbackRate = currentSpeed;
-        if (pendingResumeTime > 0 && isFinite(video.duration) && pendingResumeTime < video.duration - 2) {
+        if (!compatMode && pendingResumeTime > 0 && isFinite(video.duration) && pendingResumeTime < video.duration - 2) {
           video.currentTime = pendingResumeTime;
           pendingResumeTime = 0;
         }
       }
     });
-    video.addEventListener("waiting", () => { if (!isLive) setBuffering(true); });
-    video.addEventListener("stalled", () => { if (!isLive && !video.paused) setBuffering(true); });
-    video.addEventListener("seeking", () => { if (!isLive) setBuffering(true); });
+
+    video.addEventListener("waiting", () => {
+      if (!isLive && !video.paused) setBuffering(true, false);
+    });
+    video.addEventListener("seeking", () => {
+      if (!isLive) setBuffering(true, false);
+    });
     video.addEventListener("playing", () => {
       hideError();
       setBuffering(false);
       syncPlayerIcons();
-      if (isLive) showLiveOverlayTemporarily();
-      else showOverlayTemporarily();
+      if (isLive) {
+        liveFailCount = 0;
+        showLiveOverlayTemporarily();
+      } else {
+        /* Auto-hide controls smoothly 1.6s after playback begins */
+        if (ytOverlay.classList.contains("visible")) {
+          showOverlayTemporarily(1600);
+        }
+      }
     });
     video.addEventListener("canplay", () => {
       hideError();
@@ -1410,18 +1423,17 @@
     video.addEventListener("pause", () => {
       setBuffering(false);
       syncPlayerIcons();
-      if (!isLive) ytOverlay.classList.add("visible");
+      if (!isLive) {
+        clearTimeout(overlayTimer);
+        ytOverlay.classList.add("visible");
+      }
     });
 
     video.addEventListener("error", async () => {
       if (shuttingDown || !video.getAttribute("src")) return;
       if (isLive) {
         const ch = CHANNELS.find((c) => c.id === activeChannelId);
-        if (ch && ch.relayPath && liveStage < 2) {
-          handleLiveFallback(ch, true, "Stream failed");
-        } else if (ch) {
-          showError(`${ch.name} Error`, "Live channel failed to load. Check network or try another channel.");
-        }
+        if (ch) handleLiveFallback(ch, true, "Stream failed");
         return;
       }
       if (!isLive && activeYPlayIdx >= 0 && errorRetries < 2) {
@@ -1434,13 +1446,30 @@
     });
 
     video.addEventListener("timeupdate", () => {
-      if (isLive || seeking || !isFinite(video.duration) || video.duration <= 0) return;
-      seekInput.value = String(Math.round((video.currentTime / video.duration) * 1000));
-      curTxt.textContent = fmt(video.currentTime);
-      durTxt.textContent = fmt(video.duration);
+      if (isLive || seeking) return;
+      const cur = getEffectiveTime();
+      const dur = getEffectiveDuration();
+
+      /* Silent Audio Auto-Fix if native stream has unsupported codec (AC3/DTS) */
+      if (!compatMode && !audioAutoChecked && !video.muted && (video.currentTime || 0) > 2.2) {
+        audioAutoChecked = true;
+        if (typeof video.webkitAudioDecodedByteCount === "number" && video.webkitAudioDecodedByteCount === 0) {
+          loadYPlay(activeYPlayIdx, true, Math.floor(cur));
+          return;
+        }
+      }
+
+      if (dur > 0) {
+        seekInput.value = String(Math.round((cur / dur) * 1000));
+        durTxt.textContent = fmt(dur);
+      }
+      curTxt.textContent = fmt(cur);
+
+      const now = Date.now();
       const item = yplayItems[activeYPlayIdx];
-      if (item && video.currentTime > 2) {
-        localStorage.setItem(`yp_pos_${item.id}`, String(Math.floor(video.currentTime)));
+      if (item && cur > 2 && now - lastSavedPosTime > 2500) {
+        lastSavedPosTime = now;
+        localStorage.setItem(`yp_pos_${item.id}`, String(Math.floor(cur)));
       }
     });
 
@@ -1455,8 +1484,9 @@
 
     window.addEventListener("pagehide", () => {
       shuttingDown = true;
-      if (!isLive && yplayItems[activeYPlayIdx] && video.currentTime > 2) {
-        localStorage.setItem(`yp_pos_${yplayItems[activeYPlayIdx].id}`, String(Math.floor(video.currentTime)));
+      if (!isLive && yplayItems[activeYPlayIdx]) {
+        const cur = getEffectiveTime();
+        if (cur > 2) localStorage.setItem(`yp_pos_${yplayItems[activeYPlayIdx].id}`, String(Math.floor(cur)));
       }
       video.pause();
       video.removeAttribute("src");
@@ -1477,20 +1507,21 @@
 
     seekInput.addEventListener("input", () => {
       seeking = true;
-      if (isFinite(video.duration) && video.duration > 0) {
-        curTxt.textContent = fmt((Number(seekInput.value) / 1000) * video.duration);
+      const dur = getEffectiveDuration();
+      if (dur > 0) {
+        curTxt.textContent = fmt((Number(seekInput.value) / 1000) * dur);
       }
     });
     seekInput.addEventListener("change", () => {
-      if (!isLive && isFinite(video.duration) && video.duration > 0) {
-        setBuffering(true);
-        video.currentTime = (Number(seekInput.value) / 1000) * video.duration;
+      const dur = getEffectiveDuration();
+      if (!isLive && dur > 0) {
+        seekYPlayTo((Number(seekInput.value) / 1000) * dur);
       }
       seeking = false;
       showOverlayTemporarily();
     });
 
-    // Android TV Remote / D-Pad Navigation
+    /* Android TV Remote / D-Pad Navigation */
     document.addEventListener("keydown", (e) => {
       const k = e.key;
       const active = document.activeElement;
@@ -1626,7 +1657,7 @@
 
     function playChannelById(id) {
       const ch = CHANNELS.find((c) => c.id === id);
-      if (ch) playChannel(ch, true);
+      if (ch) playChannel(ch, true, true);
     }
 
     function renderYPlay() {
@@ -1673,11 +1704,17 @@
     }
 
     async function fetchYPlay(forceTab = false) {
+      if (document.visibilityState === "hidden") return;
       try {
         const res = await fetch(`${WORKER_URL}/api/yplay/library?t=${Date.now()}`, { cache: "no-store" });
         const data = await res.json();
-        yplayItems = Array.isArray(data.items) ? data.items : [];
-        renderYPlay();
+        const nextItems = Array.isArray(data.items) ? data.items : [];
+        const sig = JSON.stringify(nextItems.map((x) => [x.id, x.quality, x.compat_audio, x.duration]));
+        if (sig !== yplaySig) {
+          yplaySig = sig;
+          yplayItems = nextItems;
+          renderYPlay();
+        }
         if (forceTab) switchTab("yplay");
       } catch (_) {}
     }
@@ -1689,10 +1726,10 @@
     syncPlayerIcons();
     renderChannels();
     resolveDirectTunnel().then(() => {
-      playChannel(CHANNELS[0], false);
+      playChannel(CHANNELS[0], false, true);
       fetchYPlay(false);
     });
-    setInterval(() => fetchYPlay(false), 8000);
+    setInterval(() => fetchYPlay(false), 15000);
   </script>
 </body>
 </html>
