@@ -42,6 +42,20 @@ MAX_CACHE_BYTES = int(1.5 * 1024 * 1024 * 1024)  # 1.5 GB cap
 RELAY_IDLE_SEC = 45
 START_TIME = time.time()
 NATIVE_AUDIO_CODECS = {"aac", "mp3", "opus", "vorbis", "flac"}
+TEXT_SUB_CODECS = {"subrip", "srt", "ass", "ssa", "mov_text", "webvtt", "text"}
+
+LANG_NAMES = {
+    "tam": "Tamil", "ta": "Tamil", "tamil": "Tamil",
+    "hin": "Hindi", "hi": "Hindi", "hindi": "Hindi",
+    "tel": "Telugu", "te": "Telugu", "telugu": "Telugu",
+    "mal": "Malayalam", "ml": "Malayalam", "malayalam": "Malayalam",
+    "kan": "Kannada", "kn": "Kannada", "kannada": "Kannada",
+    "eng": "English", "en": "English", "english": "English",
+    "jpn": "Japanese", "jap": "Japanese", "ja": "Japanese",
+    "kor": "Korean", "ko": "Korean",
+    "spa": "Spanish", "es": "Spanish",
+    "fre": "French", "fra": "French", "fr": "French",
+}
 
 for d in (DATA_DIR, CACHE_DIR, HLS_DIR):
     d.mkdir(parents=True, exist_ok=True)
@@ -74,6 +88,7 @@ tg_client = Client(
 )
 
 ffmpeg_proc: Optional[subprocess.Popen] = None
+active_play_proc: Optional[asyncio.subprocess.Process] = None
 last_error: str = ""
 last_relay_hit: float = 0.0
 msg_cache: dict[str, Message] = {}
@@ -201,6 +216,26 @@ def fmt_bytes(size: int) -> str:
     return f"{size / (1024 * 1024):.1f} MB"
 
 
+def resolve_lang_label(lang_raw: str, title_raw: str, fallback: str) -> tuple[str, bool]:
+    l_clean = (lang_raw or "").strip().lower()
+    t_clean = (title_raw or "").strip()
+    t_low = t_clean.lower()
+
+    if l_clean in LANG_NAMES:
+        name = LANG_NAMES[l_clean]
+        return name, name == "Tamil"
+
+    for key, val in LANG_NAMES.items():
+        if len(key) >= 3 and re.search(rf"\b{re.escape(key)}\b", t_low):
+            return val, val == "Tamil"
+
+    if t_clean and t_clean.lower() not in ("und", "unknown", "stereo", "aac", "ac3", "eac3"):
+        return t_clean[:18], "tamil" in t_low
+    if l_clean and l_clean != "und":
+        return l_clean.upper()[:8], False
+    return fallback, False
+
+
 def is_video_msg(msg: Message) -> bool:
     if msg.video or msg.animation:
         return True
@@ -238,6 +273,10 @@ def get_media_info(msg: Message) -> Optional[dict]:
         "quality": detect_quality(title, width, height),
         "audio_codec": "",
         "compat_audio": likely_compat,
+        "audio_tracks": [],
+        "default_audio_idx": 0,
+        "subtitles": [],
+        "probed": False,
         "added_at": int(time.time()),
     }
 
@@ -294,53 +333,115 @@ def prune_cache_sync():
             pass
 
 
-def probe_cached_media_sync(item_id: str) -> Optional[dict]:
-    b0 = block_path(item_id, 0)
-    if not b0.exists():
-        return None
-    b1 = block_path(item_id, 1)
-    tmp_probe = safe_item_dir(item_id) / "probe.tmp"
+def run_ffprobe_json(target: str) -> Optional[dict]:
     try:
-        with tmp_probe.open("wb") as out:
-            out.write(b0.read_bytes())
-            if b1.exists():
-                out.write(b1.read_bytes())
         cmd = [
             "ffprobe", "-v", "error",
-            "-show_entries", "format=duration:stream=codec_type,codec_name,width,height",
-            "-of", "json", str(tmp_probe),
+            "-analyzeduration", "2500000",
+            "-probesize", "2500000",
+            "-show_entries", "format=duration:stream=codec_type,codec_name,width,height:stream_tags=language,title",
+            "-of", "json", target,
         ]
-        res = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL, timeout=5)
-        data = json.loads(res)
-        streams = data.get("streams") or []
-        v_stream = next((s for s in streams if s.get("codec_type") == "video"), {})
-        a_stream = next((s for s in streams if s.get("codec_type") == "audio"), {})
-        fmt_info = data.get("format") or {}
-
-        a_codec = str(a_stream.get("codec_name") or "").lower()
-        w = int(v_stream.get("width") or 0)
-        h = int(v_stream.get("height") or 0)
-        dur = 0
-        try:
-            dur = int(float(fmt_info.get("duration") or 0))
-        except Exception:
-            pass
-
-        compat = bool(a_codec and a_codec not in NATIVE_AUDIO_CODECS)
-        return {
-            "audio_codec": a_codec,
-            "compat_audio": compat,
-            "width": w,
-            "height": h,
-            "duration": dur,
-        }
+        res = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL, timeout=7)
+        return json.loads(res)
     except Exception:
         return None
-    finally:
+
+
+def parse_ffprobe_data(data: dict) -> Optional[dict]:
+    streams = data.get("streams") or []
+    if not streams:
+        return None
+    v_stream = next((s for s in streams if s.get("codec_type") == "video"), {})
+    fmt_info = data.get("format") or {}
+
+    audio_tracks = []
+    a_idx = 0
+    for s in streams:
+        if s.get("codec_type") != "audio":
+            continue
+        tags = s.get("tags") or {}
+        codec = str(s.get("codec_name") or "").lower()
+        label, is_tamil = resolve_lang_label(tags.get("language", ""), tags.get("title", ""), f"Audio {a_idx + 1}")
+        audio_tracks.append({
+            "index": a_idx,
+            "label": label,
+            "codec": codec,
+            "is_tamil": is_tamil,
+        })
+        a_idx += 1
+
+    default_audio_idx = 0
+    for tr in audio_tracks:
+        if tr["is_tamil"]:
+            default_audio_idx = tr["index"]
+            break
+
+    subtitles = []
+    s_idx = 0
+    for s in streams:
+        if s.get("codec_type") != "subtitle":
+            continue
+        codec = str(s.get("codec_name") or "").lower()
+        if codec in TEXT_SUB_CODECS:
+            tags = s.get("tags") or {}
+            label, _ = resolve_lang_label(tags.get("language", ""), tags.get("title", ""), f"Sub {len(subtitles) + 1}")
+            subtitles.append({
+                "index": s_idx,
+                "label": label,
+                "codec": codec,
+            })
+        s_idx += 1
+
+    first_codec = audio_tracks[0]["codec"] if audio_tracks else ""
+    compat = bool(first_codec and first_codec not in NATIVE_AUDIO_CODECS)
+    w = int(v_stream.get("width") or 0)
+    h = int(v_stream.get("height") or 0)
+    dur = 0
+    try:
+        dur = int(float(fmt_info.get("duration") or 0))
+    except Exception:
+        pass
+
+    return {
+        "audio_codec": first_codec,
+        "compat_audio": compat,
+        "audio_tracks": audio_tracks,
+        "default_audio_idx": default_audio_idx,
+        "subtitles": subtitles,
+        "width": w,
+        "height": h,
+        "duration": dur,
+        "probed": True,
+    }
+
+
+def probe_cached_media_sync(item_id: str, stream_index: Optional[int] = None) -> Optional[dict]:
+    b0 = block_path(item_id, 0)
+    if b0.exists():
+        b1 = block_path(item_id, 1)
+        tmp_probe = safe_item_dir(item_id) / "probe.tmp"
         try:
-            tmp_probe.unlink()
-        except Exception:
-            pass
+            with tmp_probe.open("wb") as out:
+                out.write(b0.read_bytes())
+                if b1.exists():
+                    out.write(b1.read_bytes())
+            raw = run_ffprobe_json(str(tmp_probe))
+            if raw:
+                parsed = parse_ffprobe_data(raw)
+                if parsed and (parsed["width"] > 0 or parsed["audio_tracks"]):
+                    return parsed
+        finally:
+            try:
+                tmp_probe.unlink()
+            except Exception:
+                pass
+
+    if stream_index is not None:
+        raw = run_ffprobe_json(f"http://127.0.0.1:8000/api/yplay/stream/{stream_index}")
+        if raw:
+            return parse_ffprobe_data(raw)
+    return None
 
 
 def update_library_probe(item_id: str, info: dict):
@@ -348,6 +449,10 @@ def update_library_probe(item_id: str, info: dict):
     changed = False
     for row in items:
         if row.get("id") == item_id:
+            row["probed"] = True
+            row["audio_tracks"] = info.get("audio_tracks", [])
+            row["default_audio_idx"] = int(info.get("default_audio_idx", 0))
+            row["subtitles"] = info.get("subtitles", [])
             if info.get("audio_codec"):
                 row["audio_codec"] = info["audio_codec"]
                 row["compat_audio"] = bool(info["compat_audio"])
@@ -368,7 +473,20 @@ def update_library_probe(item_id: str, info: dict):
         write_json(LIBRARY_FILE, items)
 
 
+async def kill_active_play_proc():
+    global active_play_proc
+    proc = active_play_proc
+    active_play_proc = None
+    if proc and proc.returncode is None:
+        try:
+            proc.kill()
+            await proc.wait()
+        except Exception:
+            pass
+
+
 async def clear_queue_and_cache():
+    await kill_active_play_proc()
     for task in list(prewarm_tasks.values()):
         task.cancel()
     prewarm_tasks.clear()
@@ -428,7 +546,9 @@ async def prewarm_head_tail(item: dict):
         if total_blocks > 3 and not block_path(item_id, total_blocks - 1).exists():
             await cache_span(item, total_blocks - 1, 1)
 
-        probe_res = await asyncio.to_thread(probe_cached_media_sync, item_id)
+        items = read_json(LIBRARY_FILE, [])
+        idx = next((i for i, r in enumerate(items) if r.get("id") == item_id), None)
+        probe_res = await asyncio.to_thread(probe_cached_media_sync, item_id, idx)
         if probe_res:
             update_library_probe(item_id, probe_res)
 
@@ -445,7 +565,7 @@ def trigger_prewarm(item: dict):
     item_id = item["id"]
     if item_id in prewarm_tasks:
         return
-    if block_path(item_id, 0).exists() and item.get("audio_codec"):
+    if block_path(item_id, 0).exists() and item.get("probed"):
         return
     prewarm_tasks[item_id] = asyncio.create_task(prewarm_head_tail(item))
 
@@ -660,6 +780,7 @@ async def startup():
 
 @app.on_event("shutdown")
 async def shutdown():
+    await kill_active_play_proc()
     for t in list(prewarm_tasks.values()):
         t.cancel()
     stop_suntv_relay()
@@ -688,11 +809,14 @@ async def yplay_library():
     enriched = []
     for idx, x in enumerate(items):
         row = dict(x)
-        if not row.get("audio_codec") and block_path(row["id"], 0).exists():
-            probed = await asyncio.to_thread(probe_cached_media_sync, row["id"])
-            if probed:
-                update_library_probe(row["id"], probed)
-                row.update({k: v for k, v in probed.items() if v or k == "compat_audio"})
+        if not row.get("probed"):
+            if block_path(row["id"], 0).exists():
+                probed = await asyncio.to_thread(probe_cached_media_sync, row["id"], idx)
+                if probed:
+                    update_library_probe(row["id"], probed)
+                    row.update(probed)
+            else:
+                trigger_prewarm(row)
         row["index"] = idx
         row["quality"] = detect_quality(
             row.get("title", ""),
@@ -818,8 +942,10 @@ async def yplay_stream(index: int, request: Request):
     return StreamingResponse(continuous_gen(), status_code=status_code, headers=headers, media_type=mime)
 
 
+@app.api_route("/api/yplay/play/{index}", methods=["GET", "HEAD"])
 @app.api_route("/api/yplay/compat/{index}", methods=["GET", "HEAD"])
-async def yplay_compat_stream(index: int, request: Request, t: float = 0.0):
+async def yplay_play_stream(index: int, request: Request, t: float = 0.0, q: str = "orig", a: int = 0):
+    global active_play_proc
     items = read_json(LIBRARY_FILE, [])
     if index < 0 or index >= len(items):
         raise HTTPException(status_code=404, detail="Movie not found")
@@ -827,26 +953,49 @@ async def yplay_compat_stream(index: int, request: Request, t: float = 0.0):
     if request.method == "HEAD":
         return Response(status_code=200, headers={"Content-Type": "video/mp4", "Cache-Control": "no-store"})
 
+    await kill_active_play_proc()
+
     seek_sec = max(0.0, float(t or 0.0))
+    audio_idx = max(0, int(a or 0))
+    q_clean = str(q or "orig").lower()
+
     cmd = [
         "ffmpeg", "-nostdin", "-loglevel", "error",
         "-ss", f"{seek_sec:.2f}",
         "-i", f"http://127.0.0.1:8000/api/yplay/stream/{index}",
-        "-map", "0:v:0", "-map", "0:a:0?",
-        "-c:v", "copy",
+        "-map", "0:v:0", "-map", f"0:a:{audio_idx}?",
+    ]
+
+    if q_clean in ("720", "480", "360"):
+        h = int(q_clean)
+        rate = "1600k" if h == 720 else ("850k" if h == 480 else "480k")
+        buf = "3200k" if h == 720 else ("1700k" if h == 480 else "960k")
+        cmd.extend([
+            "-vf", f"scale=-2:{h}",
+            "-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency",
+            "-crf", "26", "-maxrate", rate, "-bufsize", buf,
+            "-pix_fmt", "yuv420p", "-threads", "2",
+        ])
+    else:
+        cmd.extend(["-c:v", "copy"])
+
+    cmd.extend([
         "-c:a", "aac", "-ac", "2", "-b:a", "128k",
         "-avoid_negative_ts", "make_zero",
         "-f", "mp4",
         "-movflags", "frag_keyframe+empty_moov+default_base_moof",
         "pipe:1",
-    ]
+    ])
+
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.DEVNULL,
     )
+    active_play_proc = proc
 
     async def remux_gen():
+        global active_play_proc
         try:
             while True:
                 if await request.is_disconnected():
@@ -862,6 +1011,8 @@ async def yplay_compat_stream(index: int, request: Request, t: float = 0.0):
                     await proc.wait()
                 except Exception:
                     pass
+            if active_play_proc is proc:
+                active_play_proc = None
 
     return StreamingResponse(
         remux_gen(),
@@ -869,6 +1020,38 @@ async def yplay_compat_stream(index: int, request: Request, t: float = 0.0):
         media_type="video/mp4",
         headers={"Cache-Control": "no-store"},
     )
+
+
+@app.get("/api/yplay/sub/{index}/{sub_idx}.vtt")
+async def yplay_sub_vtt(index: int, sub_idx: int, t: float = 0.0, dur: float = 180.0):
+    items = read_json(LIBRARY_FILE, [])
+    if index < 0 or index >= len(items):
+        raise HTTPException(status_code=404, detail="Movie not found")
+
+    start_sec = max(0.0, float(t or 0.0))
+    win_sec = min(240.0, max(30.0, float(dur or 180.0)))
+    cmd = [
+        "ffmpeg", "-nostdin", "-loglevel", "error",
+        "-ss", f"{start_sec:.2f}",
+        "-i", f"http://127.0.0.1:8000/api/yplay/stream/{index}",
+        "-t", f"{win_sec:.2f}",
+        "-vn", "-an",
+        "-map", f"0:s:{max(0, sub_idx)}",
+        "-f", "webvtt",
+        "pipe:1",
+    ]
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=15)
+        vtt = out.decode("utf-8", errors="ignore") if out else "WEBVTT\n\n"
+    except Exception:
+        vtt = "WEBVTT\n\n"
+
+    return Response(content=vtt, media_type="text/vtt", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/live/suntv/index.m3u8")
