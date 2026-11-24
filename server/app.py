@@ -1,9 +1,10 @@
 import asyncio
+import html
 import json
 import os
 import re
 import shutil
-import subprocess 
+import subprocess
 import time
 from pathlib import Path
 from typing import Optional
@@ -11,7 +12,7 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
-from pyrogram import Client, filters
+from pyrogram import Client, enums, filters
 from pyrogram.types import (
     BotCommand,
     CallbackQuery,
@@ -34,10 +35,12 @@ CACHE_DIR = Path("/tmp/yplay_chunks")
 HLS_DIR = Path("/dev/shm/suntv_hls")
 LIBRARY_FILE = DATA_DIR / "yplay_library.json"
 CHANNELS_FILE = DATA_DIR / "channels.json"
-SETTINGS_FILE = DATA_DIR / "settings.json"
 SESSION_FILE = DATA_DIR / "ystream_bot"
 
-CHUNK_SIZE = 1024 * 1024  # 1 MiB Telegram chunk
+CHUNK_SIZE = 1024 * 1024  # 1 MiB
+MAX_CACHE_BYTES = int(1.5 * 1024 * 1024 * 1024)  # 1.5 GB lightweight cap
+RELAY_IDLE_SEC = 45
+START_TIME = time.time()
 
 for d in (DATA_DIR, CACHE_DIR, HLS_DIR):
     d.mkdir(parents=True, exist_ok=True)
@@ -51,12 +54,6 @@ DEFAULT_CHANNELS = [
         "source_url": os.getenv("SUNTV_SOURCE_URL") or DEFAULT_SUNTV_URL,
     }
 ]
-
-DEFAULT_SETTINGS = {
-    "prewarm": True,
-    "max_cache_gb": 3,
-    "auto_reply": True,
-}
 
 app = FastAPI(title="YStream Server")
 app.add_middleware(
@@ -77,6 +74,7 @@ tg_client = Client(
 
 ffmpeg_proc: Optional[subprocess.Popen] = None
 last_error: str = ""
+last_relay_hit: float = 0.0
 msg_cache: dict[str, Message] = {}
 prewarm_tasks: dict[str, asyncio.Task] = {}
 
@@ -95,30 +93,14 @@ def write_json(path: Path, data):
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
-def get_settings() -> dict:
-    data = read_json(SETTINGS_FILE, DEFAULT_SETTINGS)
-    merged = dict(DEFAULT_SETTINGS)
-    if isinstance(data, dict):
-        merged.update(data)
-    return merged
-
-
-def update_settings(**kwargs) -> dict:
-    s = get_settings()
-    s.update(kwargs)
-    write_json(SETTINGS_FILE, s)
-    return s
-
-
 read_json(LIBRARY_FILE, [])
 read_json(CHANNELS_FILE, DEFAULT_CHANNELS)
-read_json(SETTINGS_FILE, DEFAULT_SETTINGS)
 
 
 def get_active_tunnel_url() -> str:
     for cmd in (
-        ["journalctl", "-u", "ystream-tunnel", "-n", "100", "--no-pager"],
-        ["sudo", "-n", "journalctl", "-u", "ystream-tunnel", "-n", "100", "--no-pager"],
+        ["journalctl", "-u", "ystream-tunnel", "-n", "80", "--no-pager"],
+        ["sudo", "-n", "journalctl", "-u", "ystream-tunnel", "-n", "80", "--no-pager"],
     ):
         try:
             out = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL)
@@ -128,6 +110,55 @@ def get_active_tunnel_url() -> str:
         except Exception:
             pass
     return ""
+
+
+def get_sys_stats() -> dict:
+    mem_used_mb, mem_total_mb = 0, 0
+    try:
+        info = {}
+        for line in Path("/proc/meminfo").read_text().splitlines():
+            k, v = line.split(":", 1)
+            info[k.strip()] = int(v.strip().split()[0])
+        total_kb = info.get("MemTotal", 0)
+        avail_kb = info.get("MemAvailable", info.get("MemFree", 0))
+        mem_total_mb = total_kb // 1024
+        mem_used_mb = max(0, (total_kb - avail_kb) // 1024)
+    except Exception:
+        pass
+
+    load_1m = 0.0
+    try:
+        load_1m = os.getloadavg()[0]
+    except Exception:
+        pass
+
+    disk_used_gb, disk_total_gb = 0.0, 0.0
+    try:
+        du = shutil.disk_usage("/")
+        disk_total_gb = du.total / (1024 ** 3)
+        disk_used_gb = du.used / (1024 ** 3)
+    except Exception:
+        pass
+
+    return {
+        "mem_used_mb": mem_used_mb,
+        "mem_total_mb": mem_total_mb,
+        "load_1m": load_1m,
+        "disk_used_gb": disk_used_gb,
+        "disk_total_gb": disk_total_gb,
+    }
+
+
+def fmt_uptime(sec: float) -> str:
+    s = int(max(0, sec))
+    d, s = divmod(s, 86400)
+    h, s = divmod(s, 3600)
+    m, s = divmod(s, 60)
+    if d > 0:
+        return f"{d}d {h}h {m}m"
+    if h > 0:
+        return f"{h}h {m}m"
+    return f"{m}m {s}s"
 
 
 def detect_quality(title: str, width: int = 0, height: int = 0) -> str:
@@ -166,14 +197,24 @@ def fmt_bytes(size: int) -> str:
     gb = size / (1024 * 1024 * 1024)
     if gb >= 1.0:
         return f"{gb:.2f} GB"
-    mb = size / (1024 * 1024)
-    return f"{mb:.1f} MB"
+    return f"{size / (1024 * 1024):.1f} MB"
+
+
+def is_video_msg(msg: Message) -> bool:
+    if msg.video or msg.animation:
+        return True
+    if msg.document:
+        mime = (msg.document.mime_type or "").lower()
+        name = (msg.document.file_name or "").lower()
+        if mime.startswith("video/") or name.endswith((".mp4", ".mkv", ".webm", ".mov", ".avi", ".m4v", ".ts")):
+            return True
+    return False
 
 
 def get_media_info(msg: Message) -> Optional[dict]:
-    media = msg.video or msg.document or msg.animation
-    if not media:
+    if not is_video_msg(msg):
         return None
+    media = msg.video or msg.document or msg.animation
     name = getattr(media, "file_name", None) or msg.caption or f"Movie_{msg.id}.mp4"
     title = str(name).strip()
     mime = getattr(media, "mime_type", None) or "video/mp4"
@@ -217,8 +258,7 @@ def write_block_sync(path: Path, data: bytes):
 
 def get_cache_stats_sync() -> tuple[int, int]:
     files = [f for f in CACHE_DIR.glob("*/*.blk") if f.exists()]
-    total = sum(f.stat().st_size for f in files)
-    return len(files), total
+    return len(files), sum(f.stat().st_size for f in files)
 
 
 def clear_all_cache_sync():
@@ -233,15 +273,13 @@ def clear_all_cache_sync():
 
 
 def prune_cache_sync():
-    max_gb = int(get_settings().get("max_cache_gb", 3) or 3)
-    max_bytes = max_gb * 1024 * 1024 * 1024
     files = list(CACHE_DIR.glob("*/*.blk"))
     total = sum(f.stat().st_size for f in files if f.exists())
-    if total <= max_bytes:
+    if total <= MAX_CACHE_BYTES:
         return
     files.sort(key=lambda f: f.stat().st_mtime)
     for f in files:
-        if total <= int(max_bytes * 0.75):
+        if total <= int(MAX_CACHE_BYTES * 0.7):
             break
         try:
             sz = f.stat().st_size
@@ -302,14 +340,12 @@ async def prewarm_head_tail(item: dict):
             return
         total_blocks = (total_size + CHUNK_SIZE - 1) // CHUNK_SIZE
 
-        head_count = min(3, total_blocks)
+        head_count = min(2, total_blocks)
         if not all(block_path(item_id, b).exists() for b in range(head_count)):
             await cache_span(item, 0, head_count)
 
-        if total_blocks > 5:
-            tail_start = total_blocks - 2
-            if not all(block_path(item_id, b).exists() for b in range(tail_start, total_blocks)):
-                await cache_span(item, tail_start, 2)
+        if total_blocks > 3 and not block_path(item_id, total_blocks - 1).exists():
+            await cache_span(item, total_blocks - 1, 1)
 
         await asyncio.to_thread(prune_cache_sync)
     except asyncio.CancelledError:
@@ -321,12 +357,8 @@ async def prewarm_head_tail(item: dict):
 
 
 def trigger_prewarm(item: dict):
-    if not get_settings().get("prewarm", True):
-        return
     item_id = item["id"]
-    if item_id in prewarm_tasks:
-        return
-    if block_path(item_id, 0).exists():
+    if item_id in prewarm_tasks or block_path(item_id, 0).exists():
         return
     prewarm_tasks[item_id] = asyncio.create_task(prewarm_head_tail(item))
 
@@ -343,39 +375,15 @@ def save_media_to_queue(item: dict) -> tuple[bool, int]:
     return True, len(items)
 
 
-# --- Telegram Bot Menus & Keyboards ---
-def main_menu_markup() -> InlineKeyboardMarkup:
+# --- Minimal Useful Bot UI ---
+def menu_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("📋 Queue List", callback_data="cb:list"),
-            InlineKeyboardButton("⚙️ Settings", callback_data="cb:settings"),
+            InlineKeyboardButton("📋 Queue", callback_data="cb:list"),
+            InlineKeyboardButton("📊 Status", callback_data="cb:status"),
         ],
         [
-            InlineKeyboardButton("📊 Server Status", callback_data="cb:status"),
             InlineKeyboardButton("🗑️ Clear All", callback_data="cb:clear_ask"),
-        ],
-    ])
-
-
-def settings_menu_markup() -> InlineKeyboardMarkup:
-    s = get_settings()
-    prewarm_lbl = "⚡ Pre-warm: ON" if s.get("prewarm", True) else "⚡ Pre-warm: OFF"
-    reply_lbl = "💬 Upload Reply: ON" if s.get("auto_reply", True) else "💬 Upload Reply: OFF"
-    cache_gb = int(s.get("max_cache_gb", 3) or 3)
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton(prewarm_lbl, callback_data="cb:toggle_prewarm"),
-            InlineKeyboardButton(f"💾 Cache Limit: {cache_gb} GB", callback_data="cb:cycle_cache"),
-        ],
-        [
-            InlineKeyboardButton(reply_lbl, callback_data="cb:toggle_reply"),
-            InlineKeyboardButton("🧹 Clear Cache Only", callback_data="cb:clear_cache_only"),
-        ],
-        [
-            InlineKeyboardButton("🔄 Restart Sun TV Relay", callback_data="cb:restart_relay"),
-        ],
-        [
-            InlineKeyboardButton("⬅️ Back to Menu", callback_data="cb:menu"),
         ],
     ])
 
@@ -383,100 +391,91 @@ def settings_menu_markup() -> InlineKeyboardMarkup:
 def clear_confirm_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("✅ Yes, Delete All", callback_data="cb:clear_confirm"),
+            InlineKeyboardButton("✅ Confirm Clear", callback_data="cb:clear_confirm"),
             InlineKeyboardButton("❌ Cancel", callback_data="cb:menu"),
         ]
     ])
 
 
-def back_menu_markup(extra_btn: Optional[InlineKeyboardButton] = None) -> InlineKeyboardMarkup:
-    rows = []
-    if extra_btn:
-        rows.append([extra_btn])
-    rows.append([InlineKeyboardButton("⬅️ Back to Menu", callback_data="cb:menu")])
-    return InlineKeyboardMarkup(rows)
+def build_menu_html() -> str:
+    items = read_json(LIBRARY_FILE, [])
+    return (
+        "<b>YPlay Control</b>\n"
+        f"Queue: <code>{len(items)}</code> movies\n"
+        "Send or forward any movie to add it."
+    )
 
 
-def build_queue_text() -> str:
+def build_queue_html() -> str:
     items = read_json(LIBRARY_FILE, [])
     if not items:
-        return "📋 **YPlay Queue is Empty**\n\nForward or send any video/movie to add it to `#1`."
-    lines = []
-    start_idx = max(0, len(items) - 20)
-    for i in range(start_idx, len(items)):
-        x = items[i]
-        q = x.get("quality") or detect_quality(x.get("title", ""), int(x.get("width") or 0), int(x.get("height") or 0))
+        return "<b>YPlay Queue Empty</b>\n\nNext video you send starts at <code>#1</code>."
+    lines = [f"<b>YPlay Queue ({len(items)})</b>\n"]
+    for i, x in enumerate(items[-25:], start=max(1, len(items) - 24)):
+        title = html.escape(str(x.get("title", "Video")))
+        q = html.escape(str(x.get("quality") or "HD"))
         sz = fmt_bytes(int(x.get("file_size") or 0))
-        lines.append(f"`#{i + 1}` • **{x.get('title')}** (`{q}` • `{sz}`)")
-    return f"📋 **YPlay Queue ({len(items)} items)**\n\n" + "\n".join(lines) + "\n\nUse `/del <number>` to remove one, or `/clear` to wipe all."
+        lines.append(f"<code>#{i}</code> • {title} (<code>{q}</code> • <code>{sz}</code>)")
+    lines.append("\nUse <code>/del 1</code> or <code>/clear</code>.")
+    return "\n".join(lines)
 
 
-async def build_status_text() -> str:
+async def build_status_html() -> str:
     items = read_json(LIBRARY_FILE, [])
-    s = get_settings()
     blk_cnt, blk_bytes = await asyncio.to_thread(get_cache_stats_sync)
-    tunnel = get_active_tunnel_url() or "Starting / Not detected"
-    relay_ok = ffmpeg_proc is not None and ffmpeg_proc.poll() is None
-    return (
-        "📊 **YStream Server Status**\n\n"
-        f"• **Bot:** Connected\n"
-        f"• **YPlay Queue:** `{len(items)}` movies\n"
-        f"• **SSD Cache:** `{fmt_bytes(blk_bytes)}` (`{blk_cnt}` chunks / `{s.get('max_cache_gb', 3)} GB` limit)\n"
-        f"• **Pre-warm (5 MB):** `{'ON' if s.get('prewarm', True) else 'OFF'}`\n"
-        f"• **Sun TV Relay:** `{'Active' if relay_ok else 'Inactive'}`\n"
-        f"• **Tunnel:** `{tunnel}`"
-    )
+    sys = await asyncio.to_thread(get_sys_stats)
+    tunnel = get_active_tunnel_url()
+    relay_running = ffmpeg_proc is not None and ffmpeg_proc.poll() is None
 
+    rows = [
+        ("Bot", "Connected" if tg_client.is_connected else "Offline"),
+        ("Queue", f"{len(items)} movie(s)"),
+        ("Cache", f"{fmt_bytes(blk_bytes)} ({blk_cnt} blk)"),
+        ("RAM", f"{sys['mem_used_mb']}/{sys['mem_total_mb']} MB"),
+        ("Disk", f"{sys['disk_used_gb']:.1f}/{sys['disk_total_gb']:.1f} GB"),
+        ("CPU Load", f"{sys['load_1m']:.2f}"),
+        ("Sun Relay", "Active" if relay_running else "Idle (Auto)"),
+        ("Tunnel", "Online" if tunnel else "Missing"),
+        ("Uptime", fmt_uptime(time.time() - START_TIME)),
+    ]
 
-def build_settings_text() -> str:
-    return (
-        "⚙️ **YStream Bot Settings & Options**\n\n"
-        "• **Pre-warm:** Automatically caches first 3 MB + last 2 MB on upload for fast start.\n"
-        "• **Cache Limit:** Auto-cleans oldest chunks once SSD limit is reached.\n"
-        "• **Upload Reply:** Send confirmation reply whenever a video is queued."
-    )
+    w1, w2 = 10, 19
+    sep = f"+-{'-'*w1}-+-{'-'*w2}-+"
+    lines = [sep, f"| {'Component':<{w1}} | {'Diagnosis':<{w2}} |", sep]
+    for k, v in rows:
+        lines.append(f"| {k:<{w1}} | {v[:w2]:<{w2}} |")
+    lines.append(sep)
+    table = "\n".join(lines)
 
-
-def build_menu_text() -> str:
-    items = read_json(LIBRARY_FILE, [])
-    return (
-        "🎬 **YPlay Control Menu**\n\n"
-        f"Movies in queue: `{len(items)}`\n"
-        "Forward any movie or video directly here to stream on `ystream.pages.dev` & TV App."
-    )
-
-
-async def safe_edit_msg(msg: Message, text: str, reply_markup: InlineKeyboardMarkup):
-    try:
-        await msg.edit_text(text, reply_markup=reply_markup)
-    except Exception:
-        pass
+    out = f"<b>YStream Full Diagnosis</b>\n<pre>{html.escape(table)}</pre>"
+    if tunnel:
+        out += f"\n\n<b>Tunnel URL:</b>\n<code>{html.escape(tunnel)}</code>"
+    if last_error:
+        out += f"\n\n<b>Last Relay Note:</b> <code>{html.escape(last_error[:140])}</code>"
+    return out
 
 
 @tg_client.on_message(filters.command(["start", "menu"]))
 async def cmd_menu(_, msg: Message):
-    await msg.reply_text(build_menu_text(), reply_markup=main_menu_markup())
-
-
-@tg_client.on_message(filters.command("settings"))
-async def cmd_settings(_, msg: Message):
-    await msg.reply_text(build_settings_text(), reply_markup=settings_menu_markup())
-
-
-@tg_client.on_message(filters.command("status"))
-async def cmd_status(_, msg: Message):
-    txt = await build_status_text()
-    await msg.reply_text(
-        txt,
-        reply_markup=back_menu_markup(InlineKeyboardButton("🔄 Refresh Status", callback_data="cb:status")),
-    )
+    await msg.reply_text(build_menu_html(), parse_mode=enums.ParseMode.HTML, reply_markup=menu_markup())
 
 
 @tg_client.on_message(filters.command("list"))
 async def cmd_list(_, msg: Message):
     await msg.reply_text(
-        build_queue_text(),
-        reply_markup=back_menu_markup(InlineKeyboardButton("🗑️ Clear All", callback_data="cb:clear_ask")),
+        build_queue_html(),
+        parse_mode=enums.ParseMode.HTML,
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🗑️ Clear All", callback_data="cb:clear_ask")]]),
+    )
+
+
+@tg_client.on_message(filters.command("status"))
+async def cmd_status(_, msg: Message):
+    txt = await build_status_html()
+    await msg.reply_text(
+        txt,
+        parse_mode=enums.ParseMode.HTML,
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh", callback_data="cb:status")]]),
     )
 
 
@@ -484,12 +483,12 @@ async def cmd_list(_, msg: Message):
 async def cmd_del(_, msg: Message):
     parts = (msg.text or "").strip().split()
     if len(parts) < 2 or not parts[1].isdigit():
-        await msg.reply_text("Use: `/del <number>` (example: `/del 1`)")
+        await msg.reply_text("Use: <code>/del 1</code>", parse_mode=enums.ParseMode.HTML)
         return
     idx = int(parts[1]) - 1
     items = read_json(LIBRARY_FILE, [])
     if idx < 0 or idx >= len(items):
-        await msg.reply_text("Invalid number. Check `/list`.")
+        await msg.reply_text("Invalid number. Check <code>/list</code>.", parse_mode=enums.ParseMode.HTML)
         return
     removed = items.pop(idx)
     write_json(LIBRARY_FILE, items)
@@ -498,28 +497,15 @@ async def cmd_del(_, msg: Message):
     if task:
         task.cancel()
     shutil.rmtree(safe_item_dir(removed["id"]), ignore_errors=True)
-    await msg.reply_text(f"🗑️ Removed: **{removed.get('title')}**", reply_markup=main_menu_markup())
+    await msg.reply_text(f"Removed: <b>{html.escape(str(removed.get('title')))}</b>", parse_mode=enums.ParseMode.HTML)
 
 
 @tg_client.on_message(filters.command("clear"))
 async def cmd_clear(_, msg: Message):
     await clear_queue_and_cache()
     await msg.reply_text(
-        "✅ **All Old Videos & Cache Cleared!**\n\nQueue is now empty. Next video you send will start at `#1`.",
-        reply_markup=main_menu_markup(),
-    )
-
-
-@tg_client.on_message(filters.command("add"))
-async def cmd_add(_, msg: Message):
-    target = msg.reply_to_message or msg
-    info = get_media_info(target)
-    if not info:
-        await msg.reply_text("Reply to a video file with `/add`.")
-        return
-    added, total = save_media_to_queue(info)
-    await msg.reply_text(
-        f"{'✅ Queued' if added else 'Already in queue'} `#{total}` (`{info['quality']}` • `{fmt_bytes(info['file_size'])}`):\n**{info['title']}**"
+        "<b>Cleared All Movies & Cache.</b>\nNext video sent starts at <code>#1</code>.",
+        parse_mode=enums.ParseMode.HTML,
     )
 
 
@@ -529,89 +515,82 @@ async def on_file(_, msg: Message):
     if not info:
         return
     added, total = save_media_to_queue(info)
-    if added and get_settings().get("auto_reply", True):
+    if added:
         await msg.reply_text(
-            f"✅ Queued `#{total}` • `{info['quality']}` • `{fmt_bytes(info['file_size'])}`\n**{info['title']}**"
+            f"Queued <code>#{total}</code> • <code>{html.escape(info['quality'])}</code> • <code>{fmt_bytes(info['file_size'])}</code>\n<b>{html.escape(info['title'])}</b>",
+            parse_mode=enums.ParseMode.HTML,
         )
 
 
 @tg_client.on_callback_query()
 async def on_callback(_, cq: CallbackQuery):
     data = cq.data or ""
-    if data == "cb:menu":
-        await cq.answer()
-        await safe_edit_msg(cq.message, build_menu_text(), main_menu_markup())
-    elif data == "cb:list":
-        await cq.answer()
-        await safe_edit_msg(
-            cq.message,
-            build_queue_text(),
-            back_menu_markup(InlineKeyboardButton("🗑️ Clear All", callback_data="cb:clear_ask")),
-        )
-    elif data == "cb:settings":
-        await cq.answer()
-        await safe_edit_msg(cq.message, build_settings_text(), settings_menu_markup())
-    elif data == "cb:status":
-        await cq.answer("Refreshing status...")
-        txt = await build_status_text()
-        await safe_edit_msg(
-            cq.message,
-            txt,
-            back_menu_markup(InlineKeyboardButton("🔄 Refresh Status", callback_data="cb:status")),
-        )
-    elif data == "cb:toggle_prewarm":
-        cur = bool(get_settings().get("prewarm", True))
-        update_settings(prewarm=not cur)
-        await cq.answer(f"Pre-warm {'OFF' if cur else 'ON'}")
-        await safe_edit_msg(cq.message, build_settings_text(), settings_menu_markup())
-    elif data == "cb:toggle_reply":
-        cur = bool(get_settings().get("auto_reply", True))
-        update_settings(auto_reply=not cur)
-        await cq.answer(f"Upload Reply {'OFF' if cur else 'ON'}")
-        await safe_edit_msg(cq.message, build_settings_text(), settings_menu_markup())
-    elif data == "cb:cycle_cache":
-        cur_gb = int(get_settings().get("max_cache_gb", 3) or 3)
-        next_gb = 3 if cur_gb == 1 else (5 if cur_gb == 3 else 1)
-        update_settings(max_cache_gb=next_gb)
-        await asyncio.to_thread(prune_cache_sync)
-        await cq.answer(f"Cache limit set to {next_gb} GB")
-        await safe_edit_msg(cq.message, build_settings_text(), settings_menu_markup())
-    elif data == "cb:clear_cache_only":
-        await asyncio.to_thread(clear_all_cache_sync)
-        await cq.answer("SSD cache cleared (queue kept)!", show_alert=True)
-        await safe_edit_msg(cq.message, build_settings_text(), settings_menu_markup())
-    elif data == "cb:restart_relay":
-        await cq.answer("Restarting Sun TV relay...")
-        global ffmpeg_proc
-        if ffmpeg_proc and ffmpeg_proc.poll() is None:
-            ffmpeg_proc.terminate()
-        ok = await start_suntv_relay()
-        txt = await build_status_text()
-        await safe_edit_msg(
-            cq.message,
-            txt + f"\n\nRelay restart: {'✅ Ready' if ok else '⚠️ Source blocked/error'}",
-            back_menu_markup(InlineKeyboardButton("⚙️ Settings", callback_data="cb:settings")),
-        )
-    elif data == "cb:clear_ask":
-        items = read_json(LIBRARY_FILE, [])
-        await cq.answer()
-        await safe_edit_msg(
-            cq.message,
-            f"⚠️ **Clear All `{len(items)}` Movies & Cache?**\n\nThis will delete every queued movie and cached chunk. Next upload will start from `#1`.",
-            clear_confirm_markup(),
-        )
-    elif data == "cb:clear_confirm":
-        await clear_queue_and_cache()
-        await cq.answer("All videos & cache cleared!", show_alert=True)
-        await safe_edit_msg(
-            cq.message,
-            "✅ **YPlay Queue & Cache Cleared!**\n\nNext upload will start from `#1`.",
-            main_menu_markup(),
-        )
+    try:
+        if data == "cb:menu":
+            await cq.answer()
+            await cq.message.edit_text(build_menu_html(), parse_mode=enums.ParseMode.HTML, reply_markup=menu_markup())
+        elif data == "cb:list":
+            await cq.answer()
+            await cq.message.edit_text(
+                build_queue_html(),
+                parse_mode=enums.ParseMode.HTML,
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🗑️ Clear All", callback_data="cb:clear_ask")],
+                    [InlineKeyboardButton("⬅️ Back", callback_data="cb:menu")],
+                ]),
+            )
+        elif data == "cb:status":
+            await cq.answer("Refreshing...")
+            txt = await build_status_html()
+            await cq.message.edit_text(
+                txt,
+                parse_mode=enums.ParseMode.HTML,
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔄 Refresh", callback_data="cb:status")],
+                    [InlineKeyboardButton("⬅️ Back", callback_data="cb:menu")],
+                ]),
+            )
+        elif data == "cb:clear_ask":
+            items = read_json(LIBRARY_FILE, [])
+            await cq.answer()
+            await cq.message.edit_text(
+                f"Clear all <code>{len(items)}</code> movies & cache?\nNext upload starts at <code>#1</code>.",
+                parse_mode=enums.ParseMode.HTML,
+                reply_markup=clear_confirm_markup(),
+            )
+        elif data == "cb:clear_confirm":
+            await clear_queue_and_cache()
+            await cq.answer("Cleared!", show_alert=True)
+            await cq.message.edit_text(
+                "<b>Cleared All Movies & Cache.</b>\nNext upload starts at <code>#1</code>.",
+                parse_mode=enums.ParseMode.HTML,
+                reply_markup=menu_markup(),
+            )
+    except Exception:
+        pass
+
+
+# --- On-Demand Lightweight Sun TV Relay ---
+def stop_suntv_relay():
+    global ffmpeg_proc
+    if ffmpeg_proc and ffmpeg_proc.poll() is None:
+        ffmpeg_proc.terminate()
+        try:
+            ffmpeg_proc.wait(timeout=2)
+        except Exception:
+            ffmpeg_proc.kill()
+    ffmpeg_proc = None
+    for f in HLS_DIR.glob("*"):
+        try:
+            f.unlink()
+        except Exception:
+            pass
 
 
 async def start_suntv_relay():
-    global ffmpeg_proc, last_error
+    global ffmpeg_proc, last_error, last_relay_hit
+    last_relay_hit = time.time()
+
     channels = read_json(CHANNELS_FILE, DEFAULT_CHANNELS)
     suntv = next((c for c in channels if c.get("id") == "suntv"), None)
     url = (suntv or {}).get("source_url") or os.getenv("SUNTV_SOURCE_URL") or DEFAULT_SUNTV_URL
@@ -620,28 +599,16 @@ async def start_suntv_relay():
     if ffmpeg_proc and ffmpeg_proc.poll() is None and m3u8.exists() and (time.time() - m3u8.stat().st_mtime) < 10:
         return True
 
-    if ffmpeg_proc and ffmpeg_proc.poll() is None:
-        ffmpeg_proc.terminate()
-        try:
-            ffmpeg_proc.wait(timeout=2)
-        except Exception:
-            ffmpeg_proc.kill()
-
-    for f in HLS_DIR.glob("*"):
-        try:
-            f.unlink()
-        except Exception:
-            pass
-
+    stop_suntv_relay()
     cmd = [
         "ffmpeg", "-nostdin", "-loglevel", "error",
         "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "2",
         "-i", url,
         "-vf", "fps=25,scale=-2:720,format=yuv420p",
-        "-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency",
-        "-crf", "22", "-g", "50", "-keyint_min", "50", "-sc_threshold", "0",
-        "-c:a", "aac", "-b:a", "128k", "-ac", "2",
-        "-f", "hls", "-hls_time", "2", "-hls_list_size", "5",
+        "-c:v", "libx264", "-preset", "superfast", "-tune", "zerolatency",
+        "-crf", "24", "-g", "50", "-keyint_min", "50", "-sc_threshold", "0",
+        "-c:a", "aac", "-b:a", "96k", "-ac", "2",
+        "-f", "hls", "-hls_time", "2", "-hls_list_size", "4",
         "-hls_flags", "delete_segments+append_list+independent_segments",
         str(m3u8),
     ]
@@ -651,7 +618,7 @@ async def start_suntv_relay():
         last_error = f"FFmpeg start error: {e}"
         return False
 
-    for _ in range(24):
+    for _ in range(28):
         if m3u8.exists() and len(list(HLS_DIR.glob("*.ts"))) >= 2:
             last_error = ""
             return True
@@ -665,14 +632,12 @@ async def start_suntv_relay():
     return False
 
 
-async def relay_watcher():
+async def relay_idle_watcher():
     while True:
-        try:
-            await start_suntv_relay()
-        except Exception as e:
-            global last_error
-            last_error = str(e)
-        await asyncio.sleep(6)
+        await asyncio.sleep(10)
+        if ffmpeg_proc and ffmpeg_proc.poll() is None:
+            if (time.time() - last_relay_hit) > RELAY_IDLE_SEC:
+                stop_suntv_relay()
 
 
 @app.on_event("startup")
@@ -680,11 +645,10 @@ async def startup():
     await tg_client.start()
     try:
         await tg_client.set_bot_commands([
-            BotCommand("menu", "Open Bot Menu & Options"),
-            BotCommand("list", "Show YPlay Movie Queue"),
-            BotCommand("clear", "Delete All Movies & Clear Cache"),
-            BotCommand("settings", "Bot & Cache Settings"),
-            BotCommand("status", "Server & SSD Status"),
+            BotCommand("menu", "Quick Control"),
+            BotCommand("list", "YPlay Queue List"),
+            BotCommand("status", "Full Diagnosis Table"),
+            BotCommand("clear", "Clear Queue & Cache"),
         ])
     except Exception as exc:
         print(f"[Bot commands error] {exc}")
@@ -692,15 +656,14 @@ async def startup():
     items = read_json(LIBRARY_FILE, [])
     if items:
         trigger_prewarm(items[0])
-    asyncio.create_task(relay_watcher())
+    asyncio.create_task(relay_idle_watcher())
 
 
 @app.on_event("shutdown")
 async def shutdown():
     for t in list(prewarm_tasks.values()):
         t.cancel()
-    if ffmpeg_proc and ffmpeg_proc.poll() is None:
-        ffmpeg_proc.terminate()
+    stop_suntv_relay()
     try:
         await tg_client.stop()
     except Exception:
@@ -860,6 +823,8 @@ async def suntv_m3u8():
 
 @app.get("/live/suntv/{seg}")
 async def suntv_ts(seg: str):
+    global last_relay_hit
+    last_relay_hit = time.time()
     if "/" in seg or ".." in seg or not seg.endswith(".ts"):
         raise HTTPException(status_code=400, detail="Bad segment")
     p = HLS_DIR / seg
