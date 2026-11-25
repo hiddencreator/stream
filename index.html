@@ -9,7 +9,7 @@
   <script src="https://cdn.jsdelivr.net/npm/shaka-player@4.11.12/dist/shaka-player.compiled.js"></script>
   <style>
     :root {
-      --drawer-bg: rgba(11, 14, 21, 0.97);
+      --drawer-bg: rgba(11, 14, 21, 0.98);
       --card: rgba(255, 255, 255, 0.05);
       --active-bg: rgba(255, 255, 255, 0.13);
       --accent: #e50914;
@@ -60,6 +60,7 @@
       overflow: hidden;
     }
 
+    /* Keep video hidden until first frame renders so Android TV WebView never draws top-left default icon */
     video {
       width: 100%;
       height: 100%;
@@ -67,6 +68,11 @@
       display: block;
       background: #000;
       border: 0 !important;
+      opacity: 0;
+    }
+
+    video.has-frame {
+      opacity: 1;
     }
 
     /* Full-Black System Shutdown Alert Screen */
@@ -92,12 +98,12 @@
     .shutdown-card {
       max-width: 420px;
       width: 100%;
-      background: linear-gradient(180deg, #141822 0%, #0c0f16 100%);
-      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: linear-gradient(180deg, #151923 0%, #0c0f16 100%);
+      border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 20px;
       padding: 30px 26px;
       text-align: center;
-      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.95);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.96);
     }
 
     .shutdown-icon {
@@ -106,7 +112,7 @@
       margin: 0 auto 16px;
       border-radius: 50%;
       background: rgba(229, 9, 20, 0.14);
-      border: 1.5px solid rgba(229, 9, 20, 0.45);
+      border: 1.5px solid rgba(229, 9, 20, 0.48);
       color: #ff3b46;
       display: flex;
       align-items: center;
@@ -121,14 +127,14 @@
       text-transform: uppercase;
       color: #fca5a5;
       background: rgba(229, 9, 20, 0.16);
-      border: 1px solid rgba(229, 9, 20, 0.32);
-      padding: 3px 10px;
+      border: 1px solid rgba(229, 9, 20, 0.34);
+      padding: 3px 11px;
       border-radius: 99px;
       margin-bottom: 10px;
     }
 
     .shutdown-title {
-      font-size: 1.38rem;
+      font-size: 1.4rem;
       font-weight: 800;
       color: #ffffff;
       letter-spacing: -0.2px;
@@ -617,7 +623,7 @@
       color: #fff;
     }
 
-    /* Left Slide-Over Side Drawer (TV Center-Locked Focus) */
+    /* Left Slide-Over Side Drawer (Zero-Flicker TV List) */
     .drawer-backdrop {
       position: fixed;
       inset: 0;
@@ -712,6 +718,7 @@
       min-height: 0;
       overflow-y: auto;
       overscroll-behavior: contain;
+      will-change: scroll-position;
       padding: 14px 14px 44px;
     }
 
@@ -726,11 +733,13 @@
       border: 1.5px solid transparent;
       border-radius: 12px;
       padding: 10px 12px;
+      height: 68px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 11px;
       cursor: pointer;
+      contain: layout style paint;
     }
 
     .d-item.active {
@@ -779,7 +788,7 @@
 
     .yp-badge {
       width: 44px;
-      height: 54px;
+      height: 50px;
       border-radius: 9px;
       background: linear-gradient(160deg, #1e2430 0%, #0f131a 100%);
       border: 1px solid rgba(255, 255, 255, 0.14);
@@ -787,7 +796,7 @@
       flex-direction: column;
       align-items: center;
       justify-content: space-between;
-      padding: 5px 3px 4px;
+      padding: 4px 3px 4px;
       flex-shrink: 0;
       color: #fff;
     }
@@ -889,7 +898,7 @@
 </head>
 <body>
   <div class="stage" id="stage" tabindex="-1">
-    <video id="video" tabindex="-1" playsinline preload="auto" poster="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></video>
+    <video id="video" tabindex="-1" playsinline preload="auto"></video>
 
     <!-- Center Loader Ring -->
     <div id="centerLoader" class="center-loader show"></div>
@@ -1266,18 +1275,14 @@
       return menuBtn;
     }
 
-    /* TV Center-Locked List Scroll (Instant on hold-down, smooth on single tap) */
+    /* TV Center-Locked List Scroll (Steady 150ms 1-by-1 cadence on long press, zero flicker) */
     let lastDrawerNavAt = 0;
 
-    function centerDrawerItem(el, instant = false) {
+    function centerDrawerItem(el) {
       if (!el || !drawerScroll) return;
       const itemCenter = el.offsetTop + (el.offsetHeight / 2);
       const targetTop = Math.max(0, itemCenter - (drawerScroll.clientHeight / 2));
-      if (instant) {
-        drawerScroll.scrollTop = targetTop;
-      } else {
-        drawerScroll.scrollTo({ top: targetTop, behavior: "smooth" });
-      }
+      drawerScroll.scrollTop = targetTop;
     }
 
     /* Double-Back Exit Guard */
@@ -1638,7 +1643,7 @@
         const pane = drawerTab === "live" ? liveListPane : yplayListPane;
         const activeItem = pane.querySelector(".d-item.active") || pane.querySelector(".d-item");
         if (activeItem) {
-          centerDrawerItem(activeItem, true);
+          centerDrawerItem(activeItem);
           activeItem.focus({ preventScroll: true });
         } else {
           (drawerTab === "live" ? tabLive : tabYPlay).focus({ preventScroll: true });
@@ -2124,12 +2129,13 @@
       }
     }
 
-    /* Playback Engines (Hardware-Muted Instant Cleanup = Zero Audio Flicker) */
+    /* Playback Engines (Hardware-Muted Instant Cleanup + No Top-Left Android Icon) */
     async function cleanupPlayers() {
       clearTimeout(liveFailTimer);
       clearTimeout(unmuteTimer);
       hideError();
-      video.muted = true; // Instant hardware mute prevents previous channel voice bleed
+      video.classList.remove("has-frame");
+      video.muted = true;
       try { video.pause(); } catch (_) {}
 
       if (hls) {
@@ -2369,6 +2375,7 @@
       const item = yplayItems[activeYPlayIdx];
       if (!item) return;
       playSessionId++;
+      video.classList.remove("has-frame");
       video.muted = true;
       const clamped = Math.max(0, Math.floor(targetSec));
       const needsTranscode = Boolean(item.compat_audio) || vodQuality !== "orig" || vodAudioIdx !== 0;
@@ -2406,8 +2413,6 @@
       subFetchStart = -1;
       subOverlay.classList.remove("show");
       exitScrubMode(false);
-
-      /* Pre-focus center Play/Pause button on YPlay */
       lastHudFocusEl = centerPlayBtn;
 
       const item = yplayItems[idx];
@@ -2483,7 +2488,11 @@
       }
     });
 
-    video.addEventListener("loadeddata", () => { hideError(); hideLoading(); });
+    video.addEventListener("loadeddata", () => {
+      hideError();
+      hideLoading();
+      if (video.videoWidth > 0) video.classList.add("has-frame");
+    });
 
     video.addEventListener("playing", () => {
       if (isSystemStopped) {
@@ -2492,8 +2501,8 @@
       }
       hideError();
       hideLoading();
+      video.classList.add("has-frame");
 
-      /* Unmute cleanly 60ms after new frames start playing (Zero old-channel voice bleed) */
       clearTimeout(unmuteTimer);
       unmuteTimer = setTimeout(() => {
         if (!isSystemStopped && !userMuted && !autoMutedForBoot) {
@@ -2671,7 +2680,7 @@
         return;
       }
 
-      /* 4. Side Drawer Navigation (TV Center-Locked Focus + 1st Item from Top Tab) */
+      /* 4. Side Drawer Navigation (Steady 150ms 1-by-1 cadence on long press, zero flicker) */
       if (drawerOpen) {
         const pane = drawerTab === "live" ? liveListPane : yplayListPane;
         const items = Array.from(pane.querySelectorAll(".d-item"));
@@ -2686,9 +2695,9 @@
             (nextTab === "live" ? tabLive : tabYPlay).focus({ preventScroll: true });
           } else if (dir === "DOWN" && items.length > 0) {
             e.preventDefault();
-            /* Always focus 1st item (#01) when moving down from the top tab */
+            lastDrawerNavAt = now;
             const firstItem = items[0];
-            centerDrawerItem(firstItem, true);
+            centerDrawerItem(firstItem);
             firstItem.focus({ preventScroll: true });
           } else if (ok) {
             e.preventDefault();
@@ -2700,21 +2709,22 @@
         if (curIdx >= 0) {
           if (dir === "DOWN" || dir === "UP") {
             e.preventDefault();
-            /* Smooth cadence when holding Up/Down continuously */
-            if (e.repeat && now - lastDrawerNavAt < 80) return;
+            if (e.repeat && now - lastDrawerNavAt < 150) return;
             lastDrawerNavAt = now;
 
             if (dir === "DOWN") {
-              const next = items[Math.min(items.length - 1, curIdx + 1)];
-              centerDrawerItem(next, e.repeat);
-              next.focus({ preventScroll: true });
+              if (curIdx < items.length - 1) {
+                const next = items[curIdx + 1];
+                centerDrawerItem(next);
+                next.focus({ preventScroll: true });
+              }
             } else {
               if (curIdx === 0) {
                 drawerScroll.scrollTop = 0;
                 (drawerTab === "live" ? tabLive : tabYPlay).focus({ preventScroll: true });
               } else {
                 const prev = items[curIdx - 1];
-                centerDrawerItem(prev, e.repeat);
+                centerDrawerItem(prev);
                 prev.focus({ preventScroll: true });
               }
             }
@@ -2729,7 +2739,7 @@
           e.preventDefault();
           const firstItem = items[0];
           if (firstItem) {
-            centerDrawerItem(firstItem, true);
+            centerDrawerItem(firstItem);
             firstItem.focus({ preventScroll: true });
           }
         }
@@ -3019,7 +3029,7 @@
         fetchYPlay(false);
       }
     });
-    setInterval(pollSystemStatus, 4000);
+    setInterval(pollSystemStatus, 3500);
     setInterval(() => fetchYPlay(true), 15000);
   </script>
 </body>
