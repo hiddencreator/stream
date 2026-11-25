@@ -60,7 +60,6 @@
       overflow: hidden;
     }
 
-    /* Keep video hidden until first frame renders so Android TV WebView never draws top-left default icon */
     video {
       width: 100%;
       height: 100%;
@@ -73,6 +72,172 @@
 
     video.has-frame {
       opacity: 1;
+    }
+
+    /* Fullscreen Security Gate (Device Approval Required & Access Revoked) */
+    .auth-gate {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      background: #000000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      opacity: 1;
+      transition: opacity 0.18s ease;
+    }
+
+    .auth-gate.unlocked {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .auth-card {
+      max-width: 440px;
+      width: 100%;
+      background: linear-gradient(180deg, #151a24 0%, #0b0e14 100%);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 22px;
+      padding: 30px 26px;
+      text-align: center;
+      box-shadow: 0 28px 70px rgba(0, 0, 0, 0.98);
+    }
+
+    .auth-icon {
+      width: 58px;
+      height: 58px;
+      margin: 0 auto 16px;
+      border-radius: 50%;
+      background: rgba(59, 130, 246, 0.14);
+      border: 1.5px solid rgba(59, 130, 246, 0.45);
+      color: #60a5fa;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .auth-icon.revoked {
+      background: rgba(229, 9, 20, 0.14);
+      border-color: rgba(229, 9, 20, 0.48);
+      color: #ff3b46;
+    }
+
+    .auth-badge {
+      display: inline-block;
+      font-size: 0.68rem;
+      font-weight: 800;
+      letter-spacing: 1.4px;
+      text-transform: uppercase;
+      color: #93c5fd;
+      background: rgba(59, 130, 246, 0.16);
+      border: 1px solid rgba(59, 130, 246, 0.34);
+      padding: 3px 11px;
+      border-radius: 99px;
+      margin-bottom: 10px;
+    }
+
+    .auth-badge.revoked {
+      color: #fca5a5;
+      background: rgba(229, 9, 20, 0.16);
+      border-color: rgba(229, 9, 20, 0.34);
+    }
+
+    .auth-title {
+      font-size: 1.38rem;
+      font-weight: 800;
+      color: #ffffff;
+      letter-spacing: -0.2px;
+    }
+
+    .auth-desc {
+      font-size: 0.85rem;
+      color: #94a3b8;
+      margin-top: 8px;
+      line-height: 1.45;
+    }
+
+    .auth-meta {
+      margin-top: 16px;
+      padding: 11px 14px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      font-size: 0.78rem;
+      color: #cbd5e1;
+    }
+
+    .auth-meta-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .auth-meta-lbl {
+      color: #64748b;
+      font-weight: 700;
+    }
+
+    .auth-meta-val {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-weight: 700;
+      color: #f1f5f9;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 240px;
+    }
+
+    .auth-status-row {
+      margin-top: 16px;
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #93c5fd;
+    }
+
+    .mini-spin {
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      border: 2px solid rgba(147, 197, 253, 0.25);
+      border-top-color: #60a5fa;
+      animation: spinRing 0.75s linear infinite;
+    }
+
+    .auth-actions {
+      margin-top: 18px;
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .auth-btn {
+      background: #e50914;
+      color: #fff;
+      border: 1.5px solid transparent;
+      padding: 10px 22px;
+      border-radius: 11px;
+      font-size: 0.88rem;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .auth-btn.secondary {
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    .auth-btn:focus,
+    .auth-btn:focus-visible,
+    .auth-btn:hover {
+      border-color: #ffffff !important;
+      transform: scale(1.04);
     }
 
     /* Full-Black System Shutdown Alert Screen */
@@ -184,8 +349,8 @@
       to { transform: rotate(360deg); }
     }
 
-    /* Double-Back Exit Toast */
-    .exit-toast {
+    /* Toast Pill (Double-Back Exit & Remote Feedback) */
+    .toast-pill {
       position: fixed;
       bottom: 34px;
       left: 50%;
@@ -203,7 +368,7 @@
       transition: opacity 0.15s ease, transform 0.15s ease;
     }
 
-    .exit-toast.show {
+    .toast-pill.show {
       opacity: 1;
       transform: translate3d(-50%, 0, 0);
     }
@@ -901,10 +1066,10 @@
     <video id="video" tabindex="-1" playsinline preload="auto"></video>
 
     <!-- Center Loader Ring -->
-    <div id="centerLoader" class="center-loader show"></div>
+    <div id="centerLoader" class="center-loader"></div>
 
-    <!-- Double-Back Exit Toast -->
-    <div id="exitToast" class="exit-toast">Press Back again to exit</div>
+    <!-- Toast Pill -->
+    <div id="toastPill" class="toast-pill">Press Back again to exit</div>
 
     <!-- Subtitles -->
     <div id="subOverlay" class="sub-overlay"><span id="subText" class="sub-text"></span></div>
@@ -951,7 +1116,7 @@
         </div>
       </div>
 
-      <!-- Center Play/Pause (YPlay Only — Pre-focused when YPlay opens) -->
+      <!-- Center Play/Pause (YPlay Only) -->
       <button id="centerPlayBtn" class="center-play-btn hidden" onclick="event.stopPropagation(); toggleVodPlay();"></button>
 
       <div class="hud-bottom" onclick="event.stopPropagation()">
@@ -1008,6 +1173,41 @@
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fullscreen Device Approval & Access Revoked Gate (Blocks All Content Until Approved) -->
+  <div id="authGate" class="auth-gate" role="alertdialog" aria-modal="true" aria-labelledby="authTitle">
+    <div class="auth-card">
+      <div id="authIcon" class="auth-icon">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+        </svg>
+      </div>
+      <div id="authBadge" class="auth-badge">Security Check</div>
+      <div id="authTitle" class="auth-title">Device Approval Required</div>
+      <div id="authDesc" class="auth-desc">An approval notification has been sent to your Telegram bot. Tap <b>Approve</b> to unlock permanent access on this device.</div>
+
+      <div class="auth-meta">
+        <div class="auth-meta-row">
+          <span class="auth-meta-lbl">Device</span>
+          <span id="authDevName" class="auth-meta-val">Detecting...</span>
+        </div>
+        <div class="auth-meta-row">
+          <span class="auth-meta-lbl">Device ID</span>
+          <span id="authDevId" class="auth-meta-val">---</span>
+        </div>
+      </div>
+
+      <div id="authStatusRow" class="auth-status-row">
+        <span class="mini-spin"></span>
+        <span id="authStatusTxt">Waiting for Telegram approval...</span>
+      </div>
+
+      <div id="authActions" class="auth-actions hidden">
+        <button id="sendReqBtn" class="auth-btn" onclick="sendReaccessRequest()">Send Request</button>
       </div>
     </div>
   </div>
@@ -1091,9 +1291,20 @@
 
     const stage = document.getElementById("stage");
     const video = document.getElementById("video");
+    const authGate = document.getElementById("authGate");
+    const authIcon = document.getElementById("authIcon");
+    const authBadge = document.getElementById("authBadge");
+    const authTitle = document.getElementById("authTitle");
+    const authDesc = document.getElementById("authDesc");
+    const authDevName = document.getElementById("authDevName");
+    const authDevId = document.getElementById("authDevId");
+    const authStatusRow = document.getElementById("authStatusRow");
+    const authStatusTxt = document.getElementById("authStatusTxt");
+    const authActions = document.getElementById("authActions");
+    const sendReqBtn = document.getElementById("sendReqBtn");
     const shutdownScreen = document.getElementById("shutdownScreen");
     const centerLoader = document.getElementById("centerLoader");
-    const exitToast = document.getElementById("exitToast");
+    const toastPill = document.getElementById("toastPill");
     const dishOsd = document.getElementById("dishOsd");
     const dishNum = document.getElementById("dishNum");
     const dishName = document.getElementById("dishName");
@@ -1138,6 +1349,280 @@
     const liveListPane = document.getElementById("liveListPane");
     const yplayListPane = document.getElementById("yplayListPane");
 
+    /* Safe Persistent Storage Helpers */
+    function safeGetStorage(k, fallback = "") {
+      try {
+        const v = localStorage.getItem(k);
+        if (v !== null && v !== "") return v;
+      } catch (_) {}
+      try {
+        const m = document.cookie.match(new RegExp("(?:^|; )" + k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "=([^;]*)"));
+        if (m) return decodeURIComponent(m[1]);
+      } catch (_) {}
+      return fallback;
+    }
+
+    function safeSetStorage(k, v) {
+      try {
+        localStorage.setItem(k, v);
+      } catch (_) {
+        try {
+          const keys = Object.keys(localStorage).filter((x) => x.startsWith("yp_pos_"));
+          keys.slice(0, 15).forEach((oldK) => localStorage.removeItem(oldK));
+          localStorage.setItem(k, v);
+        } catch (__) {}
+      }
+      if (k === "ys_device_id" || k === "ys_device_token") {
+        try {
+          document.cookie = `${k}=${encodeURIComponent(v)}; path=/; max-age=315360000; SameSite=Lax`;
+        } catch (_) {}
+      }
+    }
+
+    function safeRemoveStorage(k) {
+      try { localStorage.removeItem(k); } catch (_) {}
+      if (k === "ys_device_token") {
+        try { document.cookie = `${k}=; path=/; max-age=0`; } catch (_) {}
+      }
+    }
+
+    /* =========================================================================
+       PERSISTENT DEVICE IDENTITY & TELEGRAM APPROVAL GATE
+    ========================================================================= */
+    function getOrCreateDeviceId() {
+      // 1. Prefer Native Android TV Hardware/SharedPreferences ID if available
+      try {
+        if (window.YStreamNative && typeof window.YStreamNative.getDeviceId === "function") {
+          const nativeId = String(window.YStreamNative.getDeviceId() || "").trim();
+          if (nativeId && nativeId.length >= 8) {
+            safeSetStorage("ys_device_id", nativeId);
+            return nativeId;
+          }
+        }
+      } catch (_) {}
+
+      // 2. Persistent Storage / Cookie ID (Survives Wi-Fi changes, restarts & power off)
+      let stored = safeGetStorage("ys_device_id", "");
+      if (stored && /^[a-zA-Z0-9_-]{8,64}$/.test(stored)) {
+        safeSetStorage("ys_device_id", stored);
+        return stored;
+      }
+
+      const arr = new Uint8Array(12);
+      if (window.crypto && crypto.getRandomValues) crypto.getRandomValues(arr);
+      else for (let i = 0; i < 12; i++) arr[i] = Math.floor(Math.random() * 256);
+      const hex = Array.from(arr, (b) => b.toString(16).padStart(2, "0")).join("");
+      const newId = `dev_${hex}`;
+      safeSetStorage("ys_device_id", newId);
+      return newId;
+    }
+
+    function detectDeviceName() {
+      try {
+        if (window.YStreamNative && typeof window.YStreamNative.getDeviceName === "function") {
+          const nName = String(window.YStreamNative.getDeviceName() || "").trim();
+          if (nName) return nName;
+        }
+      } catch (_) {}
+
+      const ua = navigator.userAgent || "";
+      if (/MiTV|Xiaomi/i.test(ua)) return "Xiaomi Android TV";
+      if (/BRAVIA/i.test(ua)) return "Sony Bravia TV";
+      if (/AFT/i.test(ua)) return "Amazon Fire TV";
+      if (/Android TV|SmartTV|GoogleTV/i.test(ua)) return "Android TV";
+      if (/Android/i.test(ua)) return "Android Mobile";
+      if (/iPhone|iPad/i.test(ua)) return "iOS Device";
+      if (/Windows/i.test(ua)) return "Windows PC";
+      if (/Mac OS/i.test(ua)) return "Mac";
+      return "Web Browser";
+    }
+
+    const DEVICE_ID = getOrCreateDeviceId();
+    const DEVICE_NAME = detectDeviceName();
+    let DEVICE_TOKEN = safeGetStorage("ys_device_token", "");
+    let isDeviceApproved = false;
+    let authPollTimer = null;
+    let appBootedOnce = false;
+
+    authDevName.textContent = DEVICE_NAME;
+    authDevId.textContent = DEVICE_ID;
+
+    function authQueryParams() {
+      return `did=${encodeURIComponent(DEVICE_ID)}&dtok=${encodeURIComponent(DEVICE_TOKEN)}`;
+    }
+
+    function authHeaders() {
+      return {
+        "X-Device-Id": DEVICE_ID,
+        "X-Device-Token": DEVICE_TOKEN
+      };
+    }
+
+    function renderAuthGateState(mode) {
+      authGate.classList.remove("unlocked");
+      if (mode === "revoked" || mode === "rejected") {
+        authIcon.classList.add("revoked");
+        authBadge.classList.add("revoked");
+        authBadge.textContent = mode === "revoked" ? "Access Revoked" : "Request Declined";
+        authTitle.textContent = mode === "revoked" ? "Device Access Removed" : "Access Request Cancelled";
+        authDesc.textContent = "This device is no longer authorized to access YStream. Press Send Request to notify your Telegram bot for re-approval.";
+        authStatusRow.classList.add("hidden");
+        authActions.classList.remove("hidden");
+        setTimeout(() => sendReqBtn.focus({ preventScroll: true }), 50);
+      } else {
+        authIcon.classList.remove("revoked");
+        authBadge.classList.remove("revoked");
+        authBadge.textContent = "Security Check";
+        authTitle.textContent = "Device Approval Required";
+        authDesc.innerHTML = "An approval request has been sent to your Telegram bot. Tap <b>Approve</b> to unlock permanent access.";
+        authStatusTxt.textContent = "Waiting for Telegram approval...";
+        authStatusRow.classList.remove("hidden");
+        authActions.classList.add("hidden");
+      }
+    }
+
+    async function handleAuthRevoked(mode = "revoked") {
+      const wasApproved = isDeviceApproved;
+      isDeviceApproved = false;
+      DEVICE_TOKEN = "";
+      safeRemoveStorage("ys_device_token");
+
+      if (wasApproved) {
+        playSessionId++;
+        isZapping = false;
+        closeDrawer(false);
+        hideHud();
+        hideError();
+        hideLoading();
+        shutdownScreen.classList.remove("show");
+        await cleanupPlayers();
+      }
+      renderAuthGateState(mode);
+      startAuthPolling();
+    }
+
+    async function handleAuthApproved(token, stoppedFlag = false) {
+      if (token) {
+        DEVICE_TOKEN = token;
+        safeSetStorage("ys_device_token", token);
+      }
+      stopAuthPolling();
+      isDeviceApproved = true;
+      authGate.classList.add("unlocked");
+
+      if (!appBootedOnce) {
+        appBootedOnce = true;
+        connectSystemEvents();
+        if (stoppedFlag) {
+          await applySystemStopped(true);
+        } else {
+          playChannel(CHANNELS[0], true, true);
+          fetchYPlay(false);
+        }
+      } else {
+        connectSystemEvents();
+        if (stoppedFlag) {
+          await applySystemStopped(true);
+        } else if (isSystemStopped) {
+          await applySystemStopped(false);
+        } else {
+          const ch = CHANNELS.find((c) => c.id === activeChannelId) || CHANNELS[0];
+          playChannel(ch, true, true);
+          fetchYPlay(false);
+        }
+      }
+    }
+
+    async function sendReaccessRequest() {
+      renderAuthGateState("pending");
+      authStatusTxt.textContent = "Sending request to Telegram...";
+      try {
+        const res = await fetch(`${WORKER_URL}/api/device/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            device_id: DEVICE_ID,
+            device_name: DEVICE_NAME,
+            device_token: "",
+            force_request: true
+          })
+        });
+        const data = await res.json();
+        if (data.status === "approved" && data.device_token) {
+          await handleAuthApproved(data.device_token, Boolean(data.stopped));
+          return;
+        }
+      } catch (_) {}
+      authStatusTxt.textContent = "Waiting for Telegram approval...";
+      startAuthPolling();
+    }
+
+    async function checkPendingApprovalStatus() {
+      if (isDeviceApproved || document.visibilityState === "hidden") return;
+      try {
+        const res = await fetch(`${WORKER_URL}/api/device/status?${authQueryParams()}&t=${Date.now()}`, {
+          cache: "no-store"
+        });
+        const data = await res.json();
+        if (data.status === "approved") {
+          const tok = data.device_token || DEVICE_TOKEN;
+          if (tok) {
+            await handleAuthApproved(tok, Boolean(data.stopped));
+            return;
+          }
+        } else if (data.status === "revoked" || data.status === "rejected") {
+          renderAuthGateState(data.status);
+          stopAuthPolling();
+        }
+      } catch (_) {}
+    }
+
+    function startAuthPolling() {
+      if (authPollTimer) return;
+      authPollTimer = setInterval(checkPendingApprovalStatus, 2500);
+    }
+
+    function stopAuthPolling() {
+      if (authPollTimer) {
+        clearInterval(authPollTimer);
+        authPollTimer = null;
+      }
+    }
+
+    async function initDeviceSecurity() {
+      await resolveDirectTunnel();
+      try {
+        const res = await fetch(`${WORKER_URL}/api/device/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            device_id: DEVICE_ID,
+            device_name: DEVICE_NAME,
+            device_token: DEVICE_TOKEN,
+            force_request: false
+          })
+        });
+        const data = await res.json();
+        if (data.status === "approved" && (data.device_token || DEVICE_TOKEN)) {
+          await handleAuthApproved(data.device_token || DEVICE_TOKEN, Boolean(data.stopped));
+          return;
+        }
+        if (data.status === "revoked" || data.status === "rejected") {
+          DEVICE_TOKEN = "";
+          safeRemoveStorage("ys_device_token");
+          renderAuthGateState(data.status);
+          return;
+        }
+      } catch (_) {}
+
+      renderAuthGateState("pending");
+      connectSystemEvents();
+      startAuthPolling();
+    }
+
+    /* =========================================================================
+       CORE PLAYER & REMOTE STATE
+    ========================================================================= */
     let hls = null;
     let shakaPlayer = null;
     let playSessionId = 0;
@@ -1151,6 +1636,7 @@
     let zapDebounceTimer = null;
     let loadDebounce = null;
     let unmuteTimer = null;
+    let toastTimer = null;
     let wasPlayingBeforeDrawer = false;
     let drawerOpen = false;
     let isZapping = false;
@@ -1161,6 +1647,15 @@
     let isSystemStopped = false;
     let shutdownSnapshot = null;
     let eventSource = null;
+
+    function showToast(msg, ms = 1800) {
+      toastPill.textContent = msg;
+      toastPill.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        toastPill.classList.remove("show");
+      }, ms);
+    }
 
     async function applySystemStopped(stopped) {
       const next = Boolean(stopped);
@@ -1191,6 +1686,7 @@
         shutdownScreen.classList.add("show");
       } else {
         shutdownScreen.classList.remove("show");
+        if (!isDeviceApproved) return;
         const snap = shutdownSnapshot;
         shutdownSnapshot = null;
 
@@ -1207,6 +1703,129 @@
       }
     }
 
+    /* Real-Time Per-Device Remote Command Executor (From Telegram /device) */
+    async function executeRemoteCommand(cmd) {
+      if (!isDeviceApproved || isSystemStopped) return;
+
+      switch (cmd) {
+        case "live":
+          if (drawerOpen) closeDrawer(false);
+          if (!isLive) {
+            const ch = CHANNELS.find((c) => c.id === activeChannelId) || CHANNELS[0];
+            playChannel(ch, true, true);
+          } else {
+            showHud(menuBtn, 3600);
+          }
+          break;
+
+        case "yplay":
+          if (drawerOpen) closeDrawer(false);
+          await fetchYPlay(false);
+          if (yplayItems.length > 0) {
+            const targetIdx = activeYPlayIdx >= 0 && activeYPlayIdx < yplayItems.length ? activeYPlayIdx : 0;
+            loadYPlay(targetIdx, true);
+          } else {
+            openDrawer();
+            selectDrawerTab("yplay", false);
+          }
+          break;
+
+        case "menu":
+          if (drawerOpen) closeDrawer(true);
+          else openDrawer();
+          break;
+
+        case "up":
+          if (drawerOpen) {
+            dispatchVirtualNav("UP");
+          } else if (isLive) {
+            zapChannel(1);
+          } else if (!isHudVisible()) {
+            showHud(centerPlayBtn, 4200);
+          } else {
+            dispatchVirtualNav("UP");
+          }
+          break;
+
+        case "down":
+          if (drawerOpen) {
+            dispatchVirtualNav("DOWN");
+          } else if (isLive) {
+            zapChannel(-1);
+          } else if (!isHudVisible()) {
+            showHud(centerPlayBtn, 4200);
+          } else {
+            dispatchVirtualNav("DOWN");
+          }
+          break;
+
+        case "left":
+          if (!drawerOpen && !isHudVisible()) {
+            if (isLive) showHud(menuBtn, 4200);
+            else queueSeekDelta(-10);
+          } else {
+            dispatchVirtualNav("LEFT");
+          }
+          break;
+
+        case "right":
+          if (!drawerOpen && !isHudVisible()) {
+            if (isLive) showHud(menuBtn, 4200);
+            else queueSeekDelta(10);
+          } else {
+            dispatchVirtualNav("RIGHT");
+          }
+          break;
+
+        case "ok":
+          if (!drawerOpen && !isHudVisible()) {
+            if (isLive) showHud(menuBtn, 4200);
+            else toggleVodPlay();
+          } else {
+            dispatchVirtualOk();
+          }
+          break;
+
+        case "back":
+          processBackAction();
+          break;
+
+        case "seek_back":
+          if (!isLive) {
+            if (!isHudVisible()) showHud(centerPlayBtn, 3200);
+            queueSeekDelta(-10);
+          }
+          break;
+
+        case "seek_fwd":
+          if (!isLive) {
+            if (!isHudVisible()) showHud(centerPlayBtn, 3200);
+            queueSeekDelta(10);
+          }
+          break;
+
+        case "playpause":
+          if (!isLive) {
+            toggleVodPlay();
+            showHud(centerPlayBtn, 3000);
+          } else {
+            if (video.paused) safePlayVideo();
+            showHud(menuBtn, 3000);
+          }
+          break;
+
+        case "mute":
+          toggleMute();
+          showToast(userMuted ? "Muted" : "Unmuted", 1400);
+          break;
+
+        case "next":
+          if (!isLive) playNextYPlay();
+          else zapChannel(1);
+          break;
+      }
+    }
+
     function connectSystemEvents() {
       if (eventSource) {
         try { eventSource.close(); } catch (_) {}
@@ -1214,12 +1833,35 @@
       }
       if (!window.EventSource) return;
       try {
-        eventSource = new EventSource(`${DIRECT_STREAM_URL}/api/events`);
-        eventSource.onmessage = (ev) => {
+        eventSource = new EventSource(`${DIRECT_STREAM_URL}/api/events?${authQueryParams()}`);
+        eventSource.onmessage = async (ev) => {
           try {
             const msg = JSON.parse(ev.data);
-            if (msg && typeof msg.stopped === "boolean") {
-              applySystemStopped(msg.stopped);
+            if (!msg) return;
+            if (msg.type === "auth_update") {
+              if (msg.status === "approved" && msg.device_token) {
+                await handleAuthApproved(msg.device_token, Boolean(msg.stopped));
+              } else if (msg.status === "revoked" || msg.status === "rejected") {
+                await handleAuthRevoked(msg.status);
+              }
+              return;
+            }
+            if (msg.type === "system_state" || msg.type === "device_state" || msg.type === "init") {
+              if (msg.status && msg.status !== "approved") {
+                await handleAuthRevoked(msg.status);
+                return;
+              }
+              if (typeof msg.stopped === "boolean") {
+                await applySystemStopped(msg.stopped);
+              }
+              return;
+            }
+            if (msg.type === "remote_cmd" && msg.cmd) {
+              await executeRemoteCommand(msg.cmd);
+              return;
+            }
+            if (msg.type === "library_updated") {
+              await fetchYPlay(true);
             }
           } catch (_) {}
         };
@@ -1230,28 +1872,9 @@
             if (document.visibilityState === "visible") {
               resolveDirectTunnel().then(connectSystemEvents);
             }
-          }, 5000);
+          }, 4000);
         };
       } catch (_) {}
-    }
-
-    /* Safe Storage Helpers */
-    function safeGetStorage(k, fallback = "") {
-      try { return localStorage.getItem(k) ?? fallback; } catch (_) { return fallback; }
-    }
-    function safeSetStorage(k, v) {
-      try {
-        localStorage.setItem(k, v);
-      } catch (_) {
-        try {
-          const keys = Object.keys(localStorage).filter((x) => x.startsWith("yp_pos_"));
-          keys.slice(0, 15).forEach((oldK) => localStorage.removeItem(oldK));
-          localStorage.setItem(k, v);
-        } catch (__) {}
-      }
-    }
-    function safeRemoveStorage(k) {
-      try { localStorage.removeItem(k); } catch (_) {}
     }
 
     /* Persistent Focus Memory */
@@ -1275,7 +1898,7 @@
       return menuBtn;
     }
 
-    /* TV Center-Locked List Scroll (Steady 150ms 1-by-1 cadence on long press, zero flicker) */
+    /* TV Center-Locked List Scroll (Steady 150ms 1-by-1 cadence on long press) */
     let lastDrawerNavAt = 0;
 
     function centerDrawerItem(el) {
@@ -1314,11 +1937,10 @@
 
     function showExitToast() {
       exitConfirmReady = true;
-      exitToast.classList.add("show");
+      showToast("Press Back again to exit", 2200);
       clearTimeout(exitToastTimer);
       exitToastTimer = setTimeout(() => {
         exitConfirmReady = false;
-        exitToast.classList.remove("show");
       }, 2200);
     }
 
@@ -1327,7 +1949,7 @@
       if (now - lastBackTime < 160) return true;
       lastBackTime = now;
 
-      if (isSystemStopped) {
+      if (!isDeviceApproved || isSystemStopped) {
         if (!exitConfirmReady) {
           showExitToast();
           return true;
@@ -1372,9 +1994,11 @@
       }
     });
 
-    /* YouTube 2-Step Progress Scrub State */
+    /* Accelerated YouTube 2-Step Progress Scrub State */
     let isScrubbing = false;
     let scrubPreviewSec = 0;
+    let scrubHoldCount = 0;
+    let lastScrubStepAt = 0;
 
     /* Strict Double-Tap / Double-Press Seek State */
     let lastTouchTap = 0;
@@ -1417,14 +2041,14 @@
     }
 
     function showLoading(immediate = false) {
-      if (isSystemStopped) return;
+      if (isSystemStopped || !isDeviceApproved) return;
       clearTimeout(loadDebounce);
       if (immediate) {
         centerLoader.classList.add("show");
         centerPlayBtn.classList.add("loading-hide");
       } else {
         loadDebounce = setTimeout(() => {
-          if (!video.paused && !playerError.classList.contains("show") && !isSystemStopped) {
+          if (!video.paused && !playerError.classList.contains("show") && !isSystemStopped && isDeviceApproved) {
             centerLoader.classList.add("show");
             centerPlayBtn.classList.add("loading-hide");
           }
@@ -1444,7 +2068,7 @@
     }
 
     async function safePlayVideo() {
-      if (isSystemStopped) return;
+      if (isSystemStopped || !isDeviceApproved) return;
       try {
         await video.play();
       } catch (err) {
@@ -1458,7 +2082,7 @@
     }
 
     function showError(title, msg) {
-      if (isSystemStopped) return;
+      if (isSystemStopped || !isDeviceApproved) return;
       hideLoading();
       errTitle.textContent = title;
       errMsg.textContent = msg;
@@ -1469,7 +2093,7 @@
     function hideError() { playerError.classList.remove("show"); }
 
     function retryCurrentMedia() {
-      if (isSystemStopped) return;
+      if (isSystemStopped || !isDeviceApproved) return;
       hideError();
       if (isLive) {
         liveFailCount = 0;
@@ -1485,7 +2109,7 @@
     function isHudVisible() { return hud.classList.contains("visible"); }
 
     function showHud(preferredFocus = null, autoHideMs = 4200) {
-      if (drawerOpen || isSystemStopped) return;
+      if (drawerOpen || isSystemStopped || !isDeviceApproved) return;
       hud.classList.add("visible");
       const target = getBestHudFocus(preferredFocus);
       target.focus({ preventScroll: true });
@@ -1568,8 +2192,8 @@
             <div class="d-item-left">
               <div class="yp-badge">${ICONS.cinema}<span class="yp-num">#00</span></div>
               <div class="d-info">
-                <div class="d-title">YPlay Queue Empty</div>
-                <div class="d-meta">Forward a movie to your Telegram bot</div>
+                <div class="d-title">No Shared Movies</div>
+                <div class="d-meta">Share a movie to this device via Telegram</div>
               </div>
             </div>
           </div>
@@ -1620,7 +2244,7 @@
     }
 
     function openDrawer() {
-      if (drawerOpen || isSystemStopped) return;
+      if (drawerOpen || isSystemStopped || !isDeviceApproved) return;
       drawerOpen = true;
       lastHudFocusEl = menuBtn;
       exitScrubMode(false);
@@ -1657,7 +2281,7 @@
       drawerBackdrop.classList.remove("open");
       sideDrawer.classList.remove("open");
 
-      if (resumeIfNeeded && !isLive && wasPlayingBeforeDrawer && !isSystemStopped) {
+      if (resumeIfNeeded && !isLive && wasPlayingBeforeDrawer && !isSystemStopped && isDeviceApproved) {
         wasPlayingBeforeDrawer = false;
         safePlayVideo();
       }
@@ -1674,7 +2298,7 @@
     }
 
     function pickChannel(id) {
-      if (isSystemStopped) return;
+      if (isSystemStopped || !isDeviceApproved) return;
       const ch = CHANNELS.find((c) => c.id === id);
       if (!ch) return;
       wasPlayingBeforeDrawer = false;
@@ -1683,7 +2307,7 @@
     }
 
     function pickMovie(idx) {
-      if (isSystemStopped) return;
+      if (isSystemStopped || !isDeviceApproved) return;
       wasPlayingBeforeDrawer = false;
       closeDrawer(false);
       loadYPlay(idx, true);
@@ -1918,21 +2542,28 @@
       resetHudTimer();
     }
 
-    /* YouTube 2-Step Progress Bar */
+    /* Accelerated Responsive YouTube Progress Bar */
+    let scrubRafPending = false;
     function renderProgressVisual(curSec, durSec) {
-      const pct = durSec > 0 ? Math.max(0, Math.min(100, (curSec / durSec) * 100)) : 0;
-      progressFill.style.width = `${pct}%`;
-      progressThumb.style.left = `${pct}%`;
-      scrubBubble.style.left = `${pct}%`;
-      scrubBubble.textContent = fmt(curSec);
-      curTxt.textContent = fmt(curSec);
-      if (durSec > 0) durTxt.textContent = fmt(durSec);
+      if (scrubRafPending) return;
+      scrubRafPending = true;
+      requestAnimationFrame(() => {
+        scrubRafPending = false;
+        const pct = durSec > 0 ? Math.max(0, Math.min(100, (curSec / durSec) * 100)) : 0;
+        progressFill.style.width = `${pct}%`;
+        progressThumb.style.left = `${pct}%`;
+        scrubBubble.style.left = `${pct}%`;
+        scrubBubble.textContent = fmt(curSec);
+        curTxt.textContent = fmt(curSec);
+        if (durSec > 0) durTxt.textContent = fmt(durSec);
+      });
     }
 
     function enterScrubMode() {
       const dur = getEffectiveDuration();
       if (isLive || dur <= 0) return;
       isScrubbing = true;
+      scrubHoldCount = 0;
       lastHudFocusEl = progressBar;
       scrubPreviewSec = getEffectiveTime();
       progressBar.classList.add("scrubbing");
@@ -1945,6 +2576,7 @@
       if (!isScrubbing) return;
       const target = scrubPreviewSec;
       isScrubbing = false;
+      scrubHoldCount = 0;
       progressBar.classList.remove("scrubbing");
       if (commitSeek) {
         seekYPlayTo(target);
@@ -1954,16 +2586,29 @@
       resetHudTimer();
     }
 
-    function stepScrubPreview(deltaSec) {
+    function stepScrubPreview(dirSign, isRepeat) {
       const dur = getEffectiveDuration();
       if (dur <= 0) return;
-      scrubPreviewSec = Math.max(0, Math.min(dur - 1, scrubPreviewSec + deltaSec));
+      const now = Date.now();
+      if (isRepeat && now - lastScrubStepAt < 250) {
+        scrubHoldCount++;
+      } else {
+        scrubHoldCount = 0;
+      }
+      lastScrubStepAt = now;
+
+      let step = 10;
+      if (scrubHoldCount > 18) step = 60;
+      else if (scrubHoldCount > 7) step = 25;
+      else if (isRepeat) step = 15;
+
+      scrubPreviewSec = Math.max(0, Math.min(dur - 1, scrubPreviewSec + dirSign * step));
       renderProgressVisual(scrubPreviewSec, dur);
     }
 
     progressBar.addEventListener("click", (e) => {
       e.stopPropagation();
-      if (isLive) return;
+      if (isLive || !isDeviceApproved) return;
       const dur = getEffectiveDuration();
       if (dur <= 0) return;
       const rect = progressBar.getBoundingClientRect();
@@ -2003,7 +2648,7 @@
     }
 
     function queueSeekDelta(sec) {
-      if (isLive || isSystemStopped) return;
+      if (isLive || isSystemStopped || !isDeviceApproved) return;
       const dur = getEffectiveDuration();
       if (dur <= 0) return;
       pendingSeekDelta += sec;
@@ -2018,7 +2663,7 @@
     }
 
     function seekYPlayTo(targetSec) {
-      if (isLive || isSystemStopped) return;
+      if (isLive || isSystemStopped || !isDeviceApproved) return;
       const dur = getEffectiveDuration();
       const clamped = Math.max(0, dur > 1 ? Math.min(dur - 1, targetSec) : targetSec);
       renderProgressVisual(clamped, dur);
@@ -2033,7 +2678,7 @@
 
     /* Touch Tap & Double-Tap on Fullscreen Video */
     stage.addEventListener("click", (e) => {
-      if (isSystemStopped || drawerOpen || playerError.classList.contains("show")) return;
+      if (!isDeviceApproved || isSystemStopped || drawerOpen || playerError.classList.contains("show")) return;
       if (hasOpenPop()) {
         const trigger = activePopupTrigger;
         closeAllPops();
@@ -2094,12 +2739,21 @@
     }
 
     async function loadSubtitleWindow(curSec) {
-      if (vodSubIdx < 0 || activeYPlayIdx < 0 || subLoading) return;
+      if (vodSubIdx < 0 || activeYPlayIdx < 0 || subLoading || !isDeviceApproved) return;
+      const item = yplayItems[activeYPlayIdx];
+      if (!item) return;
+      const serverIdx = typeof item.index === "number" ? item.index : activeYPlayIdx;
       subLoading = true;
       const start = Math.max(0, Math.floor(curSec));
       const session = playSessionId;
       try {
-        const res = await fetch(`${DIRECT_STREAM_URL}/api/yplay/sub/${activeYPlayIdx}/${vodSubIdx}.vtt?t=${start}&dur=180`);
+        const res = await fetch(`${DIRECT_STREAM_URL}/api/yplay/sub/${serverIdx}/${vodSubIdx}.vtt?t=${start}&dur=180&${authQueryParams()}`, {
+          headers: authHeaders()
+        });
+        if (res.status === 401 || res.status === 403) {
+          await handleAuthRevoked("revoked");
+          return;
+        }
         const txt = await res.text();
         if (session === playSessionId) {
           subCues = parseVttCues(txt, start);
@@ -2129,7 +2783,7 @@
       }
     }
 
-    /* Playback Engines (Hardware-Muted Instant Cleanup + No Top-Left Android Icon) */
+    /* Playback Engines */
     async function cleanupPlayers() {
       clearTimeout(liveFailTimer);
       clearTimeout(unmuteTimer);
@@ -2181,7 +2835,7 @@
     }
 
     function startHlsUrl(url, ch, autoPlay, session) {
-      if (session !== playSessionId || isSystemStopped) return;
+      if (session !== playSessionId || isSystemStopped || !isDeviceApproved) return;
       if (hls) { hls.destroy(); hls = null; }
       if (window.Hls && window.Hls.isSupported()) {
         hls = new Hls({
@@ -2195,7 +2849,7 @@
         hls.loadSource(url);
         hls.attachMedia(video);
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          if (session !== playSessionId || activeChannelId !== ch.id || isSystemStopped) return;
+          if (session !== playSessionId || activeChannelId !== ch.id || isSystemStopped || !isDeviceApproved) return;
           hideError();
           liveAvailableHeights = Array.from(new Set((hls.levels || []).map((lv) => lv.height || 0).filter((h) => h > 0))).sort((a, b) => b - a);
           updateLiveQualUi();
@@ -2227,7 +2881,7 @@
     }
 
     async function handleLiveFallback(ch, autoPlay, session, reason = "Stream offline") {
-      if (session !== playSessionId || activeChannelId !== ch.id || !isLive || isZapping || isSystemStopped) return;
+      if (session !== playSessionId || activeChannelId !== ch.id || !isLive || isZapping || isSystemStopped || !isDeviceApproved) return;
 
       if (liveStage === 0 && video.canPlayType("application/vnd.apple.mpegurl")) {
         liveStage = 1;
@@ -2265,7 +2919,7 @@
 
     /* Fast Dish Channel Zapping (Up / Down) */
     function zapChannel(step) {
-      if (isSystemStopped) return;
+      if (isSystemStopped || !isDeviceApproved) return;
       const curIdx = CHANNELS.findIndex((c) => c.id === activeChannelId);
       const baseIdx = curIdx >= 0 ? curIdx : 0;
       const nextIdx = (baseIdx + step + CHANNELS.length) % CHANNELS.length;
@@ -2293,11 +2947,11 @@
     }
 
     async function playChannel(ch, autoPlay = true, resetFail = true) {
-      if (isSystemStopped) return;
+      if (isSystemStopped || !isDeviceApproved) return;
       const session = ++playSessionId;
       isZapping = false;
       await cleanupPlayers();
-      if (session !== playSessionId || isSystemStopped) return;
+      if (session !== playSessionId || isSystemStopped || !isDeviceApproved) return;
 
       if (resetFail) liveFailCount = 0;
       activeChannelId = ch.id;
@@ -2323,7 +2977,7 @@
       if (isDash && window.shaka && shaka.Player.isBrowserSupported()) {
         shakaPlayer = new shaka.Player();
         await shakaPlayer.attach(video);
-        if (session !== playSessionId || isSystemStopped) return;
+        if (session !== playSessionId || isSystemStopped || !isDeviceApproved) return;
 
         const cfg = {
           abr: { enabled: true },
@@ -2340,7 +2994,7 @@
         });
         try {
           await shakaPlayer.load(ch.url);
-          if (session !== playSessionId || activeChannelId !== ch.id || isSystemStopped) return;
+          if (session !== playSessionId || activeChannelId !== ch.id || isSystemStopped || !isDeviceApproved) return;
           hideError();
           liveAvailableHeights = Array.from(new Set(shakaPlayer.getVariantTracks().map((t) => t.height || 0).filter((h) => h > 0))).sort((a, b) => b - a);
           updateLiveQualUi();
@@ -2371,9 +3025,10 @@
     }
 
     function restartYPlayAt(targetSec) {
-      if (isSystemStopped) return;
+      if (isSystemStopped || !isDeviceApproved) return;
       const item = yplayItems[activeYPlayIdx];
       if (!item) return;
+      const serverIdx = typeof item.index === "number" ? item.index : activeYPlayIdx;
       playSessionId++;
       video.classList.remove("has-frame");
       video.muted = true;
@@ -2385,11 +3040,11 @@
       if (transcodeMode) {
         baseOffset = clamped;
         pendingResumeTime = 0;
-        video.src = `${DIRECT_STREAM_URL}/api/yplay/play/${activeYPlayIdx}?t=${baseOffset}&q=${vodQuality}&a=${vodAudioIdx}`;
+        video.src = `${DIRECT_STREAM_URL}/api/yplay/play/${serverIdx}?t=${baseOffset}&q=${vodQuality}&a=${vodAudioIdx}&${authQueryParams()}`;
       } else {
         baseOffset = 0;
         pendingResumeTime = clamped > 2 ? clamped : 0;
-        video.src = `${DIRECT_STREAM_URL}/api/yplay/stream/${activeYPlayIdx}`;
+        video.src = `${DIRECT_STREAM_URL}/api/yplay/stream/${serverIdx}?${authQueryParams()}`;
       }
       video.load();
       video.playbackRate = currentSpeed;
@@ -2398,11 +3053,11 @@
     }
 
     async function loadYPlay(idx, autoPlay = true, forceOffset = null) {
-      if (isSystemStopped || idx < 0 || idx >= yplayItems.length) return;
+      if (isSystemStopped || !isDeviceApproved || idx < 0 || idx >= yplayItems.length) return;
       const session = ++playSessionId;
       isZapping = false;
       await cleanupPlayers();
-      if (session !== playSessionId || isSystemStopped) return;
+      if (session !== playSessionId || isSystemStopped || !isDeviceApproved) return;
 
       activeChannelId = "";
       activeYPlayIdx = idx;
@@ -2416,6 +3071,7 @@
       lastHudFocusEl = centerPlayBtn;
 
       const item = yplayItems[idx];
+      const serverIdx = typeof item.index === "number" ? item.index : idx;
       populateYPlayTracks(item);
       configureHudMode(true);
 
@@ -2435,11 +3091,11 @@
       if (transcodeMode) {
         baseOffset = saved > 5 ? Math.floor(saved) : 0;
         pendingResumeTime = 0;
-        video.src = `${DIRECT_STREAM_URL}/api/yplay/play/${idx}?t=${baseOffset}&q=${vodQuality}&a=${vodAudioIdx}`;
+        video.src = `${DIRECT_STREAM_URL}/api/yplay/play/${serverIdx}?t=${baseOffset}&q=${vodQuality}&a=${vodAudioIdx}&${authQueryParams()}`;
       } else {
         baseOffset = 0;
         pendingResumeTime = saved > 5 ? saved : 0;
-        video.src = `${DIRECT_STREAM_URL}/api/yplay/stream/${idx}`;
+        video.src = `${DIRECT_STREAM_URL}/api/yplay/stream/${serverIdx}?${authQueryParams()}`;
       }
 
       const initDur = Number(item.duration || 0);
@@ -2451,12 +3107,12 @@
     }
 
     function playNextYPlay() {
-      if (!yplayItems.length || isSystemStopped) return;
+      if (!yplayItems.length || isSystemStopped || !isDeviceApproved) return;
       loadYPlay(activeYPlayIdx + 1 < yplayItems.length ? activeYPlayIdx + 1 : 0, true);
     }
 
     function toggleVodPlay() {
-      if (isLive || isSystemStopped) return;
+      if (isLive || isSystemStopped || !isDeviceApproved) return;
       lastHudFocusEl = centerPlayBtn;
       if (video.paused) {
         safePlayVideo();
@@ -2471,7 +3127,7 @@
       userMuted = !userMuted;
       autoMutedForBoot = false;
       video.muted = userMuted;
-      lastHudFocusEl = muteBtn;
+      if (!isLive) lastHudFocusEl = muteBtn;
       syncIcons();
       resetHudTimer();
     }
@@ -2495,7 +3151,7 @@
     });
 
     video.addEventListener("playing", () => {
-      if (isSystemStopped) {
+      if (isSystemStopped || !isDeviceApproved) {
         video.pause();
         return;
       }
@@ -2505,7 +3161,7 @@
 
       clearTimeout(unmuteTimer);
       unmuteTimer = setTimeout(() => {
-        if (!isSystemStopped && !userMuted && !autoMutedForBoot) {
+        if (!isSystemStopped && isDeviceApproved && !userMuted && !autoMutedForBoot) {
           video.muted = false;
         }
         syncIcons();
@@ -2517,7 +3173,7 @@
     });
 
     video.addEventListener("waiting", () => {
-      if (!video.paused && !isZapping && !isSystemStopped) {
+      if (!video.paused && !isZapping && !isSystemStopped && isDeviceApproved) {
         showLoading(false);
       }
     });
@@ -2525,14 +3181,14 @@
     video.addEventListener("pause", () => {
       hideLoading();
       syncIcons();
-      if (!isLive && !drawerOpen && !shuttingDown && !isSystemStopped && video.getAttribute("src")) {
+      if (!isLive && !drawerOpen && !shuttingDown && !isSystemStopped && isDeviceApproved && video.getAttribute("src")) {
         showHud(lastHudFocusEl, 6000);
         clearTimeout(hudTimer);
       }
     });
 
     video.addEventListener("error", async () => {
-      if (shuttingDown || isZapping || isSystemStopped || !video.getAttribute("src")) return;
+      if (shuttingDown || isZapping || isSystemStopped || !isDeviceApproved || !video.getAttribute("src")) return;
       if (isLive) {
         const ch = CHANNELS.find((c) => c.id === activeChannelId);
         if (ch) handleLiveFallback(ch, true, playSessionId, "Stream failed");
@@ -2548,7 +3204,7 @@
     });
 
     video.addEventListener("timeupdate", () => {
-      if (isLive || isSystemStopped) return;
+      if (isLive || isSystemStopped || !isDeviceApproved) return;
       const cur = getEffectiveTime();
       const dur = getEffectiveDuration();
 
@@ -2577,7 +3233,7 @@
       hideLoading();
       const item = yplayItems[activeYPlayIdx];
       if (item) safeRemoveStorage(`yp_pos_${item.id}`);
-      if (!isLive && !isSystemStopped && activeYPlayIdx + 1 < yplayItems.length) {
+      if (!isLive && !isSystemStopped && isDeviceApproved && activeYPlayIdx + 1 < yplayItems.length) {
         loadYPlay(activeYPlayIdx + 1, true);
       }
     });
@@ -2624,6 +3280,175 @@
         .filter((el) => el && !el.classList.contains("hidden") && el.closest(".hidden") === null);
     }
 
+    function dispatchVirtualNav(dir, isRepeat = false) {
+      const active = document.activeElement;
+      const now = Date.now();
+
+      if (drawerOpen) {
+        const pane = drawerTab === "live" ? liveListPane : yplayListPane;
+        const items = Array.from(pane.querySelectorAll(".d-item"));
+        const curIdx = items.indexOf(active);
+
+        if (active === tabLive || active === tabYPlay) {
+          if (dir === "LEFT" || dir === "RIGHT") {
+            const nextTab = active === tabLive ? "yplay" : "live";
+            selectDrawerTab(nextTab, true);
+            (nextTab === "live" ? tabLive : tabYPlay).focus({ preventScroll: true });
+          } else if (dir === "DOWN" && items.length > 0) {
+            lastDrawerNavAt = now;
+            centerDrawerItem(items[0]);
+            items[0].focus({ preventScroll: true });
+          }
+          return;
+        }
+
+        if (curIdx >= 0) {
+          if (dir === "DOWN" || dir === "UP") {
+            if (isRepeat && now - lastDrawerNavAt < 150) return;
+            lastDrawerNavAt = now;
+            if (dir === "DOWN") {
+              if (curIdx < items.length - 1) {
+                const next = items[curIdx + 1];
+                centerDrawerItem(next);
+                next.focus({ preventScroll: true });
+              }
+            } else {
+              if (curIdx === 0) {
+                drawerScroll.scrollTop = 0;
+                (drawerTab === "live" ? tabLive : tabYPlay).focus({ preventScroll: true });
+              } else {
+                const prev = items[curIdx - 1];
+                centerDrawerItem(prev);
+                prev.focus({ preventScroll: true });
+              }
+            }
+          }
+          return;
+        }
+
+        if (items.length > 0) {
+          centerDrawerItem(items[0]);
+          items[0].focus({ preventScroll: true });
+        }
+        return;
+      }
+
+      if (hasOpenPop()) {
+        const openMenu = document.querySelector(".pop-menu.open");
+        const opts = Array.from(openMenu.querySelectorAll(".pop-opt"));
+        const idx = opts.indexOf(active);
+        if (dir === "DOWN") opts[(idx + 1) % opts.length].focus({ preventScroll: true });
+        else if (dir === "UP") opts[(idx - 1 + opts.length) % opts.length].focus({ preventScroll: true });
+        return;
+      }
+
+      if (isLive) {
+        if (!isHudVisible()) {
+          showHud(lastHudFocusEl, 4200);
+          return;
+        }
+        resetHudTimer(4200);
+        const liveBtns = getVisibleRowButtons();
+        const idx = liveBtns.indexOf(active);
+        if (dir === "RIGHT") {
+          const next = idx >= 0 ? liveBtns[(idx + 1) % liveBtns.length] : liveBtns[0];
+          next.focus({ preventScroll: true });
+        } else if (dir === "LEFT") {
+          const prev = idx >= 0 ? liveBtns[(idx - 1 + liveBtns.length) % liveBtns.length] : liveBtns[0];
+          prev.focus({ preventScroll: true });
+        }
+        return;
+      }
+
+      /* YPlay HUD Navigation */
+      if (!isHudVisible()) {
+        showHud(centerPlayBtn, 4200);
+        return;
+      }
+      resetHudTimer(4200);
+      const bottomBtns = getVisibleRowButtons();
+      const bIdx = bottomBtns.indexOf(active);
+
+      if (active === progressBar) {
+        if (dir === "LEFT" || dir === "RIGHT") {
+          if (!isScrubbing) enterScrubMode();
+          stepScrubPreview(dir === "RIGHT" ? 1 : -1, isRepeat);
+        } else if (dir === "UP") {
+          exitScrubMode(false);
+          const upTarget = centerPlayBtn.classList.contains("loading-hide") ? menuBtn : centerPlayBtn;
+          upTarget.focus({ preventScroll: true });
+        } else if (dir === "DOWN") {
+          exitScrubMode(false);
+          bottomBtns[0]?.focus({ preventScroll: true });
+        }
+        return;
+      }
+
+      if (active === menuBtn) {
+        if (dir === "DOWN" || dir === "RIGHT") {
+          const downTarget = centerPlayBtn.classList.contains("loading-hide") ? progressBar : centerPlayBtn;
+          downTarget.focus({ preventScroll: true });
+        }
+        return;
+      }
+
+      if (active === centerPlayBtn) {
+        if (dir === "UP" || dir === "LEFT") menuBtn.focus({ preventScroll: true });
+        else if (dir === "DOWN" || dir === "RIGHT") progressBar.focus({ preventScroll: true });
+        return;
+      }
+
+      if (bIdx >= 0) {
+        if (dir === "RIGHT") bottomBtns[Math.min(bottomBtns.length - 1, bIdx + 1)].focus({ preventScroll: true });
+        else if (dir === "LEFT") bottomBtns[Math.max(0, bIdx - 1)].focus({ preventScroll: true });
+        else if (dir === "UP") progressBar.focus({ preventScroll: true });
+        return;
+      }
+
+      getBestHudFocus(centerPlayBtn).focus({ preventScroll: true });
+    }
+
+    function dispatchVirtualOk() {
+      const active = document.activeElement;
+      if (drawerOpen) {
+        if (active && (active.classList.contains("d-item") || active === tabLive || active === tabYPlay)) {
+          active.click();
+        }
+        return;
+      }
+      if (hasOpenPop()) {
+        if (active && active.classList.contains("pop-opt")) active.click();
+        return;
+      }
+      if (isLive) {
+        if (!isHudVisible()) {
+          showHud(lastHudFocusEl, 4200);
+          return;
+        }
+        const liveBtns = getVisibleRowButtons();
+        const targetBtn = (active && liveBtns.includes(active)) ? active : getBestHudFocus();
+        targetBtn.focus({ preventScroll: true });
+        triggerBounce(targetBtn);
+        targetBtn.click();
+        return;
+      }
+      if (!isHudVisible()) {
+        showHud(centerPlayBtn, 4200);
+        return;
+      }
+      if (active === progressBar) {
+        if (!isScrubbing) enterScrubMode();
+        else exitScrubMode(true);
+        return;
+      }
+      if (active && hud.contains(active)) {
+        triggerBounce(active);
+        active.click();
+      } else {
+        getBestHudFocus(centerPlayBtn).focus({ preventScroll: true });
+      }
+    }
+
     document.addEventListener("keydown", (e) => {
       const k = e.key;
       const dir = getDir(e);
@@ -2639,13 +3464,22 @@
         return;
       }
 
-      /* Block all media actions during System Shutdown */
+      /* 2. Strict Device Approval Gate */
+      if (!isDeviceApproved) {
+        if (ok && !authActions.classList.contains("hidden")) {
+          e.preventDefault();
+          sendReqBtn.click();
+        }
+        return;
+      }
+
+      /* 3. Block all media actions during System Shutdown */
       if (isSystemStopped) {
         e.preventDefault();
         return;
       }
 
-      /* 2. Hardware Channel / Media Keys */
+      /* 4. Hardware Channel / Media Keys */
       if ((k === "ChannelUp" || k === "PageUp") && isLive && !drawerOpen) {
         e.preventDefault();
         zapChannel(1);
@@ -2665,7 +3499,7 @@
       if (k === "MediaFastForward" && !isLive) { e.preventDefault(); queueSeekDelta(10); return; }
       if (k === "MediaRewind" && !isLive) { e.preventDefault(); queueSeekDelta(-10); return; }
 
-      /* 3. Error Overlay */
+      /* 5. Error Overlay */
       if (playerError.classList.contains("show")) {
         const retryBtn = document.getElementById("errRetryBtn");
         const eMenuBtn = document.getElementById("errMenuBtn");
@@ -2680,91 +3514,19 @@
         return;
       }
 
-      /* 4. Side Drawer Navigation (Steady 150ms 1-by-1 cadence on long press, zero flicker) */
-      if (drawerOpen) {
-        const pane = drawerTab === "live" ? liveListPane : yplayListPane;
-        const items = Array.from(pane.querySelectorAll(".d-item"));
-        const curIdx = items.indexOf(active);
-        const now = Date.now();
-
-        if (active === tabLive || active === tabYPlay) {
-          if (dir === "LEFT" || dir === "RIGHT") {
-            e.preventDefault();
-            const nextTab = active === tabLive ? "yplay" : "live";
-            selectDrawerTab(nextTab, true);
-            (nextTab === "live" ? tabLive : tabYPlay).focus({ preventScroll: true });
-          } else if (dir === "DOWN" && items.length > 0) {
-            e.preventDefault();
-            lastDrawerNavAt = now;
-            const firstItem = items[0];
-            centerDrawerItem(firstItem);
-            firstItem.focus({ preventScroll: true });
-          } else if (ok) {
-            e.preventDefault();
-            active.click();
-          }
-          return;
-        }
-
-        if (curIdx >= 0) {
-          if (dir === "DOWN" || dir === "UP") {
-            e.preventDefault();
-            if (e.repeat && now - lastDrawerNavAt < 150) return;
-            lastDrawerNavAt = now;
-
-            if (dir === "DOWN") {
-              if (curIdx < items.length - 1) {
-                const next = items[curIdx + 1];
-                centerDrawerItem(next);
-                next.focus({ preventScroll: true });
-              }
-            } else {
-              if (curIdx === 0) {
-                drawerScroll.scrollTop = 0;
-                (drawerTab === "live" ? tabLive : tabYPlay).focus({ preventScroll: true });
-              } else {
-                const prev = items[curIdx - 1];
-                centerDrawerItem(prev);
-                prev.focus({ preventScroll: true });
-              }
-            }
-          } else if (ok) {
-            e.preventDefault();
-            items[curIdx].click();
-          }
-          return;
-        }
-
+      /* 6. Side Drawer & Popups */
+      if (drawerOpen || hasOpenPop()) {
         if (dir) {
           e.preventDefault();
-          const firstItem = items[0];
-          if (firstItem) {
-            centerDrawerItem(firstItem);
-            firstItem.focus({ preventScroll: true });
-          }
+          dispatchVirtualNav(dir, e.repeat);
+        } else if (ok) {
+          e.preventDefault();
+          dispatchVirtualOk();
         }
         return;
       }
 
-      /* 5. Open Popup Submenu */
-      if (hasOpenPop()) {
-        const openMenu = document.querySelector(".pop-menu.open");
-        const opts = Array.from(openMenu.querySelectorAll(".pop-opt"));
-        const idx = opts.indexOf(active);
-        if (dir === "DOWN") {
-          e.preventDefault();
-          opts[(idx + 1) % opts.length].focus({ preventScroll: true });
-        } else if (dir === "UP") {
-          e.preventDefault();
-          opts[(idx - 1 + opts.length) % opts.length].focus({ preventScroll: true });
-        } else if (ok && idx >= 0) {
-          e.preventDefault();
-          opts[idx].click();
-        }
-        return;
-      }
-
-      /* 6. LIVE TV REMOTE RULES */
+      /* 7. LIVE TV REMOTE RULES */
       if (isLive) {
         if (dir === "UP") {
           e.preventDefault();
@@ -2777,35 +3539,15 @@
           return;
         }
         if (dir === "LEFT" || dir === "RIGHT" || ok) {
-          if (!isHudVisible()) {
-            e.preventDefault();
-            if (video.paused) safePlayVideo();
-            showHud(lastHudFocusEl, 4200);
-            return;
-          }
-          resetHudTimer(4200);
-          const liveBtns = getVisibleRowButtons();
-          const idx = liveBtns.indexOf(active);
-          if (dir === "RIGHT") {
-            e.preventDefault();
-            const next = idx >= 0 ? liveBtns[(idx + 1) % liveBtns.length] : liveBtns[0];
-            next.focus({ preventScroll: true });
-          } else if (dir === "LEFT") {
-            e.preventDefault();
-            const prev = idx >= 0 ? liveBtns[(idx - 1 + liveBtns.length) % liveBtns.length] : liveBtns[0];
-            prev.focus({ preventScroll: true });
-          } else if (ok) {
-            e.preventDefault();
-            const targetBtn = (active && liveBtns.includes(active)) ? active : getBestHudFocus();
-            targetBtn.focus({ preventScroll: true });
-            triggerBounce(targetBtn);
-            targetBtn.click();
-          }
+          e.preventDefault();
+          if (video.paused) safePlayVideo();
+          if (ok) dispatchVirtualOk();
+          else dispatchVirtualNav(dir, e.repeat);
         }
         return;
       }
 
-      /* 7. YPLAY PURE FULLSCREEN (Strict Double-Press Required) */
+      /* 8. YPLAY PURE FULLSCREEN (Strict Double-Press Required) */
       if (!isHudVisible()) {
         if (dir === "LEFT" || dir === "RIGHT") {
           e.preventDefault();
@@ -2828,97 +3570,19 @@
         return;
       }
 
-      /* 8. YPLAY HUD VISIBLE */
-      resetHudTimer(4200);
-      const bottomBtns = getVisibleRowButtons();
-      const bIdx = bottomBtns.indexOf(active);
-
-      if (active === progressBar) {
-        if (ok) {
-          e.preventDefault();
-          e.stopPropagation();
-          if (!isScrubbing) enterScrubMode();
-          else exitScrubMode(true);
-          return;
-        }
-        if (dir === "LEFT" || dir === "RIGHT") {
-          e.preventDefault();
-          e.stopPropagation();
-          if (!isScrubbing) enterScrubMode();
-          const step = e.repeat ? 30 : 10;
-          stepScrubPreview(dir === "RIGHT" ? step : -step);
-          return;
-        }
-        if (dir === "UP") {
-          e.preventDefault();
-          e.stopPropagation();
-          exitScrubMode(false);
-          const upTarget = centerPlayBtn.classList.contains("loading-hide") ? menuBtn : centerPlayBtn;
-          upTarget.focus({ preventScroll: true });
-          return;
-        }
-        if (dir === "DOWN") {
-          e.preventDefault();
-          e.stopPropagation();
-          exitScrubMode(false);
-          bottomBtns[0]?.focus({ preventScroll: true });
-          return;
-        }
-        return;
-      }
-
-      if (active === menuBtn) {
-        if (dir === "DOWN" || dir === "RIGHT") {
-          e.preventDefault();
-          const downTarget = centerPlayBtn.classList.contains("loading-hide") ? progressBar : centerPlayBtn;
-          downTarget.focus({ preventScroll: true });
-        } else if (ok) {
-          e.preventDefault();
-          triggerBounce(menuBtn);
-          menuBtn.click();
-        }
-        return;
-      }
-
-      if (active === centerPlayBtn) {
-        if (dir === "UP" || dir === "LEFT") {
-          e.preventDefault();
-          menuBtn.focus({ preventScroll: true });
-        } else if (dir === "DOWN" || dir === "RIGHT") {
-          e.preventDefault();
-          progressBar.focus({ preventScroll: true });
-        } else if (ok) {
-          e.preventDefault();
-          centerPlayBtn.click();
-        }
-        return;
-      }
-
-      if (bIdx >= 0) {
-        if (dir === "RIGHT") {
-          e.preventDefault();
-          bottomBtns[Math.min(bottomBtns.length - 1, bIdx + 1)].focus({ preventScroll: true });
-        } else if (dir === "LEFT") {
-          e.preventDefault();
-          bottomBtns[Math.max(0, bIdx - 1)].focus({ preventScroll: true });
-        } else if (dir === "UP") {
-          e.preventDefault();
-          progressBar.focus({ preventScroll: true });
-        } else if (ok) {
-          e.preventDefault();
-          triggerBounce(active);
-          active.click();
-        }
-        return;
-      }
-
-      if (dir || ok) {
+      /* 9. YPLAY HUD VISIBLE */
+      if (dir) {
         e.preventDefault();
-        getBestHudFocus(centerPlayBtn).focus({ preventScroll: true });
+        e.stopPropagation();
+        dispatchVirtualNav(dir, e.repeat);
+      } else if (ok) {
+        e.preventDefault();
+        e.stopPropagation();
+        dispatchVirtualOk();
       }
     }, true);
 
-    /* Formatting & Library Sync */
+    /* Formatting & Device-Specific Library Sync */
     function fmt(t) {
       if (!isFinite(t) || t < 0) return "00:00";
       const total = Math.floor(t);
@@ -2943,23 +3607,33 @@
     }
 
     async function fetchYPlay(refreshUi = true) {
-      if (document.visibilityState === "hidden") return;
+      if (!isDeviceApproved || document.visibilityState === "hidden") return;
       try {
         const ctrl = new AbortController();
         const tid = setTimeout(() => ctrl.abort(), 8000);
-        const res = await fetch(`${WORKER_URL}/api/yplay/library?t=${Date.now()}`, { cache: "no-store", signal: ctrl.signal });
+        const res = await fetch(`${WORKER_URL}/api/yplay/library?${authQueryParams()}&t=${Date.now()}`, {
+          cache: "no-store",
+          headers: authHeaders(),
+          signal: ctrl.signal
+        });
         clearTimeout(tid);
+        if (res.status === 401 || res.status === 403) {
+          await handleAuthRevoked("revoked");
+          return;
+        }
         const data = await res.json();
         if (data && typeof data.stopped === "boolean") {
           await applySystemStopped(data.stopped);
         }
         const nextItems = Array.isArray(data.items) ? data.items : [];
-        const sig = JSON.stringify(nextItems.map((x) => [x.id, x.quality, x.compat_audio, x.duration, (x.audio_tracks || []).length, (x.subtitles || []).length]));
+        const sig = JSON.stringify(nextItems.map((x) => [x.id, x.index, x.quality, x.compat_audio, x.duration, (x.audio_tracks || []).length, (x.subtitles || []).length]));
         if (sig !== yplaySig) {
           yplaySig = sig;
           yplayItems = nextItems;
           if (!yplayItems.length && !isLive) {
             activeYPlayIdx = -1;
+            const ch = CHANNELS.find((c) => c.id === activeChannelId) || CHANNELS[0];
+            playChannel(ch, true, true);
           }
           renderYPlayListPane();
           if (!isLive) {
@@ -2972,19 +3646,28 @@
       } catch (_) {}
     }
 
-    async function pollSystemStatus() {
+    async function pollSystemAndAuth() {
       if (document.visibilityState === "hidden") return;
+      if (!isDeviceApproved) {
+        await checkPendingApprovalStatus();
+        return;
+      }
       try {
         const ctrl = new AbortController();
         const tid = setTimeout(() => ctrl.abort(), 3500);
-        const res = await fetch(`${WORKER_URL}/health?t=${Date.now()}`, { cache: "no-store", signal: ctrl.signal });
+        const res = await fetch(`${WORKER_URL}/api/device/status?${authQueryParams()}&t=${Date.now()}`, {
+          cache: "no-store",
+          headers: authHeaders(),
+          signal: ctrl.signal
+        });
         clearTimeout(tid);
         const data = await res.json();
-        if (data && typeof data.stopped === "boolean") {
-          await applySystemStopped(data.stopped);
+        if (data.status && data.status !== "approved") {
+          await handleAuthRevoked(data.status);
+          return;
         }
-        if (data && typeof data.tunnel_url === "string" && data.tunnel_url.startsWith("https://")) {
-          DIRECT_STREAM_URL = data.tunnel_url;
+        if (typeof data.stopped === "boolean") {
+          await applySystemStopped(data.stopped);
         }
       } catch (_) {}
     }
@@ -3008,6 +3691,10 @@
       if (document.visibilityState === "visible") {
         shuttingDown = false;
         await resolveDirectTunnel();
+        if (!isDeviceApproved) {
+          await checkPendingApprovalStatus();
+          return;
+        }
         connectSystemEvents();
         if (isSystemStopped) return;
         if (!isLive && activeYPlayIdx >= 0 && !video.getAttribute("src")) {
@@ -3018,18 +3705,12 @@
       }
     });
 
-    /* Init Fullscreen TV Experience */
+    /* Boot Security Gate First — Zero Content Loads Without Telegram Approval */
     syncIcons();
     buildLiveListOnce();
     renderYPlayListPane();
-    resolveDirectTunnel().then(() => {
-      connectSystemEvents();
-      if (!isSystemStopped) {
-        playChannel(CHANNELS[0], true, true);
-        fetchYPlay(false);
-      }
-    });
-    setInterval(pollSystemStatus, 3500);
+    initDeviceSecurity();
+    setInterval(pollSystemAndAuth, 3500);
     setInterval(() => fetchYPlay(true), 15000);
   </script>
 </body>
