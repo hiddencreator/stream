@@ -38,6 +38,7 @@ HLS_DIR = Path("/dev/shm/suntv_hls")
 LIBRARY_FILE = DATA_DIR / "yplay_library.json"
 CHANNELS_FILE = DATA_DIR / "channels.json"
 OWNER_FILE = DATA_DIR / "owner.json"
+STATE_FILE = DATA_DIR / "system_state.json"
 SESSION_FILE = DATA_DIR / "ystream_bot"
 
 CHUNK_SIZE = 1024 * 1024  # 1 MiB
@@ -96,6 +97,7 @@ last_error: str = ""
 last_relay_hit: float = 0.0
 msg_cache: dict[str, Message] = {}
 prewarm_tasks: dict[str, asyncio.Task] = {}
+state_subscribers: set[asyncio.Queue] = set()
 
 
 def read_json(path: Path, default):
@@ -114,6 +116,19 @@ def write_json(path: Path, data):
 
 read_json(LIBRARY_FILE, [])
 read_json(CHANNELS_FILE, DEFAULT_CHANNELS)
+SYSTEM_STOPPED: bool = bool(read_json(STATE_FILE, {"stopped": False}).get("stopped", False))
+
+
+def set_system_stopped(stopped: bool):
+    global SYSTEM_STOPPED
+    SYSTEM_STOPPED = bool(stopped)
+    write_json(STATE_FILE, {"stopped": SYSTEM_STOPPED, "updated_at": int(time.time())})
+    payload = json.dumps({"stopped": SYSTEM_STOPPED, "ts": int(time.time())})
+    for q in list(state_subscribers):
+        try:
+            q.put_nowait(payload)
+        except Exception:
+            pass
 
 
 def get_owner_id() -> int:
@@ -614,24 +629,16 @@ async def build_status_html() -> str:
     sys = await asyncio.to_thread(get_sys_stats)
     tunnel = get_active_tunnel_url()
     owner_id = get_owner_id()
-    relay_running = ffmpeg_proc is not None and ffmpeg_proc.poll() is None
-
-    if relay_running:
-        relay_state = "Active"
-    elif last_error:
-        relay_state = last_error[:19]
-    else:
-        relay_state = "Idle (Auto)"
 
     rows = [
         ("Bot", "Connected" if tg_client.is_connected else "Offline"),
+        ("System", "SHUTDOWN" if SYSTEM_STOPPED else "ACTIVE"),
         ("Owner Lock", str(owner_id) if owner_id else "Unlocked"),
         ("Queue", f"{len(items)} movie(s)"),
         ("Cache", f"{fmt_bytes(blk_bytes)} ({blk_cnt} blk)"),
         ("RAM", f"{sys['mem_used_mb']}/{sys['mem_total_mb']} MB"),
         ("Disk", f"{sys['disk_used_gb']:.1f}/{sys['disk_total_gb']:.1f} GB"),
         ("CPU Load", f"{sys['load_1m']:.2f}"),
-        ("Sun Relay", relay_state),
         ("Tunnel", "Online" if tunnel else "Missing"),
         ("Uptime", fmt_uptime(time.time() - START_TIME)),
     ]
@@ -650,13 +657,38 @@ async def build_status_html() -> str:
     return out
 
 
-# --- Owner-Only Telegram Bot Handlers (Silent Dead Mode for Others) ---
+# --- Owner-Only Telegram Bot Handlers ---
 @tg_client.on_message(filters.private & filters.command("start"))
 async def cmd_start(_, msg: Message):
     if not authorize_user(msg.from_user, allow_claim=True):
         return
+    state_txt = "SYSTEM SHUTDOWN (send /resume to restore)" if SYSTEM_STOPPED else "ACTIVE"
     await msg.reply_text(
-        "<b>YStream Bot Ready (Owner Locked).</b>\nForward any movie to add to YPlay.\nUse /status or /clear.",
+        f"<b>YStream Bot Ready.</b>\nStatus: <code>{state_txt}</code>\nForward any movie to add to YPlay.\nCommands: /status, /shutdown, /resume, /clear",
+        parse_mode=enums.ParseMode.HTML,
+    )
+
+
+@tg_client.on_message(filters.private & filters.command("shutdown"))
+async def cmd_shutdown(_, msg: Message):
+    if not authorize_user(msg.from_user, allow_claim=False):
+        return
+    set_system_stopped(True)
+    await kill_active_play_proc()
+    stop_suntv_relay()
+    await msg.reply_text(
+        "<b>System Shutdown Activated.</b>\nAll TV & Browser screens are now blacked out with the System Shutdown alert.\nSend /resume to continue playback immediately.",
+        parse_mode=enums.ParseMode.HTML,
+    )
+
+
+@tg_client.on_message(filters.private & filters.command(["resume", "poweron"]))
+async def cmd_resume(_, msg: Message):
+    if not authorize_user(msg.from_user, allow_claim=False):
+        return
+    set_system_stopped(False)
+    await msg.reply_text(
+        "<b>System Resumed.</b>\nPlayback restored immediately on TV & Browser.",
         parse_mode=enums.ParseMode.HTML,
     )
 
@@ -716,7 +748,7 @@ async def on_callback(_, cq: CallbackQuery):
             pass
 
 
-# --- On-Demand Lightweight Sun TV Relay ---
+# --- On-Demand Lightweight Relay ---
 def stop_suntv_relay():
     global ffmpeg_proc
     if ffmpeg_proc and ffmpeg_proc.poll() is None:
@@ -746,6 +778,8 @@ def format_ffmpeg_err(raw: str) -> str:
 
 async def start_suntv_relay():
     global ffmpeg_proc, last_error, last_relay_hit
+    if SYSTEM_STOPPED:
+        return False
     last_relay_hit = time.time()
 
     channels = read_json(CHANNELS_FILE, DEFAULT_CHANNELS)
@@ -806,6 +840,8 @@ async def startup():
     try:
         await tg_client.set_bot_commands([
             BotCommand("status", "Full Diagnosis Table"),
+            BotCommand("shutdown", "System Shutdown Alert"),
+            BotCommand("resume", "Resume Playback"),
             BotCommand("clear", "Clear Queue & Cache"),
         ])
     except Exception as exc:
@@ -834,12 +870,38 @@ async def health():
     items = read_json(LIBRARY_FILE, [])
     return {
         "status": "ok",
+        "stopped": SYSTEM_STOPPED,
         "bot_connected": tg_client.is_connected,
         "yplay_count": len(items),
         "tunnel_url": get_active_tunnel_url(),
-        "suntv_active": ffmpeg_proc is not None and ffmpeg_proc.poll() is None,
-        "suntv_error": last_error,
     }
+
+
+@app.get("/api/events")
+async def api_events(request: Request):
+    q: asyncio.Queue = asyncio.Queue(maxsize=16)
+    state_subscribers.add(q)
+
+    async def event_stream():
+        try:
+            init_payload = json.dumps({"stopped": SYSTEM_STOPPED, "ts": int(time.time())})
+            yield f"data: {init_payload}\n\n"
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    msg = await asyncio.wait_for(q.get(), timeout=15.0)
+                    yield f"data: {msg}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+        finally:
+            state_subscribers.discard(q)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.get("/api/yplay/library")
@@ -863,11 +925,13 @@ async def yplay_library():
             int(row.get("height") or 0),
         )
         enriched.append(row)
-    return {"count": len(enriched), "items": enriched}
+    return {"stopped": SYSTEM_STOPPED, "count": len(enriched), "items": enriched}
 
 
 @app.api_route("/api/yplay/stream/{index}", methods=["GET", "HEAD"])
 async def yplay_stream(index: int, request: Request):
+    if SYSTEM_STOPPED:
+        raise HTTPException(status_code=503, detail="System shutdown")
     items = read_json(LIBRARY_FILE, [])
     if index < 0 or index >= len(items):
         raise HTTPException(status_code=404, detail="Movie not found in YPlay queue")
@@ -918,7 +982,7 @@ async def yplay_stream(index: int, request: Request):
     async def continuous_gen():
         pos = start_byte
         while pos <= end_byte:
-            if await request.is_disconnected():
+            if SYSTEM_STOPPED or await request.is_disconnected():
                 break
 
             b_idx = pos // CHUNK_SIZE
@@ -939,7 +1003,7 @@ async def yplay_stream(index: int, request: Request):
 
             try:
                 async for chunk in tg_client.stream_media(refresh_msg, offset=b_idx):
-                    if await request.is_disconnected():
+                    if SYSTEM_STOPPED or await request.is_disconnected():
                         return
                     buf.extend(chunk)
                     while len(buf) >= CHUNK_SIZE:
@@ -985,6 +1049,8 @@ async def yplay_stream(index: int, request: Request):
 @app.api_route("/api/yplay/compat/{index}", methods=["GET", "HEAD"])
 async def yplay_play_stream(index: int, request: Request, t: float = 0.0, q: str = "orig", a: int = 0):
     global active_play_proc
+    if SYSTEM_STOPPED:
+        raise HTTPException(status_code=503, detail="System shutdown")
     items = read_json(LIBRARY_FILE, [])
     if index < 0 or index >= len(items):
         raise HTTPException(status_code=404, detail="Movie not found")
@@ -998,12 +1064,17 @@ async def yplay_play_stream(index: int, request: Request, t: float = 0.0, q: str
     audio_idx = max(0, int(a or 0))
     q_clean = str(q or "orig").lower()
 
-    cmd = [
-        "ffmpeg", "-nostdin", "-loglevel", "error",
-        "-ss", f"{seek_sec:.2f}",
+    # 100% Lip-Sync A/V Alignment:
+    # - Start (seek_sec <= 0.1): preserve exact container PTS from byte 0.
+    # - Seek: -noaccurate_seek with -c:v copy cuts video & audio on the exact same keyframe.
+    cmd = ["ffmpeg", "-nostdin", "-loglevel", "error", "-fflags", "+genpts"]
+    if seek_sec > 0.1:
+        cmd.extend(["-noaccurate_seek", "-ss", f"{seek_sec:.2f}"])
+
+    cmd.extend([
         "-i", f"http://127.0.0.1:8000/api/yplay/stream/{index}",
         "-map", "0:v:0", "-map", f"0:a:{audio_idx}?",
-    ]
+    ])
 
     if q_clean in ("720", "480", "360"):
         h = int(q_clean)
@@ -1020,6 +1091,7 @@ async def yplay_play_stream(index: int, request: Request, t: float = 0.0, q: str
 
     cmd.extend([
         "-c:a", "aac", "-ac", "2", "-b:a", "128k",
+        "-af", "aresample=async=1:min_hard_comp=0.100000:first_pts=0",
         "-avoid_negative_ts", "make_zero",
         "-f", "mp4",
         "-movflags", "frag_keyframe+empty_moov+default_base_moof",
@@ -1037,7 +1109,7 @@ async def yplay_play_stream(index: int, request: Request, t: float = 0.0, q: str
         global active_play_proc
         try:
             while True:
-                if await request.is_disconnected():
+                if SYSTEM_STOPPED or await request.is_disconnected():
                     break
                 chunk = await proc.stdout.read(65536)
                 if not chunk:
@@ -1063,6 +1135,8 @@ async def yplay_play_stream(index: int, request: Request, t: float = 0.0, q: str
 
 @app.get("/api/yplay/sub/{index}/{sub_idx}.vtt")
 async def yplay_sub_vtt(index: int, sub_idx: int, t: float = 0.0, dur: float = 180.0):
+    if SYSTEM_STOPPED:
+        raise HTTPException(status_code=503, detail="System shutdown")
     items = read_json(LIBRARY_FILE, [])
     if index < 0 or index >= len(items):
         raise HTTPException(status_code=404, detail="Movie not found")
@@ -1095,6 +1169,8 @@ async def yplay_sub_vtt(index: int, sub_idx: int, t: float = 0.0, dur: float = 1
 
 @app.get("/live/suntv/index.m3u8")
 async def suntv_m3u8():
+    if SYSTEM_STOPPED:
+        raise HTTPException(status_code=503, detail="System shutdown")
     ok = await start_suntv_relay()
     m3u8 = HLS_DIR / "index.m3u8"
     if not ok or not m3u8.exists():
@@ -1105,6 +1181,8 @@ async def suntv_m3u8():
 @app.get("/live/suntv/{seg}")
 async def suntv_ts(seg: str):
     global last_relay_hit
+    if SYSTEM_STOPPED:
+        raise HTTPException(status_code=503, detail="System shutdown")
     last_relay_hit = time.time()
     if "/" in seg or ".." in seg or not seg.endswith(".ts"):
         raise HTTPException(status_code=400, detail="Bad segment")
