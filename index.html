@@ -113,12 +113,12 @@
       left: 50%;
       transform: translate3d(-50%, 10px, 0);
       z-index: 80;
-      background: rgba(16, 20, 28, 0.95);
-      border: 1px solid rgba(255, 255, 255, 0.22);
+      background: rgba(16, 20, 28, 0.96);
+      border: 1px solid rgba(255, 255, 255, 0.24);
       color: #fff;
       font-size: 0.84rem;
       font-weight: 700;
-      padding: 9px 18px;
+      padding: 9px 20px;
       border-radius: 99px;
       opacity: 0;
       pointer-events: none;
@@ -545,7 +545,7 @@
       color: #fff;
     }
 
-    /* Left Slide-Over Side Drawer (Zero Flicker Architecture) */
+    /* Left Slide-Over Side Drawer (TV Center-Locked Focus) */
     .drawer-backdrop {
       position: fixed;
       inset: 0;
@@ -635,12 +635,13 @@
     }
 
     .drawer-scroll {
+      position: relative;
       flex: 1;
       min-height: 0;
       overflow-y: auto;
       overscroll-behavior: contain;
       -webkit-overflow-scrolling: touch;
-      padding: 12px 14px 28px;
+      padding: 14px 14px 40px;
     }
 
     .list-pane {
@@ -649,7 +650,6 @@
       gap: 8px;
     }
 
-    /* Crisp Zero-Flicker List Item (No scale/shadow ghosting during fast scroll) */
     .d-item {
       background: var(--card);
       border: 1.5px solid transparent;
@@ -769,7 +769,7 @@
       color: #fca5a5;
     }
 
-    /* Instant Crisp Focus Styles (Zero Flicker) */
+    /* TV Focus Styles */
     .icon-btn:focus,
     .icon-btn:focus-visible,
     .icon-btn:hover,
@@ -793,8 +793,8 @@
     .d-item:focus,
     .d-item:focus-visible,
     .d-item:hover {
-      background: rgba(255, 255, 255, 0.2) !important;
-      border-color: rgba(255, 255, 255, 0.82) !important;
+      background: rgba(255, 255, 255, 0.22) !important;
+      border-color: rgba(255, 255, 255, 0.85) !important;
     }
 
     .center-play-btn:focus,
@@ -856,7 +856,7 @@
             </svg>
           </button>
           <div class="hud-meta hidden" id="hudMeta">
-            <div id="hudTitle" class="hud-title">Sun TV</div>
+            <div id="hudTitle" class="hud-title">Vijay TV</div>
             <div id="hudSub" class="hud-sub">#01 • Live</div>
           </div>
         </div>
@@ -865,7 +865,7 @@
         <div id="dishOsd" class="dish-osd">
           <div id="dishNum" class="dish-num">01</div>
           <div class="dish-info">
-            <div id="dishName" class="dish-name">Sun TV</div>
+            <div id="dishName" class="dish-name">Vijay TV</div>
             <div class="dish-live"><span class="live-dot"></span> <span>LIVE</span></div>
           </div>
         </div>
@@ -943,7 +943,7 @@
       <div class="drawer-tabs">
         <button id="tabLive" class="d-tab active" onclick="selectDrawerTab('live');">
           <span>Live TV</span>
-          <span id="liveBadge" class="d-badge">13</span>
+          <span id="liveBadge" class="d-badge">12</span>
         </button>
         <button id="tabYPlay" class="d-tab" onclick="selectDrawerTab('yplay');">
           <span>YPlay</span>
@@ -978,21 +978,20 @@
       eng: "English", en: "English", english: "English"
     };
 
-    /* Ordered Channel List: Entertainment -> Music -> News -> Infotainment (No section split headers) */
+    /* Ordered Channel List: Entertainment -> Music -> News -> Infotainment (Sun TV Removed) */
     const CHANNELS = [
-      { id: "suntv", num: "01", short: "SUN", bg: "#d92323", name: "Sun TV", type: "hls", url: "https://d2px1d6ssc60fw.cloudfront.net/SunTV/SunTV-HDR10-IN-index.m3u8", relayPath: "/live/suntv/index.m3u8", logo: "assets/suntv.webp" },
-      { id: "vijaytv", num: "02", short: "VIJAY", bg: "#c2410c", name: "Vijay TV", type: "hls", url: "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:starvijayuk.smil/playlist.m3u8", logo: "assets/vijaytv.webp" },
-      { id: "zeetamil", num: "03", short: "ZEE", bg: "#6d28d9", name: "Zee Tamil HD", type: "hls", url: "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:zeetamil1.smil/playlist.m3u8", logo: "assets/zeetamil.webp" },
-      { id: "colorstamil", num: "04", short: "COLORS", bg: "#be185d", name: "Colors Tamil HD", type: "hls", url: "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:colorstamilhd11.smil/playlist.m3u8", logo: "assets/colorstamil.webp" },
-      { id: "vijaytakkar", num: "05", short: "TAKKAR", bg: "#b91c1c", name: "Vijay Takkar", type: "dash", url: "https://tglmp01.akamaized.net/out/v1/c1071012b73f4f189b202e1529e8f802/manifest.mpd", logo: "assets/vijaytakkar.webp" },
-      { id: "vendhartv", num: "06", short: "VENDHAR", bg: "#0f766e", name: "Vendhar TV", type: "hls", url: "https://mumt04.tangotv.in/m18aqlK4VENDHARTV/index.m3u8", logo: "assets/vendhartv.webp" },
-      { id: "rajtv", num: "07", short: "RAJ", bg: "#1d4ed8", name: "Raj TV", type: "hls", url: "https://livestream.rajtv.tv/hlslive/Admin/px08241087/live/RAJTV/master_1.m3u8", logo: "assets/rajtv.webp" },
-      { id: "makkaltv", num: "08", short: "MAKKAL", bg: "#047857", name: "Makkal TV", type: "hls", url: "https://5k8q87azdy4v-hls-live.wmncdn.net/MAKKAL/271ddf829afeece44d8732757fba1a66.sdp/playlist.m3u8", logo: "assets/makkaltv.webp" },
-      { id: "7smusic", num: "09", short: "7S", bg: "#7e22ce", name: "7S Music", type: "hls", url: "https://cdn.pishow.tv/ott/live/1257/master.m3u8", logo: "assets/7smusic.webp" },
-      { id: "isaiaruvi", num: "10", short: "ISAI", bg: "#a21caf", name: "Isaiaruvi", type: "hls", url: "https://segment.yuppcdn.net/140622/isaiaruvi/playlist.m3u8", logo: "assets/isaiaruvi.webp" },
-      { id: "newstamil24", num: "11", short: "NEWS24", bg: "#dc2626", name: "News Tamil 24x7", type: "hls", url: "https://streams.tangotv.in/NEWSTAMIL24X7/ORIGIN/index.m3u8", logo: "assets/newstamil24.webp" },
-      { id: "puthiyathalaimurai", num: "12", short: "PT", bg: "#b91c1c", name: "Puthiya Thalaimurai", type: "hls", url: "https://mumt07.tangotv.in/zHjX9OFlPUTHIYAEXPRESS/index.m3u8", logo: "assets/puthiyathalaimurai.webp" },
-      { id: "discoverytamil", num: "13", short: "DISC", bg: "#0369a1", name: "Discovery Tamil", type: "dash-clearkey", url: "https://login.bheem.tv/bpk-tv/22652/output/index.mpd", kid: "c6cb0bcbeac25fb286fed851e41de38c", key: "955c54f2cac8783fafccae5e5f9cdf8d", logo: "assets/discoverytamil.webp" }
+      { id: "vijaytv", num: "01", short: "VIJAY", bg: "#c2410c", name: "Vijay TV", type: "hls", url: "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:starvijayuk.smil/playlist.m3u8", logo: "assets/vijaytv.webp" },
+      { id: "zeetamil", num: "02", short: "ZEE", bg: "#6d28d9", name: "Zee Tamil HD", type: "hls", url: "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:zeetamil1.smil/playlist.m3u8", logo: "assets/zeetamil.webp" },
+      { id: "colorstamil", num: "03", short: "COLORS", bg: "#be185d", name: "Colors Tamil HD", type: "hls", url: "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:colorstamilhd11.smil/playlist.m3u8", logo: "assets/colorstamil.webp" },
+      { id: "vijaytakkar", num: "04", short: "TAKKAR", bg: "#b91c1c", name: "Vijay Takkar", type: "dash", url: "https://tglmp01.akamaized.net/out/v1/c1071012b73f4f189b202e1529e8f802/manifest.mpd", logo: "assets/vijaytakkar.webp" },
+      { id: "vendhartv", num: "05", short: "VENDHAR", bg: "#0f766e", name: "Vendhar TV", type: "hls", url: "https://mumt04.tangotv.in/m18aqlK4VENDHARTV/index.m3u8", logo: "assets/vendhartv.webp" },
+      { id: "rajtv", num: "06", short: "RAJ", bg: "#1d4ed8", name: "Raj TV", type: "hls", url: "https://livestream.rajtv.tv/hlslive/Admin/px08241087/live/RAJTV/master_1.m3u8", logo: "assets/rajtv.webp" },
+      { id: "makkaltv", num: "07", short: "MAKKAL", bg: "#047857", name: "Makkal TV", type: "hls", url: "https://5k8q87azdy4v-hls-live.wmncdn.net/MAKKAL/271ddf829afeece44d8732757fba1a66.sdp/playlist.m3u8", logo: "assets/makkaltv.webp" },
+      { id: "7smusic", num: "08", short: "7S", bg: "#7e22ce", name: "7S Music", type: "hls", url: "https://cdn.pishow.tv/ott/live/1257/master.m3u8", logo: "assets/7smusic.webp" },
+      { id: "isaiaruvi", num: "09", short: "ISAI", bg: "#a21caf", name: "Isaiaruvi", type: "hls", url: "https://segment.yuppcdn.net/140622/isaiaruvi/playlist.m3u8", logo: "assets/isaiaruvi.webp" },
+      { id: "newstamil24", num: "10", short: "NEWS24", bg: "#dc2626", name: "News Tamil 24x7", type: "hls", url: "https://streams.tangotv.in/NEWSTAMIL24X7/ORIGIN/index.m3u8", logo: "assets/newstamil24.webp" },
+      { id: "puthiyathalaimurai", num: "11", short: "PT", bg: "#b91c1c", name: "Puthiya Thalaimurai", type: "hls", url: "https://mumt07.tangotv.in/zHjX9OFlPUTHIYAEXPRESS/index.m3u8", logo: "assets/puthiyathalaimurai.webp" },
+      { id: "discoverytamil", num: "12", short: "DISC", bg: "#0369a1", name: "Discovery Tamil", type: "dash-clearkey", url: "https://login.bheem.tv/bpk-tv/22652/output/index.mpd", kid: "c6cb0bcbeac25fb286fed851e41de38c", key: "955c54f2cac8783fafccae5e5f9cdf8d", logo: "assets/discoverytamil.webp" }
     ];
 
     const stage = document.getElementById("stage");
@@ -1045,7 +1044,8 @@
 
     let hls = null;
     let shakaPlayer = null;
-    let activeChannelId = "suntv";
+    let playSessionId = 0;
+    let activeChannelId = CHANNELS[0].id;
     let yplayItems = [];
     let yplaySig = "";
     let activeYPlayIdx = -1;
@@ -1057,6 +1057,26 @@
     let wasPlayingBeforeDrawer = false;
     let drawerOpen = false;
     let isZapping = false;
+    let autoMutedForBoot = false;
+
+    /* Safe Storage Helpers */
+    function safeGetStorage(k, fallback = "") {
+      try { return localStorage.getItem(k) ?? fallback; } catch (_) { return fallback; }
+    }
+    function safeSetStorage(k, v) {
+      try {
+        localStorage.setItem(k, v);
+      } catch (_) {
+        try {
+          const keys = Object.keys(localStorage).filter((x) => x.startsWith("yp_pos_"));
+          keys.slice(0, 15).forEach((oldK) => localStorage.removeItem(oldK));
+          localStorage.setItem(k, v);
+        } catch (__) {}
+      }
+    }
+    function safeRemoveStorage(k) {
+      try { localStorage.removeItem(k); } catch (_) {}
+    }
 
     /* Persistent Focus Memory */
     let lastHudFocusEl = menuBtn;
@@ -1078,28 +1098,43 @@
       return menuBtn;
     }
 
-    /* Instant Zero-Flicker Scroll Helper */
-    function keepItemVisible(el) {
+    /* TV Center-Locked Smooth List Scroll (Keeps focused item centered on TV screen) */
+    function centerDrawerItem(el, instant = false) {
       if (!el || !drawerScroll) return;
-      const top = el.offsetTop - drawerScroll.offsetTop;
-      const bottom = top + el.offsetHeight;
-      const viewTop = drawerScroll.scrollTop;
-      const viewBottom = viewTop + drawerScroll.clientHeight;
-      if (top < viewTop + 10) {
-        drawerScroll.scrollTop = Math.max(0, top - 10);
-      } else if (bottom > viewBottom - 10) {
-        drawerScroll.scrollTop = bottom - drawerScroll.clientHeight + 10;
-      }
+      const itemCenter = el.offsetTop + (el.offsetHeight / 2);
+      const targetTop = Math.max(0, itemCenter - (drawerScroll.clientHeight / 2));
+      drawerScroll.scrollTo({
+        top: targetTop,
+        behavior: instant ? "auto" : "smooth"
+      });
     }
 
-    /* Back-Button Trap + Double-Back to Exit */
+    /* Double-Back Exit Guard (Handles Chromium User-Activation History Rules) */
     let lastBackTime = 0;
     let exitConfirmReady = false;
     let exitToastTimer = null;
+    let historyArmed = false;
 
     function armHistoryAnchor() {
-      try { history.pushState({ ystreamAnchor: Date.now() }, ""); } catch (_) {}
+      try {
+        history.pushState({ ystreamGuard: 1 }, "");
+        history.pushState({ ystreamGuard: 2 }, "");
+        historyArmed = true;
+      } catch (_) {}
     }
+
+    function ensureHistoryOnGesture() {
+      if (!historyArmed) armHistoryAnchor();
+      if (autoMutedForBoot && video.muted) {
+        autoMutedForBoot = false;
+        video.muted = false;
+        syncIcons();
+      }
+    }
+
+    window.addEventListener("keydown", ensureHistoryOnGesture, { capture: true, passive: true });
+    window.addEventListener("pointerdown", ensureHistoryOnGesture, { capture: true, passive: true });
+    window.addEventListener("touchstart", ensureHistoryOnGesture, { capture: true, passive: true });
 
     function showExitToast() {
       exitConfirmReady = true;
@@ -1113,7 +1148,7 @@
 
     function processBackAction() {
       const now = Date.now();
-      if (now - lastBackTime < 150) return true;
+      if (now - lastBackTime < 160) return true;
       lastBackTime = now;
 
       if (isScrubbing) {
@@ -1147,7 +1182,9 @@
     armHistoryAnchor();
     window.addEventListener("popstate", () => {
       if (processBackAction()) {
-        armHistoryAnchor();
+        try { history.pushState({ ystreamGuard: Date.now() }, ""); } catch (_) {}
+      } else {
+        try { history.go(-2); } catch (_) {}
       }
     });
 
@@ -1219,6 +1256,19 @@
     function syncIcons() {
       centerPlayBtn.innerHTML = video.paused ? ICONS.play : ICONS.pause;
       muteBtn.innerHTML = video.muted ? ICONS.volOff : ICONS.volOn;
+    }
+
+    async function safePlayVideo() {
+      try {
+        await video.play();
+      } catch (err) {
+        if (err && err.name === "NotAllowedError" && !video.muted) {
+          autoMutedForBoot = true;
+          video.muted = true;
+          syncIcons();
+          video.play().catch(() => {});
+        }
+      }
     }
 
     function showError(title, msg) {
@@ -1405,7 +1455,7 @@
         const pane = drawerTab === "live" ? liveListPane : yplayListPane;
         const activeItem = pane.querySelector(".d-item.active") || pane.querySelector(".d-item");
         if (activeItem) {
-          keepItemVisible(activeItem);
+          centerDrawerItem(activeItem, true);
           activeItem.focus({ preventScroll: true });
         } else {
           (drawerTab === "live" ? tabLive : tabYPlay).focus({ preventScroll: true });
@@ -1421,7 +1471,7 @@
 
       if (resumeIfNeeded && !isLive && wasPlayingBeforeDrawer) {
         wasPlayingBeforeDrawer = false;
-        video.play().catch(() => {});
+        safePlayVideo();
       }
     }
 
@@ -1802,7 +1852,7 @@
       }
 
       if (isLive) {
-        if (video.paused) video.play().catch(() => {});
+        if (video.paused) safePlayVideo();
         if (isHudVisible()) hideHud();
         else showHud(lastHudFocusEl, 4200);
         return;
@@ -1857,11 +1907,14 @@
       if (vodSubIdx < 0 || activeYPlayIdx < 0 || subLoading) return;
       subLoading = true;
       const start = Math.max(0, Math.floor(curSec));
+      const session = playSessionId;
       try {
         const res = await fetch(`${DIRECT_STREAM_URL}/api/yplay/sub/${activeYPlayIdx}/${vodSubIdx}.vtt?t=${start}&dur=180`);
         const txt = await res.text();
-        subCues = parseVttCues(txt, start);
-        subFetchStart = start;
+        if (session === playSessionId) {
+          subCues = parseVttCues(txt, start);
+          subFetchStart = start;
+        }
       } catch (_) {
         subCues = [];
       } finally {
@@ -1886,7 +1939,7 @@
       }
     }
 
-    /* Playback Engines */
+    /* Playback Engines with Session Race-Condition Guard */
     async function cleanupPlayers() {
       clearTimeout(liveFailTimer);
       hideError();
@@ -1901,7 +1954,10 @@
 
     async function resolveDirectTunnel() {
       try {
-        const res = await fetch(`${WORKER_URL}/health?t=${Date.now()}`, { cache: "no-store" });
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 5000);
+        const res = await fetch(`${WORKER_URL}/health?t=${Date.now()}`, { cache: "no-store", signal: ctrl.signal });
+        clearTimeout(tid);
         const data = await res.json();
         if (data && typeof data.tunnel_url === "string" && data.tunnel_url.startsWith("https://")) {
           DIRECT_STREAM_URL = data.tunnel_url;
@@ -1921,14 +1977,15 @@
       return out;
     }
 
-    function startHlsUrl(url, ch, autoPlay, isRelay = false) {
+    function startHlsUrl(url, ch, autoPlay, session) {
+      if (session !== playSessionId) return;
       if (hls) { hls.destroy(); hls = null; }
       if (window.Hls && window.Hls.isSupported()) {
         hls = new Hls({ enableWorker: true, lowLatencyMode: false, maxBufferLength: 14, backBufferLength: 8 });
         hls.loadSource(url);
         hls.attachMedia(video);
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          if (activeChannelId !== ch.id) return;
+          if (session !== playSessionId || activeChannelId !== ch.id) return;
           hideError();
           liveAvailableHeights = Array.from(new Set((hls.levels || []).map((lv) => lv.height || 0).filter((h) => h > 0))).sort((a, b) => b - a);
           updateLiveQualUi();
@@ -1942,11 +1999,11 @@
             hls.audioTrack = Number(tam.id);
           }
           updateLiveAudioUi();
-          if (autoPlay) video.play().catch(() => {});
+          if (autoPlay) safePlayVideo();
         });
         hls.on(Hls.Events.ERROR, (_, data) => {
-          if (!data.fatal || activeChannelId !== ch.id) return;
-          handleLiveFallback(ch, autoPlay, data.details || "Network error");
+          if (!data.fatal || session !== playSessionId || activeChannelId !== ch.id) return;
+          handleLiveFallback(ch, autoPlay, session, data.details || "Network error");
         });
       } else {
         liveAvailableHeights = [];
@@ -1955,29 +2012,24 @@
         updateLiveAudioUi();
         video.src = url;
         video.load();
-        if (autoPlay) video.play().catch(() => {});
+        if (autoPlay) safePlayVideo();
       }
     }
 
-    async function handleLiveFallback(ch, autoPlay, reason = "Stream offline") {
-      if (activeChannelId !== ch.id || !isLive || isZapping) return;
+    async function handleLiveFallback(ch, autoPlay, session, reason = "Stream offline") {
+      if (session !== playSessionId || activeChannelId !== ch.id || !isLive || isZapping) return;
 
       if (liveStage === 0 && video.canPlayType("application/vnd.apple.mpegurl")) {
         liveStage = 1;
         await cleanupPlayers();
+        if (session !== playSessionId) return;
         liveAvailableHeights = [];
         liveAudioOptions = [];
         updateLiveQualUi();
         updateLiveAudioUi();
         video.src = ch.url;
         video.load();
-        if (autoPlay) video.play().catch(() => {});
-        return;
-      }
-      if (liveStage < 2 && ch.relayPath) {
-        liveStage = 2;
-        await resolveDirectTunnel();
-        startHlsUrl(`${DIRECT_STREAM_URL}${ch.relayPath}`, ch, autoPlay, true);
+        if (autoPlay) safePlayVideo();
         return;
       }
 
@@ -1991,7 +2043,9 @@
         showLoading(true);
         clearTimeout(liveFailTimer);
         liveFailTimer = setTimeout(() => {
-          if (isLive && activeChannelId === ch.id) playChannel(nextCh, true, false);
+          if (session === playSessionId && isLive && activeChannelId === ch.id) {
+            playChannel(nextCh, true, false);
+          }
         }, 650);
         return;
       }
@@ -2006,6 +2060,7 @@
       const nextIdx = (baseIdx + step + CHANNELS.length) % CHANNELS.length;
       const nextCh = CHANNELS[nextIdx];
 
+      playSessionId++;
       isZapping = true;
       activeChannelId = nextCh.id;
       dishNum.textContent = nextCh.num;
@@ -2027,8 +2082,11 @@
     }
 
     async function playChannel(ch, autoPlay = true, resetFail = true) {
+      const session = ++playSessionId;
       isZapping = false;
       await cleanupPlayers();
+      if (session !== playSessionId) return;
+
       if (resetFail) liveFailCount = 0;
       activeChannelId = ch.id;
       activeYPlayIdx = -1;
@@ -2053,6 +2111,8 @@
       if (isDash && window.shaka && shaka.Player.isBrowserSupported()) {
         shakaPlayer = new shaka.Player();
         await shakaPlayer.attach(video);
+        if (session !== playSessionId) return;
+
         const cfg = {
           abr: { enabled: true },
           streaming: { bufferingGoal: 10, rebufferingGoal: 2 }
@@ -2062,13 +2122,13 @@
         }
         shakaPlayer.configure(cfg);
         shakaPlayer.addEventListener("error", (ev) => {
-          if (activeChannelId === ch.id) {
-            handleLiveFallback(ch, autoPlay, `Code ${ev && ev.detail ? ev.detail.code : "Network"}`);
+          if (session === playSessionId && activeChannelId === ch.id) {
+            handleLiveFallback(ch, autoPlay, session, `Code ${ev && ev.detail ? ev.detail.code : "Network"}`);
           }
         });
         try {
           await shakaPlayer.load(ch.url);
-          if (activeChannelId !== ch.id) return;
+          if (session !== playSessionId || activeChannelId !== ch.id) return;
           hideError();
           liveAvailableHeights = Array.from(new Set(shakaPlayer.getVariantTracks().map((t) => t.height || 0).filter((h) => h > 0))).sort((a, b) => b - a);
           updateLiveQualUi();
@@ -2081,24 +2141,27 @@
             shakaPlayer.selectAudioLanguage(String(tam.id));
           }
           updateLiveAudioUi();
-          if (autoPlay) video.play().catch(() => {});
+          if (autoPlay) safePlayVideo();
         } catch (_) {
-          if (activeChannelId === ch.id) handleLiveFallback(ch, autoPlay, "Stream offline");
+          if (session === playSessionId && activeChannelId === ch.id) {
+            handleLiveFallback(ch, autoPlay, session, "Stream offline");
+          }
         }
         return;
       }
 
-      if (ch.url.includes(".m3u8")) startHlsUrl(ch.url, ch, autoPlay, false);
+      if (ch.url.includes(".m3u8")) startHlsUrl(ch.url, ch, autoPlay, session);
       else {
         video.src = ch.url;
         video.load();
-        if (autoPlay) video.play().catch(() => {});
+        if (autoPlay) safePlayVideo();
       }
     }
 
     function restartYPlayAt(targetSec) {
       const item = yplayItems[activeYPlayIdx];
       if (!item) return;
+      playSessionId++;
       const clamped = Math.max(0, Math.floor(targetSec));
       const needsTranscode = Boolean(item.compat_audio) || vodQuality !== "orig" || vodAudioIdx !== 0;
       transcodeMode = needsTranscode;
@@ -2115,14 +2178,17 @@
       }
       video.load();
       video.playbackRate = currentSpeed;
-      video.play().catch(() => hideLoading());
+      safePlayVideo();
       if (vodSubIdx >= 0) loadSubtitleWindow(clamped);
     }
 
     async function loadYPlay(idx, autoPlay = true, forceOffset = null) {
       if (idx < 0 || idx >= yplayItems.length) return;
+      const session = ++playSessionId;
       isZapping = false;
       await cleanupPlayers();
+      if (session !== playSessionId) return;
+
       activeChannelId = "";
       activeYPlayIdx = idx;
       errorRetries = 0;
@@ -2149,7 +2215,7 @@
 
       const saved = forceOffset !== null
         ? forceOffset
-        : Number(localStorage.getItem(`yp_pos_${item.id}`) || "0");
+        : Number(safeGetStorage(`yp_pos_${item.id}`, "0"));
 
       if (transcodeMode) {
         baseOffset = saved > 5 ? Math.floor(saved) : 0;
@@ -2166,7 +2232,7 @@
 
       video.load();
       video.playbackRate = currentSpeed;
-      if (autoPlay) video.play().catch(() => hideLoading());
+      if (autoPlay) safePlayVideo();
     }
 
     function playNextYPlay() {
@@ -2178,7 +2244,7 @@
       if (isLive) return;
       lastHudFocusEl = centerPlayBtn;
       if (video.paused) {
-        video.play().catch(() => {});
+        safePlayVideo();
         resetHudTimer(2200);
       } else {
         video.pause();
@@ -2188,6 +2254,7 @@
 
     function toggleMute() {
       video.muted = !video.muted;
+      autoMutedForBoot = false;
       lastHudFocusEl = muteBtn;
       syncIcons();
       resetHudTimer();
@@ -2234,7 +2301,7 @@
       if (shuttingDown || isZapping || !video.getAttribute("src")) return;
       if (isLive) {
         const ch = CHANNELS.find((c) => c.id === activeChannelId);
-        if (ch) handleLiveFallback(ch, true, "Stream failed");
+        if (ch) handleLiveFallback(ch, true, playSessionId, "Stream failed");
         return;
       }
       if (!isLive && activeYPlayIdx >= 0 && errorRetries < 2) {
@@ -2268,14 +2335,14 @@
       const item = yplayItems[activeYPlayIdx];
       if (item && cur > 2 && now - lastSavedPosTime > 2500) {
         lastSavedPosTime = now;
-        localStorage.setItem(`yp_pos_${item.id}`, String(Math.floor(cur)));
+        safeSetStorage(`yp_pos_${item.id}`, String(Math.floor(cur)));
       }
     });
 
     video.addEventListener("ended", () => {
       hideLoading();
       const item = yplayItems[activeYPlayIdx];
-      if (item) localStorage.removeItem(`yp_pos_${item.id}`);
+      if (item) safeRemoveStorage(`yp_pos_${item.id}`);
       if (!isLive && activeYPlayIdx + 1 < yplayItems.length) loadYPlay(activeYPlayIdx + 1, true);
     });
 
@@ -2327,7 +2394,7 @@
       const ok = isOkKey(e);
       const active = document.activeElement;
 
-      /* 1. Back Button */
+      /* 1. Back Button (1st Back closes option/HUD or shows exit toast; 2nd Back exits) */
       if (isBackKey(e)) {
         if (processBackAction()) {
           e.preventDefault();
@@ -2371,7 +2438,7 @@
         return;
       }
 
-      /* 4. Side Drawer Navigation (Instant Zero-Flicker Scroll) */
+      /* 4. Side Drawer Navigation (TV Center-Locked Focus) */
       if (drawerOpen) {
         const pane = drawerTab === "live" ? liveListPane : yplayListPane;
         const items = Array.from(pane.querySelectorAll(".d-item"));
@@ -2386,7 +2453,7 @@
           } else if (dir === "DOWN" && items.length > 0) {
             e.preventDefault();
             const activeItem = pane.querySelector(".d-item.active") || items[0];
-            keepItemVisible(activeItem);
+            centerDrawerItem(activeItem, false);
             activeItem.focus({ preventScroll: true });
           } else if (ok) {
             e.preventDefault();
@@ -2399,15 +2466,16 @@
           if (dir === "DOWN") {
             e.preventDefault();
             const next = items[Math.min(items.length - 1, curIdx + 1)];
-            keepItemVisible(next);
+            centerDrawerItem(next, false);
             next.focus({ preventScroll: true });
           } else if (dir === "UP") {
             e.preventDefault();
             if (curIdx === 0) {
+              drawerScroll.scrollTo({ top: 0, behavior: "smooth" });
               (drawerTab === "live" ? tabLive : tabYPlay).focus({ preventScroll: true });
             } else {
               const prev = items[curIdx - 1];
-              keepItemVisible(prev);
+              centerDrawerItem(prev, false);
               prev.focus({ preventScroll: true });
             }
           } else if (ok) {
@@ -2421,7 +2489,7 @@
           e.preventDefault();
           const activeItem = pane.querySelector(".d-item.active") || items[0];
           if (activeItem) {
-            keepItemVisible(activeItem);
+            centerDrawerItem(activeItem, false);
             activeItem.focus({ preventScroll: true });
           }
         }
@@ -2461,7 +2529,7 @@
         if (dir === "LEFT" || dir === "RIGHT" || ok) {
           if (!isHudVisible()) {
             e.preventDefault();
-            if (video.paused) video.play().catch(() => {});
+            if (video.paused) safePlayVideo();
             showHud(lastHudFocusEl, 4200);
             return;
           }
@@ -2627,13 +2695,19 @@
     async function fetchYPlay(refreshUi = true) {
       if (document.visibilityState === "hidden") return;
       try {
-        const res = await fetch(`${WORKER_URL}/api/yplay/library?t=${Date.now()}`, { cache: "no-store" });
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 8000);
+        const res = await fetch(`${WORKER_URL}/api/yplay/library?t=${Date.now()}`, { cache: "no-store", signal: ctrl.signal });
+        clearTimeout(tid);
         const data = await res.json();
         const nextItems = Array.isArray(data.items) ? data.items : [];
         const sig = JSON.stringify(nextItems.map((x) => [x.id, x.quality, x.compat_audio, x.duration, (x.audio_tracks || []).length, (x.subtitles || []).length]));
         if (sig !== yplaySig) {
           yplaySig = sig;
           yplayItems = nextItems;
+          if (!yplayItems.length && !isLive) {
+            activeYPlayIdx = -1;
+          }
           renderYPlayListPane();
           if (!isLive) {
             nextBtn.classList.toggle("hidden", yplayItems.length <= 1);
@@ -2653,7 +2727,7 @@
       shuttingDown = true;
       if (!isLive && yplayItems[activeYPlayIdx]) {
         const cur = getEffectiveTime();
-        if (cur > 2) localStorage.setItem(`yp_pos_${yplayItems[activeYPlayIdx].id}`, String(Math.floor(cur)));
+        if (cur > 2) safeSetStorage(`yp_pos_${yplayItems[activeYPlayIdx].id}`, String(Math.floor(cur)));
       }
       video.pause();
       video.removeAttribute("src");
@@ -2667,7 +2741,7 @@
           await resolveDirectTunnel();
           loadYPlay(activeYPlayIdx, false);
         } else if (isLive && video.paused && !drawerOpen) {
-          video.play().catch(() => {});
+          safePlayVideo();
         }
       }
     });
