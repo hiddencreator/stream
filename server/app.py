@@ -95,7 +95,9 @@ tg_client = Client(
 )
 
 ffmpeg_proc: Optional[subprocess.Popen] = None
-active_play_proc: Optional[asyncio.subprocess.Process] = None
+# Per-device active FFmpeg transcode & subtitle processes so devices never kill each other's streams
+active_play_procs: dict[str, asyncio.subprocess.Process] = {}
+active_sub_procs: dict[str, asyncio.subprocess.Process] = {}
 last_error: str = ""
 last_relay_hit: float = 0.0
 msg_cache: dict[str, Message] = {}
@@ -245,7 +247,11 @@ def require_approved_device(request: Request, did: str = "", dtok: str = "", che
 
     now = time.time()
     dev["last_active"] = int(now)
-    if now - last_device_disk_sync.get(dev_id, 0.0) > 20.0:
+    if not dev.get("token_claimed", False):
+        dev["token_claimed"] = True
+        last_device_disk_sync[dev_id] = now
+        save_devices_store()
+    elif now - last_device_disk_sync.get(dev_id, 0.0) > 20.0:
         last_device_disk_sync[dev_id] = now
         save_devices_store()
 
@@ -611,10 +617,7 @@ def update_library_probe(item_id: str, info: dict):
         write_json(LIBRARY_FILE, items)
 
 
-async def kill_active_play_proc():
-    global active_play_proc
-    proc = active_play_proc
-    active_play_proc = None
+async def kill_proc_obj(proc: Optional[asyncio.subprocess.Process]):
     if proc and proc.returncode is None:
         try:
             proc.kill()
@@ -623,8 +626,25 @@ async def kill_active_play_proc():
             pass
 
 
+async def kill_device_play_proc(device_id: str):
+    proc = active_play_procs.pop(device_id, None)
+    await kill_proc_obj(proc)
+
+
+async def kill_device_sub_proc(device_id: str):
+    proc = active_sub_procs.pop(device_id, None)
+    await kill_proc_obj(proc)
+
+
+async def kill_all_play_procs():
+    for did in list(active_play_procs.keys()):
+        await kill_device_play_proc(did)
+    for did in list(active_sub_procs.keys()):
+        await kill_device_sub_proc(did)
+
+
 async def clear_queue_and_cache():
-    await kill_active_play_proc()
+    await kill_all_play_procs()
     for task in list(prewarm_tasks.values()):
         task.cancel()
     prewarm_tasks.clear()
@@ -955,7 +975,7 @@ async def cmd_shutdown(_, msg: Message):
     if not authorize_user(msg.from_user, allow_claim=False):
         return
     set_system_stopped(True)
-    await kill_active_play_proc()
+    await kill_all_play_procs()
     stop_suntv_relay()
     await msg.reply_text(
         "<b>Global System Shutdown Activated.</b>\nAll devices are locked with the System Shutdown screen.\nSend /resume to restore.",
@@ -1147,7 +1167,9 @@ async def on_callback(_, cq: CallbackQuery):
             dev["stopped"] = False
             save_devices_store()
 
-            # Remove device from allowed_devices on all library items
+            await kill_device_play_proc(did)
+            await kill_device_sub_proc(did)
+
             items = read_json(LIBRARY_FILE, [])
             changed = False
             for row in items:
@@ -1178,7 +1200,8 @@ async def on_callback(_, cq: CallbackQuery):
             if action == "shutdown":
                 dev["stopped"] = True
                 save_devices_store()
-                await kill_active_play_proc()
+                await kill_device_play_proc(did)
+                await kill_device_sub_proc(did)
                 push_to_device(did, {"type": "device_state", "stopped": True, "ts": int(time.time())})
                 await cq.answer("🛑 Device Shutdown Activated")
                 txt, kb = build_device_remote_view(did)
@@ -1234,7 +1257,7 @@ async def on_callback(_, cq: CallbackQuery):
 
             item = entry["item"]
             pending_shares.pop(share_id, None)
-            added, _ = save_media_for_devices(item, selected_ids)
+            save_media_for_devices(item, selected_ids)
             for target_did in selected_ids:
                 push_to_device(target_did, {"type": "library_updated"})
 
@@ -1367,7 +1390,7 @@ async def startup():
 
 @app.on_event("shutdown")
 async def shutdown():
-    await kill_active_play_proc()
+    await kill_all_play_procs()
     for t in list(prewarm_tasks.values()):
         t.cancel()
     stop_suntv_relay()
@@ -1404,6 +1427,8 @@ async def device_register(request: Request):
         if status == "approved":
             stored_tok = str(dev.get("device_token") or "")
             if stored_tok and dtok and secrets.compare_digest(stored_tok, dtok):
+                if not dev.get("token_claimed", False):
+                    dev["token_claimed"] = True
                 save_devices_store()
                 return {
                     "status": "approved",
@@ -1411,7 +1436,16 @@ async def device_register(request: Request):
                     "device_token": stored_tok,
                     "stopped": SYSTEM_STOPPED or bool(dev.get("stopped", False)),
                 }
-            # Token missing/mismatched: require re-approval to prevent spoofing
+            # Allow one-time claim if device hasn't confirmed receipt yet
+            if stored_tok and not dev.get("token_claimed", False):
+                save_devices_store()
+                return {
+                    "status": "approved",
+                    "device_id": did,
+                    "device_token": stored_tok,
+                    "stopped": SYSTEM_STOPPED or bool(dev.get("stopped", False)),
+                }
+            # Token claimed previously but missing/mismatched now: require re-approval
             dev["status"] = "pending"
             dev["device_token"] = ""
             dev["token_claimed"] = False
@@ -1430,7 +1464,6 @@ async def device_register(request: Request):
             save_devices_store()
             return {"status": status, "device_id": did}
 
-        # Currently pending
         last_notified = int(dev.get("last_notified_at") or 0)
         if force_request or (now - last_notified) > 30:
             await send_device_approval_alert(dev, is_reaccess=force_request)
@@ -1438,7 +1471,6 @@ async def device_register(request: Request):
             save_devices_store()
         return {"status": "pending", "device_id": did}
 
-    # Brand new device
     new_dev = {
         "device_id": did,
         "device_token": "",
@@ -1470,15 +1502,16 @@ async def device_status(request: Request, did: str = "", dtok: str = ""):
     if status == "approved":
         stored_tok = str(dev.get("device_token") or "")
         if stored_tok and dev_tok and secrets.compare_digest(stored_tok, dev_tok):
+            if not dev.get("token_claimed", False):
+                dev["token_claimed"] = True
+                save_devices_store()
             return {
                 "status": "approved",
                 "device_id": dev_id,
                 "stopped": SYSTEM_STOPPED or bool(dev.get("stopped", False)),
             }
-        # One-time token handoff right after Telegram approval
+        # Hand off token until client proves receipt by sending dtok back
         if stored_tok and not dev.get("token_claimed", False):
-            dev["token_claimed"] = True
-            save_devices_store()
             return {
                 "status": "approved",
                 "device_id": dev_id,
@@ -1742,15 +1775,15 @@ async def yplay_play_stream(
     did: str = "",
     dtok: str = "",
 ):
-    global active_play_proc
     dev = require_approved_device(request, did, dtok, check_stopped=True)
+    dev_id = dev["device_id"]
     items = read_json(LIBRARY_FILE, [])
-    get_authorized_item(items, index, dev["device_id"])
+    get_authorized_item(items, index, dev_id)
 
     if request.method == "HEAD":
         return Response(status_code=200, headers={"Content-Type": "video/mp4", "Cache-Control": "no-store"})
 
-    await kill_active_play_proc()
+    await kill_device_play_proc(dev_id)
 
     seek_sec = max(0.0, float(t or 0.0))
     audio_idx = max(0, int(a or 0))
@@ -1795,29 +1828,26 @@ async def yplay_play_stream(
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.DEVNULL,
     )
-    active_play_proc = proc
+    active_play_procs[dev_id] = proc
 
     async def remux_gen():
-        global active_play_proc
         try:
             while True:
                 if SYSTEM_STOPPED or dev.get("status") != "approved" or dev.get("stopped"):
                     break
                 if await request.is_disconnected():
                     break
-                chunk = await proc.stdout.read(65536)
+                try:
+                    chunk = await asyncio.wait_for(proc.stdout.read(65536), timeout=25.0)
+                except asyncio.TimeoutError:
+                    break
                 if not chunk:
                     break
                 yield chunk
         finally:
-            if proc.returncode is None:
-                try:
-                    proc.kill()
-                    await proc.wait()
-                except Exception:
-                    pass
-            if active_play_proc is proc:
-                active_play_proc = None
+            await kill_proc_obj(proc)
+            if active_play_procs.get(dev_id) is proc:
+                active_play_procs.pop(dev_id, None)
 
     return StreamingResponse(
         remux_gen(),
@@ -1838,8 +1868,11 @@ async def yplay_sub_vtt(
     dtok: str = "",
 ):
     dev = require_approved_device(request, did, dtok, check_stopped=True)
+    dev_id = dev["device_id"]
     items = read_json(LIBRARY_FILE, [])
-    get_authorized_item(items, index, dev["device_id"])
+    get_authorized_item(items, index, dev_id)
+
+    await kill_device_sub_proc(dev_id)
 
     start_sec = max(0.0, float(t or 0.0))
     win_sec = min(240.0, max(30.0, float(dur or 180.0)))
@@ -1853,16 +1886,22 @@ async def yplay_sub_vtt(
         "-f", "webvtt",
         "pipe:1",
     ]
+    proc = None
     try:
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
         )
+        active_sub_procs[dev_id] = proc
         out, _ = await asyncio.wait_for(proc.communicate(), timeout=15)
         vtt = out.decode("utf-8", errors="ignore") if out else "WEBVTT\n\n"
     except Exception:
+        await kill_proc_obj(proc)
         vtt = "WEBVTT\n\n"
+    finally:
+        if active_sub_procs.get(dev_id) is proc:
+            active_sub_procs.pop(dev_id, None)
 
     return Response(content=vtt, media_type="text/vtt", headers={"Cache-Control": "no-store"})
 
