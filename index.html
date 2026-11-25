@@ -9,13 +9,13 @@
   <script src="https://cdn.jsdelivr.net/npm/shaka-player@4.11.12/dist/shaka-player.compiled.js"></script>
   <style>
     :root {
-      --drawer-bg: rgba(11, 14, 21, 0.96);
-      --card: rgba(255, 255, 255, 0.055);
-      --active-bg: rgba(255, 255, 255, 0.14);
+      --drawer-bg: rgba(11, 14, 21, 0.97);
+      --card: rgba(255, 255, 255, 0.05);
+      --active-bg: rgba(255, 255, 255, 0.13);
       --accent: #e50914;
       --text: #f8fafc;
       --muted: #94a3b8;
-      --border: rgba(255, 255, 255, 0.12);
+      --border: rgba(255, 255, 255, 0.11);
     }
 
     *, *::before, *::after {
@@ -69,7 +69,7 @@
       border: 0 !important;
     }
 
-    /* Center Loader Ring (Replaces Play/Pause in-place while video stays visible in background) */
+    /* Center Loader Ring */
     .center-loader {
       position: absolute;
       top: 50%;
@@ -85,7 +85,7 @@
       z-index: 19;
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.16s ease;
+      transition: opacity 0.14s ease;
     }
 
     .center-loader.show {
@@ -113,17 +113,16 @@
       left: 50%;
       transform: translate3d(-50%, 10px, 0);
       z-index: 80;
-      background: rgba(16, 20, 28, 0.94);
+      background: rgba(16, 20, 28, 0.95);
       border: 1px solid rgba(255, 255, 255, 0.22);
       color: #fff;
       font-size: 0.84rem;
       font-weight: 700;
       padding: 9px 18px;
       border-radius: 99px;
-      box-shadow: 0 10px 26px rgba(0, 0, 0, 0.7);
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.16s ease, transform 0.16s ease;
+      transition: opacity 0.15s ease, transform 0.15s ease;
     }
 
     .exit-toast.show {
@@ -152,7 +151,6 @@
       line-height: 1.38;
       padding: 5px 14px;
       border-radius: 8px;
-      text-shadow: 0 1px 4px rgba(0,0,0,0.95);
       white-space: pre-line;
     }
 
@@ -171,7 +169,7 @@
       z-index: 18;
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.16s ease;
+      transition: opacity 0.14s ease;
     }
     .seek-flash.left { left: 12%; }
     .seek-flash.right { right: 12%; }
@@ -189,7 +187,7 @@
       padding: 20px;
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.18s ease;
+      transition: opacity 0.16s ease;
     }
     .player-error.show { opacity: 1; pointer-events: auto; }
     .err-card {
@@ -233,8 +231,7 @@
       padding: clamp(16px, 2.8vw, 28px);
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.18s ease;
-      will-change: opacity;
+      transition: opacity 0.16s ease;
     }
 
     .hud.visible {
@@ -262,7 +259,7 @@
       width: 44px;
       height: 44px;
       border-radius: 50%;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.07) 100%);
+      background: rgba(255, 255, 255, 0.13);
       color: #fff;
       border: 1.5px solid rgba(255, 255, 255, 0.16);
       display: inline-flex;
@@ -270,7 +267,6 @@
       justify-content: center;
       cursor: pointer;
       flex-shrink: 0;
-      transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
     }
 
     .hud-meta { min-width: 0; }
@@ -295,9 +291,8 @@
       display: flex;
       align-items: center;
       gap: 14px;
-      background: linear-gradient(180deg, rgba(22, 26, 36, 0.94) 0%, rgba(10, 13, 20, 0.96) 100%);
+      background: rgba(14, 17, 25, 0.94);
       border: 1px solid rgba(255, 255, 255, 0.18);
-      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.7);
       padding: 10px 18px;
       border-radius: 16px;
       flex-shrink: 0;
@@ -342,7 +337,7 @@
       background: var(--accent);
     }
 
-    /* Center Play/Pause Button (Hides cleanly while center-loader spins) */
+    /* Center Play/Pause Button (YPlay Only) */
     .center-play-btn {
       position: absolute;
       top: 50%;
@@ -351,7 +346,7 @@
       width: 64px;
       height: 64px;
       border-radius: 50%;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, rgba(15, 18, 26, 0.78) 100%);
+      background: rgba(15, 18, 26, 0.78);
       border: 1.5px solid rgba(255, 255, 255, 0.2);
       color: #fff;
       display: flex;
@@ -359,7 +354,7 @@
       justify-content: center;
       cursor: pointer;
       opacity: 1;
-      transition: opacity 0.15s ease, background 0.18s ease, border-color 0.18s ease;
+      transition: opacity 0.14s ease;
     }
 
     .center-play-btn.loading-hide {
@@ -391,7 +386,6 @@
     }
     .time-lbl.end { text-align: right; }
 
-    /* Borderless YouTube Progress Track (Zero white box border = zero flicker) */
     .yt-track-wrap {
       position: relative;
       flex: 1;
@@ -409,7 +403,6 @@
       height: 4px;
       border-radius: 99px;
       background: rgba(255, 255, 255, 0.26);
-      transition: height 0.14s ease, background 0.14s ease;
     }
 
     .yt-track-wrap:focus .yt-track-bg,
@@ -439,20 +432,17 @@
       border-radius: 50%;
       background: #ff2a36;
       border: 2px solid #fff;
-      transition: transform 0.14s ease, background 0.14s ease, box-shadow 0.14s ease;
     }
 
     .yt-track-wrap:focus .yt-track-thumb,
     .yt-track-wrap:focus-visible .yt-track-thumb {
       transform: translate(-50%, -50%) scale(1.25);
-      box-shadow: 0 0 0 5px rgba(255, 42, 54, 0.35);
     }
 
     .yt-track-wrap.scrubbing .yt-track-thumb {
       transform: translate(-50%, -50%) scale(1.42);
       background: #fff;
       border-color: #ff2a36;
-      box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.28);
     }
 
     .scrub-bubble {
@@ -470,7 +460,6 @@
       white-space: nowrap;
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.12s ease;
     }
 
     .yt-track-wrap.scrubbing .scrub-bubble {
@@ -493,7 +482,7 @@
     }
 
     .ctrl-btn {
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.07) 100%);
+      background: rgba(255, 255, 255, 0.12);
       color: #fff;
       border: 1.5px solid rgba(255, 255, 255, 0.12);
       padding: 8px 14px;
@@ -506,7 +495,6 @@
       gap: 6px;
       min-height: 38px;
       cursor: pointer;
-      transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
     }
 
     /* Popover Menus */
@@ -527,9 +515,9 @@
       max-height: 220px;
       overflow-y: auto;
       opacity: 0;
-      transform: translateY(8px);
+      transform: translateY(6px);
       pointer-events: none;
-      transition: opacity 0.15s ease, transform 0.15s ease;
+      transition: opacity 0.12s ease, transform 0.12s ease;
       z-index: 40;
     }
 
@@ -550,7 +538,6 @@
       font-weight: 700;
       color: #cbd5e1;
       cursor: pointer;
-      transition: transform 0.16s ease, background 0.16s ease, border-color 0.16s ease;
     }
 
     .pop-opt.active {
@@ -558,7 +545,7 @@
       color: #fff;
     }
 
-    /* Left Slide-Over Side Drawer */
+    /* Left Slide-Over Side Drawer (Zero Flicker Architecture) */
     .drawer-backdrop {
       position: fixed;
       inset: 0;
@@ -566,7 +553,7 @@
       background: rgba(0, 0, 0, 0.62);
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.2s ease;
+      transition: opacity 0.18s ease;
     }
 
     .drawer-backdrop.open { opacity: 1; pointer-events: auto; }
@@ -580,12 +567,12 @@
       z-index: 60;
       background: var(--drawer-bg);
       border-right: 1px solid rgba(255, 255, 255, 0.14);
-      box-shadow: 18px 0 42px rgba(0, 0, 0, 0.78);
       display: flex;
       flex-direction: column;
       transform: translate3d(-102%, 0, 0);
-      transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+      transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
       will-change: transform;
+      backface-visibility: hidden;
     }
 
     .side-drawer.open { transform: translate3d(0, 0, 0); }
@@ -632,7 +619,6 @@
       justify-content: center;
       gap: 7px;
       cursor: pointer;
-      transition: transform 0.16s ease, background 0.16s ease, border-color 0.16s ease;
     }
 
     .d-tab.active {
@@ -655,11 +641,15 @@
       overscroll-behavior: contain;
       -webkit-overflow-scrolling: touch;
       padding: 12px 14px 28px;
-      display: flex;
-      flex-direction: column;
-      gap: 9px;
     }
 
+    .list-pane {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* Crisp Zero-Flicker List Item (No scale/shadow ghosting during fast scroll) */
     .d-item {
       background: var(--card);
       border: 1.5px solid transparent;
@@ -670,12 +660,11 @@
       justify-content: space-between;
       gap: 11px;
       cursor: pointer;
-      transition: transform 0.16s ease, background 0.16s ease, border-color 0.16s ease;
     }
 
     .d-item.active {
       background: var(--active-bg);
-      border-color: rgba(255, 255, 255, 0.28);
+      border-color: rgba(255, 255, 255, 0.24);
     }
 
     .d-item-left {
@@ -711,7 +700,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 0.7rem;
+      font-size: 0.68rem;
       font-weight: 800;
       color: #fff;
       z-index: 1;
@@ -780,13 +769,21 @@
       color: #fca5a5;
     }
 
-    /* Glossy Fade + Minimal White Border Focus (Pill Buttons & Drawer Items Only) */
+    /* Instant Crisp Focus Styles (Zero Flicker) */
     .icon-btn:focus,
     .icon-btn:focus-visible,
     .icon-btn:hover,
     .ctrl-btn:focus,
     .ctrl-btn:focus-visible,
     .ctrl-btn:hover,
+    .err-btn:focus,
+    .err-btn:focus-visible,
+    .err-btn:hover {
+      background: rgba(255, 255, 255, 0.24) !important;
+      border-color: rgba(255, 255, 255, 0.85) !important;
+      transform: scale(1.04);
+    }
+
     .pop-opt:focus,
     .pop-opt:focus-visible,
     .pop-opt:hover,
@@ -795,20 +792,15 @@
     .d-tab:hover,
     .d-item:focus,
     .d-item:focus-visible,
-    .d-item:hover,
-    .err-btn:focus,
-    .err-btn:focus-visible,
-    .err-btn:hover {
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.11) 100%) !important;
-      border-color: rgba(255, 255, 255, 0.85) !important;
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 6px 18px rgba(0, 0, 0, 0.45);
-      transform: scale(1.04);
+    .d-item:hover {
+      background: rgba(255, 255, 255, 0.2) !important;
+      border-color: rgba(255, 255, 255, 0.82) !important;
     }
 
     .center-play-btn:focus,
     .center-play-btn:focus-visible,
     .center-play-btn:hover {
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0.12) 100%) !important;
+      background: rgba(255, 255, 255, 0.24) !important;
       border-color: rgba(255, 255, 255, 0.85) !important;
     }
 
@@ -820,7 +812,7 @@
     }
 
     .click-bounce {
-      animation: clickBounce 0.24s cubic-bezier(0.34, 1.56, 0.64, 1);
+      animation: clickBounce 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
   </style>
 </head>
@@ -828,7 +820,7 @@
   <div class="stage" id="stage" tabindex="-1">
     <video id="video" tabindex="-1" playsinline preload="auto" poster="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></video>
 
-    <!-- Center Loader Ring (Sits in exact Play/Pause spot; background video stays visible) -->
+    <!-- Center Loader Ring -->
     <div id="centerLoader" class="center-loader show"></div>
 
     <!-- Double-Back Exit Toast -->
@@ -865,7 +857,7 @@
           </button>
           <div class="hud-meta hidden" id="hudMeta">
             <div id="hudTitle" class="hud-title">Sun TV</div>
-            <div id="hudSub" class="hud-sub">#01 • Entertainment • Live</div>
+            <div id="hudSub" class="hud-sub">#01 • Live</div>
           </div>
         </div>
 
@@ -874,12 +866,12 @@
           <div id="dishNum" class="dish-num">01</div>
           <div class="dish-info">
             <div id="dishName" class="dish-name">Sun TV</div>
-            <div class="dish-live"><span class="live-dot"></span> <span id="dishCat">Entertainment • Live</span></div>
+            <div class="dish-live"><span class="live-dot"></span> <span>LIVE</span></div>
           </div>
         </div>
       </div>
 
-      <!-- Center Play/Pause (YPlay Only — Hides smoothly when centerLoader spins) -->
+      <!-- Center Play/Pause (YPlay Only) -->
       <button id="centerPlayBtn" class="center-play-btn hidden" onclick="event.stopPropagation(); toggleVodPlay();"></button>
 
       <div class="hud-bottom" onclick="event.stopPropagation()">
@@ -928,10 +920,10 @@
             <div id="speedWrap" class="pop-wrap hidden">
               <button id="speedBtn" class="ctrl-btn" onclick="triggerBounce(this); togglePop('speedMenu');">1x</button>
               <div id="speedMenu" class="pop-menu">
-                <button class="pop-opt active" data-rate="1" onclick="triggerBounce(this); setSpeed(1);">1x</button>
-                <button class="pop-opt" data-rate="1.15" onclick="triggerBounce(this); setSpeed(1.15);">1.15x</button>
-                <button class="pop-opt" data-rate="1.25" onclick="triggerBounce(this); setSpeed(1.25);">1.25x</button>
-                <button class="pop-opt" data-rate="1.5" onclick="triggerBounce(this); setSpeed(1.5);">1.5x</button>
+                <button class="pop-opt active" data-rate="1" onclick="setSpeed(1);">1x</button>
+                <button class="pop-opt" data-rate="1.15" onclick="setSpeed(1.15);">1.15x</button>
+                <button class="pop-opt" data-rate="1.25" onclick="setSpeed(1.25);">1.25x</button>
+                <button class="pop-opt" data-rate="1.5" onclick="setSpeed(1.5);">1.5x</button>
               </div>
             </div>
           </div>
@@ -949,17 +941,20 @@
         <div class="drawer-hint">BACK to Fullscreen</div>
       </div>
       <div class="drawer-tabs">
-        <button id="tabLive" class="d-tab active" onclick="triggerBounce(this); selectDrawerTab('live');">
+        <button id="tabLive" class="d-tab active" onclick="selectDrawerTab('live');">
           <span>Live TV</span>
-          <span id="liveBadge" class="d-badge">6</span>
+          <span id="liveBadge" class="d-badge">13</span>
         </button>
-        <button id="tabYPlay" class="d-tab" onclick="triggerBounce(this); selectDrawerTab('yplay');">
+        <button id="tabYPlay" class="d-tab" onclick="selectDrawerTab('yplay');">
           <span>YPlay</span>
           <span id="yplayBadge" class="d-badge">0</span>
         </button>
       </div>
     </div>
-    <div id="drawerList" class="drawer-scroll"></div>
+    <div id="drawerScroll" class="drawer-scroll">
+      <div id="liveListPane" class="list-pane"></div>
+      <div id="yplayListPane" class="list-pane hidden"></div>
+    </div>
   </aside>
 
   <script>
@@ -983,13 +978,21 @@
       eng: "English", en: "English", english: "English"
     };
 
+    /* Ordered Channel List: Entertainment -> Music -> News -> Infotainment (No section split headers) */
     const CHANNELS = [
-      { id: "suntv", num: "01", short: "SUN", bg: "#d92323", name: "Sun TV", cat: "Entertainment • Live", type: "hls", url: "https://d2px1d6ssc60fw.cloudfront.net/SunTV/SunTV-HDR10-IN-index.m3u8", relayPath: "/live/suntv/index.m3u8", logo: "assets/suntv.webp" },
-      { id: "zeetamil", num: "02", short: "ZEE", bg: "#6d28d9", name: "Zee Tamil HD", cat: "Entertainment • HD", type: "hls", url: "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:zeetamil1.smil/playlist.m3u8", logo: "assets/zeetamil.webp" },
-      { id: "colorstamil", num: "03", short: "COLORS", bg: "#be185d", name: "Colors Tamil HD", cat: "Entertainment • HD", type: "hls", url: "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:colorstamilhd11.smil/playlist.m3u8", logo: "assets/colorstamil.webp" },
-      { id: "makkaltv", num: "04", short: "MAKKAL", bg: "#047857", name: "Makkal TV", cat: "General • Live", type: "hls", url: "https://5k8q87azdy4v-hls-live.wmncdn.net/MAKKAL/271ddf829afeece44d8732757fba1a66.sdp/playlist.m3u8", logo: "assets/makkaltv.webp" },
-      { id: "historytv18", num: "05", short: "HIST", bg: "#b45309", name: "History TV18 HD", cat: "Infotainment • HD", type: "dash-clearkey", url: "https://login.bheem.tv/bpk-tv/22652/output/index.mpd", kid: "c6cb0bcbeac25fb286fed851e41de38c", key: "955c54f2cac8783fafccae5e5f9cdf8d", logo: "assets/historytv18.webp" },
-      { id: "discoverytamil", num: "06", short: "DISC", bg: "#0369a1", name: "Discovery Tamil", cat: "Infotainment • HD", type: "dash-clearkey", url: "https://login.bheem.tv/bpk-tv/22652/output/index.mpd", kid: "c6cb0bcbeac25fb286fed851e41de38c", key: "955c54f2cac8783fafccae5e5f9cdf8d", logo: "assets/discoverytamil.webp" }
+      { id: "suntv", num: "01", short: "SUN", bg: "#d92323", name: "Sun TV", type: "hls", url: "https://d2px1d6ssc60fw.cloudfront.net/SunTV/SunTV-HDR10-IN-index.m3u8", relayPath: "/live/suntv/index.m3u8", logo: "assets/suntv.webp" },
+      { id: "vijaytv", num: "02", short: "VIJAY", bg: "#c2410c", name: "Vijay TV", type: "hls", url: "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:starvijayuk.smil/playlist.m3u8", logo: "assets/vijaytv.webp" },
+      { id: "zeetamil", num: "03", short: "ZEE", bg: "#6d28d9", name: "Zee Tamil HD", type: "hls", url: "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:zeetamil1.smil/playlist.m3u8", logo: "assets/zeetamil.webp" },
+      { id: "colorstamil", num: "04", short: "COLORS", bg: "#be185d", name: "Colors Tamil HD", type: "hls", url: "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:colorstamilhd11.smil/playlist.m3u8", logo: "assets/colorstamil.webp" },
+      { id: "vijaytakkar", num: "05", short: "TAKKAR", bg: "#b91c1c", name: "Vijay Takkar", type: "dash", url: "https://tglmp01.akamaized.net/out/v1/c1071012b73f4f189b202e1529e8f802/manifest.mpd", logo: "assets/vijaytakkar.webp" },
+      { id: "vendhartv", num: "06", short: "VENDHAR", bg: "#0f766e", name: "Vendhar TV", type: "hls", url: "https://mumt04.tangotv.in/m18aqlK4VENDHARTV/index.m3u8", logo: "assets/vendhartv.webp" },
+      { id: "rajtv", num: "07", short: "RAJ", bg: "#1d4ed8", name: "Raj TV", type: "hls", url: "https://livestream.rajtv.tv/hlslive/Admin/px08241087/live/RAJTV/master_1.m3u8", logo: "assets/rajtv.webp" },
+      { id: "makkaltv", num: "08", short: "MAKKAL", bg: "#047857", name: "Makkal TV", type: "hls", url: "https://5k8q87azdy4v-hls-live.wmncdn.net/MAKKAL/271ddf829afeece44d8732757fba1a66.sdp/playlist.m3u8", logo: "assets/makkaltv.webp" },
+      { id: "7smusic", num: "09", short: "7S", bg: "#7e22ce", name: "7S Music", type: "hls", url: "https://cdn.pishow.tv/ott/live/1257/master.m3u8", logo: "assets/7smusic.webp" },
+      { id: "isaiaruvi", num: "10", short: "ISAI", bg: "#a21caf", name: "Isaiaruvi", type: "hls", url: "https://segment.yuppcdn.net/140622/isaiaruvi/playlist.m3u8", logo: "assets/isaiaruvi.webp" },
+      { id: "newstamil24", num: "11", short: "NEWS24", bg: "#dc2626", name: "News Tamil 24x7", type: "hls", url: "https://streams.tangotv.in/NEWSTAMIL24X7/ORIGIN/index.m3u8", logo: "assets/newstamil24.webp" },
+      { id: "puthiyathalaimurai", num: "12", short: "PT", bg: "#b91c1c", name: "Puthiya Thalaimurai", type: "hls", url: "https://mumt07.tangotv.in/zHjX9OFlPUTHIYAEXPRESS/index.m3u8", logo: "assets/puthiyathalaimurai.webp" },
+      { id: "discoverytamil", num: "13", short: "DISC", bg: "#0369a1", name: "Discovery Tamil", type: "dash-clearkey", url: "https://login.bheem.tv/bpk-tv/22652/output/index.mpd", kid: "c6cb0bcbeac25fb286fed851e41de38c", key: "955c54f2cac8783fafccae5e5f9cdf8d", logo: "assets/discoverytamil.webp" }
     ];
 
     const stage = document.getElementById("stage");
@@ -999,7 +1002,6 @@
     const dishOsd = document.getElementById("dishOsd");
     const dishNum = document.getElementById("dishNum");
     const dishName = document.getElementById("dishName");
-    const dishCat = document.getElementById("dishCat");
     const subOverlay = document.getElementById("subOverlay");
     const subText = document.getElementById("subText");
     const seekLeftFlash = document.getElementById("seekLeftFlash");
@@ -1035,9 +1037,11 @@
     const speedBtn = document.getElementById("speedBtn");
     const drawerBackdrop = document.getElementById("drawerBackdrop");
     const sideDrawer = document.getElementById("sideDrawer");
+    const drawerScroll = document.getElementById("drawerScroll");
     const tabLive = document.getElementById("tabLive");
     const tabYPlay = document.getElementById("tabYPlay");
-    const drawerList = document.getElementById("drawerList");
+    const liveListPane = document.getElementById("liveListPane");
+    const yplayListPane = document.getElementById("yplayListPane");
 
     let hls = null;
     let shakaPlayer = null;
@@ -1054,7 +1058,7 @@
     let drawerOpen = false;
     let isZapping = false;
 
-    /* Persistent Focus Memory (Never resets to first button after closing an option) */
+    /* Persistent Focus Memory */
     let lastHudFocusEl = menuBtn;
     let activePopupTrigger = null;
 
@@ -1072,6 +1076,20 @@
         }
       }
       return menuBtn;
+    }
+
+    /* Instant Zero-Flicker Scroll Helper */
+    function keepItemVisible(el) {
+      if (!el || !drawerScroll) return;
+      const top = el.offsetTop - drawerScroll.offsetTop;
+      const bottom = top + el.offsetHeight;
+      const viewTop = drawerScroll.scrollTop;
+      const viewBottom = viewTop + drawerScroll.clientHeight;
+      if (top < viewTop + 10) {
+        drawerScroll.scrollTop = Math.max(0, top - 10);
+      } else if (bottom > viewBottom - 10) {
+        drawerScroll.scrollTop = bottom - drawerScroll.clientHeight + 10;
+      }
     }
 
     /* Back-Button Trap + Double-Back to Exit */
@@ -1177,7 +1195,6 @@
       el.classList.add("click-bounce");
     }
 
-    /* Center Loader Morph (Hides Play/Pause button while loading; background video stays visible) */
     function showLoading(immediate = false) {
       clearTimeout(loadDebounce);
       if (immediate) {
@@ -1284,7 +1301,86 @@
       }
     }
 
-    /* Slide-Over Side Drawer */
+    /* Zero-Flicker Persistent Side Drawer */
+    function buildLiveListOnce() {
+      document.getElementById("liveBadge").textContent = String(CHANNELS.length);
+      liveListPane.innerHTML = CHANNELS.map((ch) => `
+        <div class="d-item" data-ch="${ch.id}" tabindex="0" onclick='pickChannel("${ch.id}");'>
+          <div class="d-item-left">
+            <div class="ch-logo">
+              <div class="ch-fallback" style="background:${ch.bg};">${esc(ch.short)}</div>
+              <img src="${esc(ch.logo)}" alt="${esc(ch.name)}" decoding="async" onload="if(this.previousElementSibling)this.previousElementSibling.style.display='none'" onerror="this.style.display='none'" />
+            </div>
+            <div class="d-info">
+              <div class="d-title">${esc(ch.name)}</div>
+              <div class="d-meta"><span>#${esc(ch.num)}</span></div>
+            </div>
+          </div>
+          <span class="d-tag live hidden">LIVE</span>
+        </div>
+      `).join("");
+      syncDrawerActiveStates();
+    }
+
+    function renderYPlayListPane() {
+      document.getElementById("yplayBadge").textContent = String(yplayItems.length);
+      if (!yplayItems.length) {
+        yplayListPane.innerHTML = `
+          <div class="d-item" tabindex="0">
+            <div class="d-item-left">
+              <div class="yp-badge">${ICONS.cinema}<span class="yp-num">#00</span></div>
+              <div class="d-info">
+                <div class="d-title">YPlay Queue Empty</div>
+                <div class="d-meta">Forward a movie to your Telegram bot</div>
+              </div>
+            </div>
+          </div>
+        `;
+        return;
+      }
+      yplayListPane.innerHTML = yplayItems.map((m, i) => {
+        const num = String(i + 1).padStart(2, "0");
+        const qStr = m.quality || "HD";
+        const gbStr = fmtGB(m.file_size);
+        const durStr = fmtDurShort(m.duration);
+        return `
+          <div class="d-item" data-yp="${i}" tabindex="0" onclick="pickMovie(${i});">
+            <div class="d-item-left">
+              <div class="yp-badge">
+                ${ICONS.cinema}
+                <span class="yp-num">#${num}</span>
+              </div>
+              <div class="d-info">
+                <div class="d-title">${esc(m.title)}</div>
+                <div class="d-meta">
+                  <span class="d-tag live hidden">PLAYING</span>
+                  <span class="d-tag">${esc(qStr)}</span>
+                  <span class="d-tag">${esc(gbStr)}</span>
+                  ${durStr ? `<span>${esc(durStr)}</span>` : ""}
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join("");
+      syncDrawerActiveStates();
+    }
+
+    function syncDrawerActiveStates() {
+      liveListPane.querySelectorAll(".d-item[data-ch]").forEach((el) => {
+        const isCur = isLive && el.dataset.ch === activeChannelId;
+        el.classList.toggle("active", isCur);
+        const badge = el.querySelector(".d-tag.live");
+        if (badge) badge.classList.toggle("hidden", !isCur);
+      });
+      yplayListPane.querySelectorAll(".d-item[data-yp]").forEach((el) => {
+        const isCur = !isLive && Number(el.dataset.yp) === activeYPlayIdx;
+        el.classList.toggle("active", isCur);
+        const badge = el.querySelector(".d-tag.live");
+        if (badge) badge.classList.toggle("hidden", !isCur);
+      });
+    }
+
     function openDrawer() {
       if (drawerOpen) return;
       drawerOpen = true;
@@ -1300,20 +1396,21 @@
         wasPlayingBeforeDrawer = false;
       }
 
-      drawerTab = isLive ? "live" : "yplay";
+      syncDrawerActiveStates();
+      selectDrawerTab(isLive ? "live" : "yplay", false);
       drawerBackdrop.classList.add("open");
       sideDrawer.classList.add("open");
-      renderDrawer();
 
-      setTimeout(() => {
-        const activeItem = drawerList.querySelector(".d-item.active") || drawerList.querySelector(".d-item");
+      requestAnimationFrame(() => {
+        const pane = drawerTab === "live" ? liveListPane : yplayListPane;
+        const activeItem = pane.querySelector(".d-item.active") || pane.querySelector(".d-item");
         if (activeItem) {
-          activeItem.scrollIntoView({ block: "center", behavior: "instant" });
+          keepItemVisible(activeItem);
           activeItem.focus({ preventScroll: true });
         } else {
           (drawerTab === "live" ? tabLive : tabYPlay).focus({ preventScroll: true });
         }
-      }, 45);
+      });
     }
 
     function closeDrawer(resumeIfNeeded = true) {
@@ -1328,83 +1425,14 @@
       }
     }
 
-    function selectDrawerTab(tab) {
+    function selectDrawerTab(tab, fetchIfYPlay = true) {
       drawerTab = tab;
-      renderDrawer();
-      if (tab === "yplay") fetchYPlay(false);
-    }
-
-    function renderDrawer() {
-      tabLive.classList.toggle("active", drawerTab === "live");
-      tabYPlay.classList.toggle("active", drawerTab === "yplay");
-      document.getElementById("liveBadge").textContent = String(CHANNELS.length);
-      document.getElementById("yplayBadge").textContent = String(yplayItems.length);
-
-      if (drawerTab === "live") {
-        drawerList.innerHTML = CHANNELS.map((ch) => {
-          const isCur = isLive && ch.id === activeChannelId;
-          return `
-            <div class="d-item ${isCur ? "active" : ""}" tabindex="0" onclick='triggerBounce(this); pickChannel("${ch.id}");'>
-              <div class="d-item-left">
-                <div class="ch-logo">
-                  <div class="ch-fallback" style="background:${ch.bg};">${esc(ch.short)}</div>
-                  <img src="${esc(ch.logo)}" alt="${esc(ch.name)}" onload="if(this.previousElementSibling)this.previousElementSibling.style.display='none'" onerror="this.style.display='none'" />
-                </div>
-                <div class="d-info">
-                  <div class="d-title">${esc(ch.name)}</div>
-                  <div class="d-meta">
-                    <span>#${esc(ch.num)}</span>
-                    <span>•</span>
-                    <span>${esc(ch.cat)}</span>
-                  </div>
-                </div>
-              </div>
-              ${isCur ? `<span class="d-tag live">LIVE</span>` : ""}
-            </div>
-          `;
-        }).join("");
-      } else {
-        if (!yplayItems.length) {
-          drawerList.innerHTML = `
-            <div class="d-item" tabindex="0">
-              <div class="d-item-left">
-                <div class="yp-badge">${ICONS.cinema}<span class="yp-num">#00</span></div>
-                <div class="d-info">
-                  <div class="d-title">YPlay Queue Empty</div>
-                  <div class="d-meta">Forward a movie to your Telegram bot</div>
-                </div>
-              </div>
-            </div>
-          `;
-          return;
-        }
-        drawerList.innerHTML = yplayItems.map((m, i) => {
-          const isCur = !isLive && i === activeYPlayIdx;
-          const num = String(i + 1).padStart(2, "0");
-          const qStr = m.quality || "HD";
-          const gbStr = fmtGB(m.file_size);
-          const durStr = fmtDurShort(m.duration);
-          return `
-            <div class="d-item ${isCur ? "active" : ""}" tabindex="0" onclick="triggerBounce(this); pickMovie(${i});">
-              <div class="d-item-left">
-                <div class="yp-badge">
-                  ${ICONS.cinema}
-                  <span class="yp-num">#${num}</span>
-                </div>
-                <div class="d-info">
-                  <div class="d-title">${esc(m.title)}</div>
-                  <div class="d-meta">
-                    ${isCur ? `<span class="d-tag live">PLAYING</span>` : ""}
-                    <span class="d-tag">${esc(qStr)}</span>
-                    <span class="d-tag">${esc(gbStr)}</span>
-                    ${durStr ? `<span>${esc(durStr)}</span>` : ""}
-                  </div>
-                </div>
-              </div>
-            </div>
-          `;
-        }).join("");
-      }
+      tabLive.classList.toggle("active", tab === "live");
+      tabYPlay.classList.toggle("active", tab === "yplay");
+      liveListPane.classList.toggle("hidden", tab !== "live");
+      yplayListPane.classList.toggle("hidden", tab !== "yplay");
+      drawerScroll.scrollTop = 0;
+      if (tab === "yplay" && fetchIfYPlay) fetchYPlay(false);
     }
 
     function pickChannel(id) {
@@ -1462,7 +1490,7 @@
       const activeObj = liveAudioOptions.find((x) => String(x.id) === String(selectedLiveAudio)) || liveAudioOptions[0];
       langBtn.textContent = activeObj.label;
       langMenu.innerHTML = liveAudioOptions.map((x) =>
-        `<button class="pop-opt ${String(x.id) === String(activeObj.id) ? "active" : ""}" data-la="${esc(x.id)}" onclick="triggerBounce(this); setLiveAudio('${esc(x.id)}');">${esc(x.label)}</button>`
+        `<button class="pop-opt ${String(x.id) === String(activeObj.id) ? "active" : ""}" data-la="${esc(x.id)}" onclick="setLiveAudio('${esc(x.id)}');">${esc(x.label)}</button>`
       ).join("");
     }
 
@@ -1489,10 +1517,10 @@
         return;
       }
       qualWrap.classList.remove("hidden");
-      const opts = [`<button class="pop-opt ${selectedLiveQuality === "auto" ? "active" : ""}" data-q="auto" onclick="triggerBounce(this); setLiveQuality('auto');">Auto</button>`];
+      const opts = [`<button class="pop-opt ${selectedLiveQuality === "auto" ? "active" : ""}" data-q="auto" onclick="setLiveQuality('auto');">Auto</button>`];
       for (const h of liveAvailableHeights) {
         const label = h >= 2160 ? "4K" : `${h}p`;
-        opts.push(`<button class="pop-opt ${selectedLiveQuality === h ? "active" : ""}" data-q="${h}" onclick="triggerBounce(this); setLiveQuality(${h});">${label}</button>`);
+        opts.push(`<button class="pop-opt ${selectedLiveQuality === h ? "active" : ""}" data-q="${h}" onclick="setLiveQuality(${h});">${label}</button>`);
       }
       qualMenu.innerHTML = opts.join("");
       qualBtn.textContent = selectedLiveQuality === "auto" ? "Auto" : (selectedLiveQuality >= 2160 ? "4K" : `${selectedLiveQuality}p`);
@@ -1533,7 +1561,7 @@
         { q: "360", label: "360p" }
       ];
       qualMenu.innerHTML = list.map((x) =>
-        `<button class="pop-opt ${vodQuality === x.q ? "active" : ""}" data-q="${x.q}" onclick="triggerBounce(this); setVodQuality('${x.q}');">${x.label}</button>`
+        `<button class="pop-opt ${vodQuality === x.q ? "active" : ""}" data-q="${x.q}" onclick="setVodQuality('${x.q}');">${x.label}</button>`
       ).join("");
       qualBtn.textContent = vodQuality === "orig" ? "Orig" : `${vodQuality}p`;
     }
@@ -1587,7 +1615,7 @@
         vodAudioIdx = defTrack.index;
         langBtn.textContent = defTrack.cleanLabel;
         langMenu.innerHTML = tracks.map((t) =>
-          `<button class="pop-opt ${t.index === vodAudioIdx ? "active" : ""}" data-a="${t.index}" onclick="triggerBounce(this); setVodAudio(${t.index});">${esc(t.cleanLabel)}</button>`
+          `<button class="pop-opt ${t.index === vodAudioIdx ? "active" : ""}" data-a="${t.index}" onclick="setVodAudio(${t.index});">${esc(t.cleanLabel)}</button>`
         ).join("");
       } else {
         langWrap.classList.add("hidden");
@@ -1601,8 +1629,8 @@
         subWrap.classList.remove("hidden");
         vodSubIdx = -1;
         subBtn.textContent = "CC";
-        subMenu.innerHTML = `<button class="pop-opt active" data-s="-1" onclick="triggerBounce(this); setVodSub(-1);">Off</button>` +
-          subs.map((s) => `<button class="pop-opt" data-s="${s.index}" onclick="triggerBounce(this); setVodSub(${s.index});">${esc(s.label)}</button>`).join("");
+        subMenu.innerHTML = `<button class="pop-opt active" data-s="-1" onclick="setVodSub(-1);">Off</button>` +
+          subs.map((s) => `<button class="pop-opt" data-s="${s.index}" onclick="setVodSub(${s.index});">${esc(s.label)}</button>`).join("");
       } else {
         subWrap.classList.add("hidden");
         vodSubIdx = -1;
@@ -1650,7 +1678,7 @@
       resetHudTimer();
     }
 
-    /* YouTube 2-Step Progress Bar (Clean Timestamp Only — No "OK" Text) */
+    /* YouTube 2-Step Progress Bar */
     function renderProgressVisual(curSec, durSec) {
       const pct = durSec > 0 ? Math.max(0, Math.min(100, (curSec / durSec) * 100)) : 0;
       progressFill.style.width = `${pct}%`;
@@ -1959,7 +1987,6 @@
         const nextCh = CHANNELS[(curIdx + 1) % CHANNELS.length];
         dishNum.textContent = nextCh.num;
         dishName.textContent = nextCh.name;
-        dishCat.textContent = `${ch.name} offline • Switching...`;
         showHud(lastHudFocusEl, 4200);
         showLoading(true);
         clearTimeout(liveFailTimer);
@@ -1983,7 +2010,6 @@
       activeChannelId = nextCh.id;
       dishNum.textContent = nextCh.num;
       dishName.textContent = nextCh.name;
-      dishCat.textContent = nextCh.cat;
       liveAvailableHeights = [];
       liveAudioOptions = [];
       updateLiveAudioUi();
@@ -2008,7 +2034,6 @@
       activeYPlayIdx = -1;
       dishNum.textContent = ch.num;
       dishName.textContent = ch.name;
-      dishCat.textContent = ch.cat;
       pendingResumeTime = 0;
       transcodeMode = false;
       baseOffset = 0;
@@ -2024,14 +2049,18 @@
       showHud(menuBtn, 4200);
       showLoading(true);
 
-      if (ch.type === "dash-clearkey" && window.shaka && shaka.Player.isBrowserSupported()) {
+      const isDash = ch.type === "dash" || ch.type === "dash-clearkey" || ch.url.includes(".mpd");
+      if (isDash && window.shaka && shaka.Player.isBrowserSupported()) {
         shakaPlayer = new shaka.Player();
         await shakaPlayer.attach(video);
-        shakaPlayer.configure({
-          drm: { clearKeys: { [ch.kid]: ch.key } },
+        const cfg = {
           abr: { enabled: true },
           streaming: { bufferingGoal: 10, rebufferingGoal: 2 }
-        });
+        };
+        if (ch.kid && ch.key) {
+          cfg.drm = { clearKeys: { [ch.kid]: ch.key } };
+        }
+        shakaPlayer.configure(cfg);
         shakaPlayer.addEventListener("error", (ev) => {
           if (activeChannelId === ch.id) {
             handleLiveFallback(ch, autoPlay, `Code ${ev && ev.detail ? ev.detail.code : "Network"}`);
@@ -2251,7 +2280,7 @@
     });
 
     /* =========================================================================
-       ANDROID TV 4-WAY REMOTE + OK + BACK CONTROLLER (Normalized KeyCodes)
+       ANDROID TV 4-WAY REMOTE + OK + BACK CONTROLLER
     ========================================================================= */
     function getDir(e) {
       if (e.key === "ArrowUp" || e.keyCode === 38 || e.keyCode === 19) return "UP";
@@ -2298,7 +2327,7 @@
       const ok = isOkKey(e);
       const active = document.activeElement;
 
-      /* 1. Back Button (Restores exact option focus; Double-Back to exit) */
+      /* 1. Back Button */
       if (isBackKey(e)) {
         if (processBackAction()) {
           e.preventDefault();
@@ -2342,25 +2371,25 @@
         return;
       }
 
-      /* 4. Side Drawer Navigation */
+      /* 4. Side Drawer Navigation (Instant Zero-Flicker Scroll) */
       if (drawerOpen) {
-        const items = Array.from(drawerList.querySelectorAll(".d-item"));
+        const pane = drawerTab === "live" ? liveListPane : yplayListPane;
+        const items = Array.from(pane.querySelectorAll(".d-item"));
         const curIdx = items.indexOf(active);
 
         if (active === tabLive || active === tabYPlay) {
           if (dir === "LEFT" || dir === "RIGHT") {
             e.preventDefault();
             const nextTab = active === tabLive ? "yplay" : "live";
-            selectDrawerTab(nextTab);
+            selectDrawerTab(nextTab, true);
             (nextTab === "live" ? tabLive : tabYPlay).focus({ preventScroll: true });
           } else if (dir === "DOWN" && items.length > 0) {
             e.preventDefault();
-            const activeItem = drawerList.querySelector(".d-item.active") || items[0];
-            activeItem.scrollIntoView({ block: "nearest", behavior: "smooth" });
+            const activeItem = pane.querySelector(".d-item.active") || items[0];
+            keepItemVisible(activeItem);
             activeItem.focus({ preventScroll: true });
           } else if (ok) {
             e.preventDefault();
-            triggerBounce(active);
             active.click();
           }
           return;
@@ -2370,7 +2399,7 @@
           if (dir === "DOWN") {
             e.preventDefault();
             const next = items[Math.min(items.length - 1, curIdx + 1)];
-            next.scrollIntoView({ block: "nearest", behavior: "smooth" });
+            keepItemVisible(next);
             next.focus({ preventScroll: true });
           } else if (dir === "UP") {
             e.preventDefault();
@@ -2378,12 +2407,11 @@
               (drawerTab === "live" ? tabLive : tabYPlay).focus({ preventScroll: true });
             } else {
               const prev = items[curIdx - 1];
-              prev.scrollIntoView({ block: "nearest", behavior: "smooth" });
+              keepItemVisible(prev);
               prev.focus({ preventScroll: true });
             }
           } else if (ok) {
             e.preventDefault();
-            triggerBounce(items[curIdx]);
             items[curIdx].click();
           }
           return;
@@ -2391,8 +2419,11 @@
 
         if (dir) {
           e.preventDefault();
-          const activeItem = drawerList.querySelector(".d-item.active") || items[0];
-          if (activeItem) activeItem.focus({ preventScroll: true });
+          const activeItem = pane.querySelector(".d-item.active") || items[0];
+          if (activeItem) {
+            keepItemVisible(activeItem);
+            activeItem.focus({ preventScroll: true });
+          }
         }
         return;
       }
@@ -2410,13 +2441,12 @@
           opts[(idx - 1 + opts.length) % opts.length].focus({ preventScroll: true });
         } else if (ok && idx >= 0) {
           e.preventDefault();
-          triggerBounce(opts[idx]);
           opts[idx].click();
         }
         return;
       }
 
-      /* 6. LIVE TV REMOTE RULES (Up/Down = Dish Channel Change; Left/Right = Available Options) */
+      /* 6. LIVE TV REMOTE RULES */
       if (isLive) {
         if (dir === "UP") {
           e.preventDefault();
@@ -2457,11 +2487,11 @@
         return;
       }
 
-      /* 7. YPLAY PURE FULLSCREEN (HUD Hidden — Strict Double-Press Required for -10s / +10s) */
+      /* 7. YPLAY PURE FULLSCREEN (Strict Double-Press Required) */
       if (!isHudVisible()) {
         if (dir === "LEFT" || dir === "RIGHT") {
           e.preventDefault();
-          if (e.repeat) return; // Never seek on single long press
+          if (e.repeat) return;
           const now = Date.now();
           const delta = dir === "LEFT" ? -10 : 10;
           if (lastRemoteDir === dir && now - lastRemoteDirTime < 420) {
@@ -2480,7 +2510,7 @@
         return;
       }
 
-      /* 8. YPLAY HUD VISIBLE: Locked Progress Bar Scrubbing + 1-by-1 Controls */
+      /* 8. YPLAY HUD VISIBLE */
       resetHudTimer(4200);
       const bottomBtns = getVisibleRowButtons();
       const bIdx = bottomBtns.indexOf(active);
@@ -2604,11 +2634,10 @@
         if (sig !== yplaySig) {
           yplaySig = sig;
           yplayItems = nextItems;
-          document.getElementById("yplayBadge").textContent = String(yplayItems.length);
+          renderYPlayListPane();
           if (!isLive) {
             nextBtn.classList.toggle("hidden", yplayItems.length <= 1);
           }
-          if (refreshUi && drawerOpen && drawerTab === "yplay") renderDrawer();
           if (!isLive && activeYPlayIdx >= 0 && yplayItems[activeYPlayIdx]) {
             populateYPlayTracks(yplayItems[activeYPlayIdx]);
           }
@@ -2645,6 +2674,8 @@
 
     /* Init Fullscreen TV Experience */
     syncIcons();
+    buildLiveListOnce();
+    renderYPlayListPane();
     resolveDirectTunnel().then(() => {
       playChannel(CHANNELS[0], true, true);
       fetchYPlay(false);
