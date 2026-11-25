@@ -66,8 +66,8 @@ jobs:
                   applicationId "com.ystream.app"
                   minSdk 23
                   targetSdk 34
-                  versionCode 5
-                  versionName "5.0-TV"
+                  versionCode 6
+                  versionName "6.0-TV"
               }
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
@@ -102,6 +102,7 @@ jobs:
           cat <<'EOF' > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
               <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
               <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
               <uses-feature android:name="android.software.leanback" android:required="false" />
@@ -129,10 +130,8 @@ jobs:
                   <receiver
                       android:name=".BootReceiver"
                       android:enabled="true"
-                      android:exported="true"
-                      android:directBootAware="true">
+                      android:exported="true">
                       <intent-filter android:priority="999">
-                          <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
                           <action android:name="android.intent.action.BOOT_COMPLETED" />
                           <action android:name="android.intent.action.QUICKBOOT_POWERON" />
                           <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
@@ -155,12 +154,12 @@ jobs:
           import android.os.Looper;
 
           public class BootReceiver extends BroadcastReceiver {
-              private void launchApp(Context context) {
+              private void bringToFront(Context context, boolean force) {
+                  if (!force && MainActivity.isForeground) return;
                   try {
                       Intent launch = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
                       if (launch != null) {
                           launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
-                                  | Intent.FLAG_ACTIVITY_CLEAR_TOP
                                   | Intent.FLAG_ACTIVITY_SINGLE_TOP
                                   | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
                           context.startActivity(launch);
@@ -172,21 +171,21 @@ jobs:
               public void onReceive(Context context, Intent intent) {
                   if (intent == null || intent.getAction() == null) return;
                   String action = intent.getAction();
-                  if (Intent.ACTION_LOCKED_BOOT_COMPLETED.equals(action)
-                          || Intent.ACTION_BOOT_COMPLETED.equals(action)
+                  if (Intent.ACTION_BOOT_COMPLETED.equals(action)
                           || "android.intent.action.QUICKBOOT_POWERON".equals(action)
                           || "com.htc.intent.action.QUICKBOOT_POWERON".equals(action)
                           || Intent.ACTION_REBOOT.equals(action)
                           || Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)) {
-                      launchApp(context);
+                      bringToFront(context, true);
                       final PendingResult pending = goAsync();
                       final Context appCtx = context.getApplicationContext();
                       Handler handler = new Handler(Looper.getMainLooper());
-                      handler.postDelayed(() -> launchApp(appCtx), 1500);
+                      handler.postDelayed(() -> bringToFront(appCtx, false), 1200);
+                      handler.postDelayed(() -> bringToFront(appCtx, false), 2800);
                       handler.postDelayed(() -> {
-                          launchApp(appCtx);
+                          bringToFront(appCtx, false);
                           try { pending.finish(); } catch (Exception ignored) {}
-                      }, 3500);
+                      }, 4500);
                   }
               }
           }
@@ -198,15 +197,24 @@ jobs:
           import android.app.Activity;
           import android.content.Context;
           import android.content.pm.ActivityInfo;
+          import android.graphics.Bitmap;
           import android.graphics.Color;
           import android.media.AudioManager;
+          import android.net.ConnectivityManager;
+          import android.net.Network;
+          import android.net.NetworkCapabilities;
+          import android.net.NetworkRequest;
           import android.os.Bundle;
+          import android.os.Handler;
+          import android.os.Looper;
           import android.view.KeyEvent;
           import android.view.View;
           import android.view.ViewGroup;
           import android.view.Window;
           import android.view.WindowManager;
           import android.webkit.WebChromeClient;
+          import android.webkit.WebResourceError;
+          import android.webkit.WebResourceRequest;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
@@ -214,11 +222,18 @@ jobs:
           import android.widget.Toast;
 
           public class MainActivity extends Activity {
+              public static volatile boolean isForeground = false;
+              private static final String APP_URL = "https://ystream.pages.dev";
+
               private WebView webView;
               private FrameLayout rootLayout;
               private View customView;
               private WebChromeClient.CustomViewCallback customViewCallback;
               private WebChromeClient chromeClient;
+              private ConnectivityManager connectivityManager;
+              private ConnectivityManager.NetworkCallback networkCallback;
+              private final Handler mainHandler = new Handler(Looper.getMainLooper());
+              private boolean pageLoadedSuccessfully = false;
               private long lastFallbackBackTime = 0L;
 
               private void enableImmersive() {
@@ -234,6 +249,31 @@ jobs:
                       if (am != null) {
                           am.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
                       }
+                  } catch (Exception ignored) {}
+              }
+
+              private void loadAppIfNeeded() {
+                  if (webView == null) return;
+                  String cur = webView.getUrl();
+                  if (!pageLoadedSuccessfully || cur == null || !cur.startsWith(APP_URL)) {
+                      webView.loadUrl(APP_URL);
+                  }
+              }
+
+              private void registerNetworkWatcher() {
+                  try {
+                      connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+                      if (connectivityManager == null) return;
+                      NetworkRequest req = new NetworkRequest.Builder()
+                              .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                              .build();
+                      networkCallback = new ConnectivityManager.NetworkCallback() {
+                          @Override
+                          public void onAvailable(Network network) {
+                              mainHandler.post(() -> loadAppIfNeeded());
+                          }
+                      };
+                      connectivityManager.registerNetworkCallback(req, networkCallback);
                   } catch (Exception ignored) {}
               }
 
@@ -271,12 +311,31 @@ jobs:
                       @Override
                       public void onPageFinished(WebView view, String url) {
                           super.onPageFinished(view, url);
+                          if (url != null && url.startsWith(APP_URL)) {
+                              pageLoadedSuccessfully = true;
+                          }
                           requestTvAudio();
                           view.requestFocus();
+                      }
+
+                      @Override
+                      public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                          super.onReceivedError(view, request, error);
+                          if (request != null && request.isForMainFrame()) {
+                              pageLoadedSuccessfully = false;
+                              mainHandler.postDelayed(() -> loadAppIfNeeded(), 1500);
+                          }
                       }
                   });
 
                   chromeClient = new WebChromeClient() {
+                      @Override
+                      public Bitmap getDefaultVideoPoster() {
+                          Bitmap bmp = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);
+                          bmp.setPixel(0, 0, Color.BLACK);
+                          return bmp;
+                      }
+
                       @Override
                       public void onShowCustomView(View view, CustomViewCallback callback) {
                           if (customView != null) {
@@ -312,15 +371,35 @@ jobs:
                           ViewGroup.LayoutParams.MATCH_PARENT,
                           ViewGroup.LayoutParams.MATCH_PARENT));
                   setContentView(rootLayout);
-                  webView.loadUrl("https://ystream.pages.dev");
+                  registerNetworkWatcher();
+                  webView.loadUrl(APP_URL);
                   webView.requestFocus();
               }
 
               @Override
               protected void onResume() {
                   super.onResume();
+                  isForeground = true;
                   enableImmersive();
                   requestTvAudio();
+                  loadAppIfNeeded();
+              }
+
+              @Override
+              protected void onPause() {
+                  isForeground = false;
+                  super.onPause();
+              }
+
+              @Override
+              protected void onDestroy() {
+                  isForeground = false;
+                  try {
+                      if (connectivityManager != null && networkCallback != null) {
+                          connectivityManager.unregisterNetworkCallback(networkCallback);
+                      }
+                  } catch (Exception ignored) {}
+                  super.onDestroy();
               }
 
               @Override
