@@ -25,15 +25,6 @@ jobs:
           printf "\n24333f8a63b6825ea9c5514f83c2829b004d1fee\n" > "$SDK_DIR/licenses/android-sdk-license"
           mkdir -p app/src/main/java/com/ystream/app app/src/main/res/drawable
 
-          python3 -c '
-          der = bytes.fromhex("303102010104200000000000000000000000000000000000000000000000000000000059535452a00a06082a8648ce3d030107")
-          open("key.der", "wb").write(der)
-          '
-          openssl ec -inform DER -in key.der -out key.pem
-          openssl req -new -x509 -key key.pem -out cert.pem -days 10000 -subj "/CN=YStream,O=YStream,C=IN"
-          openssl pkcs12 -export -inkey key.pem -in cert.pem -out ystream.p12 -name ystream -passout pass:ystream123
-          rm -f key.der key.pem cert.pem
-
           cat <<'EOF' > settings.gradle
           pluginManagement {
               repositories {
@@ -75,29 +66,8 @@ jobs:
                   applicationId "com.ystream.app"
                   minSdk 23
                   targetSdk 34
-                  versionCode 9
-                  versionName "9.0-TV"
-              }
-              signingConfigs {
-                  release {
-                      storeFile file("../ystream.p12")
-                      storePassword "ystream123"
-                      keyAlias "ystream"
-                      keyPassword "ystream123"
-                  }
-              }
-              buildTypes {
-                  debug {
-                      signingConfig signingConfigs.release
-                  }
-                  release {
-                      signingConfig signingConfigs.release
-                      minifyEnabled false
-                  }
-              }
-              lint {
-                  abortOnError false
-                  checkReleaseBuilds false
+                  versionCode 6
+                  versionName "6.0-TV"
               }
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
@@ -226,7 +196,6 @@ jobs:
 
           import android.app.Activity;
           import android.content.Context;
-          import android.content.SharedPreferences;
           import android.content.pm.ActivityInfo;
           import android.graphics.Bitmap;
           import android.graphics.Color;
@@ -235,18 +204,14 @@ jobs:
           import android.net.Network;
           import android.net.NetworkCapabilities;
           import android.net.NetworkRequest;
-          import android.os.Build;
           import android.os.Bundle;
           import android.os.Handler;
           import android.os.Looper;
-          import android.provider.Settings;
           import android.view.KeyEvent;
           import android.view.View;
           import android.view.ViewGroup;
           import android.view.Window;
           import android.view.WindowManager;
-          import android.webkit.CookieManager;
-          import android.webkit.JavascriptInterface;
           import android.webkit.WebChromeClient;
           import android.webkit.WebResourceError;
           import android.webkit.WebResourceRequest;
@@ -255,8 +220,6 @@ jobs:
           import android.webkit.WebViewClient;
           import android.widget.FrameLayout;
           import android.widget.Toast;
-
-          import java.util.UUID;
 
           public class MainActivity extends Activity {
               public static volatile boolean isForeground = false;
@@ -272,72 +235,6 @@ jobs:
               private final Handler mainHandler = new Handler(Looper.getMainLooper());
               private boolean pageLoadedSuccessfully = false;
               private long lastFallbackBackTime = 0L;
-              private String persistentDeviceId = "";
-              private String persistentDeviceName = "";
-
-              private void initDeviceIdentity() {
-                  SharedPreferences prefs = getSharedPreferences("ystream_device_prefs", Context.MODE_PRIVATE);
-                  String savedId = prefs.getString("ys_device_id", "");
-                  if (savedId != null && savedId.matches("^[a-zA-Z0-9_-]{8,64}$")) {
-                      persistentDeviceId = savedId;
-                  } else {
-                      String androidId = "";
-                      try {
-                          String raw = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
-                          if (raw != null && !"9774d56d682e549c".equalsIgnoreCase(raw)) {
-                              androidId = raw.replaceAll("[^a-zA-Z0-9_-]", "");
-                          }
-                      } catch (Exception ignored) {}
-
-                      if (androidId.length() >= 8) {
-                          persistentDeviceId = "tv_" + androidId;
-                      } else {
-                          persistentDeviceId = "tv_" + UUID.randomUUID().toString().replace("-", "");
-                      }
-                      prefs.edit().putString("ys_device_id", persistentDeviceId).commit();
-                  }
-
-                  String mfg = Build.MANUFACTURER != null ? Build.MANUFACTURER.trim() : "";
-                  String mdl = Build.MODEL != null ? Build.MODEL.trim() : "Android TV";
-                  String combined;
-                  if (!mfg.isEmpty() && !mdl.toLowerCase().startsWith(mfg.toLowerCase())) {
-                      String capMfg = mfg.substring(0, 1).toUpperCase() + mfg.substring(1);
-                      combined = capMfg + " " + mdl;
-                  } else {
-                      combined = mdl;
-                  }
-                  combined = combined.replaceAll("[^\\w\\s().-]", "").trim();
-                  if (combined.length() > 36) combined = combined.substring(0, 36);
-                  persistentDeviceName = combined.isEmpty() ? "Android TV" : combined;
-              }
-
-              public class NativeBridge {
-                  @JavascriptInterface
-                  public String getDeviceId() {
-                      return persistentDeviceId;
-                  }
-
-                  @JavascriptInterface
-                  public String getDeviceName() {
-                      return persistentDeviceName;
-                  }
-
-                  @JavascriptInterface
-                  public String getDeviceToken() {
-                      SharedPreferences prefs = getSharedPreferences("ystream_device_prefs", Context.MODE_PRIVATE);
-                      String tok = prefs.getString("ys_device_token", "");
-                      return tok != null ? tok : "";
-                  }
-
-                  @JavascriptInterface
-                  public void setDeviceToken(String token) {
-                      SharedPreferences prefs = getSharedPreferences("ystream_device_prefs", Context.MODE_PRIVATE);
-                      prefs.edit().putString("ys_device_token", token != null ? token : "").commit();
-                      try {
-                          CookieManager.getInstance().flush();
-                      } catch (Exception ignored) {}
-                  }
-              }
 
               private void enableImmersive() {
                   getWindow().getDecorView().setSystemUiVisibility(
@@ -383,7 +280,6 @@ jobs:
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
-                  initDeviceIdentity();
                   requestWindowFeature(Window.FEATURE_NO_TITLE);
                   setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
                   getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -399,11 +295,6 @@ jobs:
                   webView.setFocusable(true);
                   webView.setFocusableInTouchMode(true);
 
-                  try {
-                      CookieManager.getInstance().setAcceptCookie(true);
-                      CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
-                  } catch (Exception ignored) {}
-
                   WebSettings s = webView.getSettings();
                   s.setJavaScriptEnabled(true);
                   s.setDomStorageEnabled(true);
@@ -415,8 +306,6 @@ jobs:
                   s.setDisplayZoomControls(false);
                   s.setLoadWithOverviewMode(true);
                   s.setUseWideViewPort(true);
-
-                  webView.addJavascriptInterface(new NativeBridge(), "YStreamNative");
 
                   webView.setWebViewClient(new WebViewClient() {
                       @Override
@@ -499,9 +388,6 @@ jobs:
               @Override
               protected void onPause() {
                   isForeground = false;
-                  try {
-                      CookieManager.getInstance().flush();
-                  } catch (Exception ignored) {}
                   super.onPause();
               }
 
@@ -570,10 +456,10 @@ jobs:
           EOF
 
       - name: Build TV APK
-        run: gradle assembleRelease --no-daemon
+        run: gradle assembleDebug --no-daemon
 
       - name: Upload YStream TV APK
         uses: actions/upload-artifact@v4
         with:
           name: YStream-TV-APK
-          path: app/build/outputs/apk/release/app-release.apk
+          path: app/build/outputs/apk/debug/app-debug.apk
