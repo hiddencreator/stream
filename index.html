@@ -28,12 +28,9 @@
     }
 
     html, body {
-      position: fixed;
-      inset: 0;
       width: 100%;
-      height: 100dvh;
+      height: 100%;
       overflow: hidden;
-      overscroll-behavior: none;
       background: var(--bg);
       color: var(--text);
       font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
@@ -42,11 +39,13 @@
     body {
       display: flex;
       flex-direction: column;
+      height: 100vh;
+      height: 100dvh;
+      overscroll-behavior: none;
     }
 
     button, [tabindex] {
       outline: none;
-      transition: background-color 0.2s ease, opacity 0.2s ease, transform 0.16s ease;
     }
 
     button {
@@ -57,15 +56,13 @@
       font-size: 0.8rem;
       font-weight: 600;
       cursor: pointer;
+      transition: background-color 0.18s ease, opacity 0.18s ease;
     }
 
     button:hover,
     button:focus-visible {
       background: rgba(255, 255, 255, 0.18);
-      opacity: 0.96;
     }
-
-    button:active { transform: scale(0.97); }
 
     /* Fixed Top Player */
     .player-stage {
@@ -390,7 +387,7 @@
 
     /* Main Panel & Fixed 2-Tab Bar */
     .main-panel {
-      flex: 1;
+      flex: 1 1 auto;
       min-height: 0;
       display: flex;
       flex-direction: column;
@@ -436,15 +433,17 @@
     }
     .tab-btn.active .tab-badge { background: rgba(59, 130, 246, 0.3); color: #93c5fd; }
 
-    /* Scrollable List Only */
+    /* Butter-Smooth GPU Scroll Area */
     .scroll-area {
-      flex: 1;
+      flex: 1 1 auto;
       min-height: 0;
       overflow-y: auto;
-      overscroll-behavior: contain;
+      overflow-x: hidden;
+      overscroll-behavior-y: contain;
       touch-action: pan-y;
       -webkit-overflow-scrolling: touch;
-      padding: 12px 14px 28px;
+      transform: translateZ(0);
+      padding: 12px 14px 36px;
     }
     .tab-pane { display: none; }
     .tab-pane.active { display: block; }
@@ -462,10 +461,6 @@
       justify-content: space-between;
       gap: 12px;
       cursor: pointer;
-    }
-    .ch-card:hover, .ch-card:focus-visible {
-      background: var(--card-hover);
-      border-color: rgba(255, 255, 255, 0.16);
     }
     .ch-card.active { background: var(--active-bg); border-color: var(--active-border); }
 
@@ -505,49 +500,91 @@
     .ch-meta { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
     .ch-eq { font-size: 0.78rem; color: #60a5fa; font-weight: 800; padding-right: 4px; }
 
-    /* YPlay Card */
+    /* YPlay Card with Sleek Left Movie Poster Badge */
     .yp-card {
       background: linear-gradient(145deg, #141a27 0%, #0f141f 100%);
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 14px;
-      padding: 12px;
+      padding: 11px 13px;
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 13px;
       cursor: pointer;
-    }
-    .yp-card:hover, .yp-card:focus-visible {
-      background: linear-gradient(145deg, #1a2233 0%, #141a28 100%);
-      border-color: rgba(255, 255, 255, 0.18);
     }
     .yp-card.active {
       background: linear-gradient(145deg, #152542 0%, #101b30 100%);
       border-color: var(--active-border);
     }
+
     .yp-poster {
-      width: 48px;
-      height: 54px;
-      border-radius: 10px;
-      background: linear-gradient(135deg, rgba(229, 9, 20, 0.24) 0%, rgba(37, 99, 235, 0.22) 100%);
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      position: relative;
+      width: 50px;
+      height: 64px;
+      border-radius: 11px;
+      background: linear-gradient(160deg, #1e293b 0%, #0f172a 60%, #1d1528 100%);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 4px 12px rgba(0, 0, 0, 0.35);
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
+      justify-content: space-between;
+      padding: 6px 4px 5px;
       flex-shrink: 0;
-      color: #fff;
-      gap: 2px;
+      overflow: hidden;
+    }
+    .yp-poster::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #e50914, #3b82f6);
+      opacity: 0.85;
     }
     .yp-card.active .yp-poster {
-      background: linear-gradient(135deg, #e50914 0%, #b91c1c 100%);
-      border-color: rgba(255, 255, 255, 0.22);
+      background: linear-gradient(160deg, #dc2626 0%, #7f1d1d 100%);
+      border-color: rgba(252, 165, 165, 0.45);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 4px 16px rgba(229, 9, 20, 0.35);
     }
-    .yp-num { font-size: 0.68rem; font-weight: 700; color: rgba(255, 255, 255, 0.78); }
+    .yp-card.active .yp-poster::before {
+      background: #fff;
+      opacity: 0.9;
+    }
+    .yp-poster-icon {
+      margin-top: 3px;
+      width: 26px;
+      height: 26px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #f8fafc;
+    }
+    .yp-card.active .yp-poster-icon {
+      background: rgba(0, 0, 0, 0.25);
+      color: #fff;
+    }
+    .yp-num {
+      font-size: 0.65rem;
+      font-weight: 800;
+      letter-spacing: 0.4px;
+      padding: 1px 6px;
+      border-radius: 5px;
+      background: rgba(0, 0, 0, 0.42);
+      color: #e2e8f0;
+    }
+    .yp-card.active .yp-num {
+      background: rgba(0, 0, 0, 0.45);
+      color: #fff;
+    }
+
     .yp-info { flex: 1; min-width: 0; }
     .yp-title {
       font-size: 0.92rem;
       font-weight: 700;
-      line-height: 1.3;
+      line-height: 1.32;
       color: #f8fafc;
       display: -webkit-box;
       -webkit-line-clamp: 2;
@@ -566,18 +603,12 @@
     }
     .yp-tag.qual { background: rgba(59, 130, 246, 0.18); color: #93c5fd; }
     .yp-tag.qual-4k { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
-    .yp-play-btn {
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      background: rgba(255, 255, 255, 0.1);
-      color: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
+    .yp-tag.now { background: rgba(229, 9, 20, 0.24); color: #fca5a5; }
+
+    @media (hover: hover) {
+      .ch-card:hover { background: var(--card-hover); border-color: rgba(255, 255, 255, 0.16); }
+      .yp-card:hover { background: linear-gradient(145deg, #1a2233 0%, #141a28 100%); border-color: rgba(255, 255, 255, 0.18); }
     }
-    .yp-card.active .yp-play-btn { background: var(--accent); }
 
     @media (min-width: 768px) {
       video { max-height: 46dvh; }
@@ -663,17 +694,14 @@
             </div>
 
             <div class="yt-act-grp">
-              <!-- Language (Visible only if multi-audio) -->
               <div id="langWrap" class="pop-wrap hidden">
                 <button id="langBtn" class="yt-btn" onclick="togglePop('langMenu')">Audio</button>
                 <div id="langMenu" class="pop-menu"></div>
               </div>
-              <!-- Caption (Visible only if subtitles exist) -->
               <div id="subWrap" class="pop-wrap hidden">
                 <button id="subBtn" class="yt-btn" onclick="togglePop('subMenu')">CC</button>
                 <div id="subMenu" class="pop-menu"></div>
               </div>
-              <!-- Quality -->
               <div class="pop-wrap">
                 <button id="vodQualBtn" class="yt-btn" onclick="togglePop('vodQualMenu')">Orig</button>
                 <div id="vodQualMenu" class="pop-menu">
@@ -683,7 +711,6 @@
                   <button class="pop-opt" data-q="360" onclick="setVodQuality('360')">360p</button>
                 </div>
               </div>
-              <!-- Speed -->
               <div class="pop-wrap">
                 <button id="speedBtn" class="yt-btn" onclick="togglePop('speedMenu')">1x</button>
                 <div id="speedMenu" class="pop-menu">
@@ -737,13 +764,13 @@
 
     const ICONS = {
       play: `<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`,
-      playSm: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`,
       pause: `<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`,
       volOn: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>`,
       volOff: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>`,
       fsEnter: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>`,
       fsExit: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>`,
-      film: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.5"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg>`
+      cinema: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8H4Z"/><path d="m4 11-.88-2.87a2 2 0 0 1 1.33-2.5l11.48-3.5a2 2 0 0 1 2.5 1.32l.87 2.87L4 11.01Z"/><path d="m6.6 4.99 3.38 4.2"/><path d="m11.86 3.38 3.38 4.2"/></svg>`,
+      nowPlaying: `<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="10" width="3" height="10" rx="1.5"/><rect x="10.5" y="5" width="3" height="15" rx="1.5"/><rect x="17" y="8" width="3" height="12" rx="1.5"/></svg>`
     };
 
     const CHANNELS = [
@@ -815,10 +842,9 @@
     let shuttingDown = false;
     let selectedLiveQuality = "auto";
 
-    /* YPlay Player State */
     let vodQuality = "orig";
     let vodAudioIdx = 0;
-    let vodSubIdx = -1; // -1 = Off
+    let vodSubIdx = -1;
     let transcodeMode = false;
     let baseOffset = 0;
     let lastSavedPosTime = 0;
@@ -988,7 +1014,6 @@
       }
     }
 
-    /* YPlay Quality, Audio Language, Subtitles */
     function setVodQuality(q) {
       vodQuality = q;
       vodQualBtn.textContent = q === "orig" ? "Orig" : `${q}p`;
@@ -1119,7 +1144,6 @@
       }
     }
 
-    /* Live Quality Control */
     function renderLiveQualityOptions(heights) {
       const unique = Array.from(new Set(heights.filter((h) => h > 0))).sort((a, b) => b - a);
       const opts = [
@@ -1701,7 +1725,10 @@
       if (!yplayItems.length) {
         box.innerHTML = `
           <div class="yp-card" tabindex="0">
-            <div class="yp-poster">${ICONS.film}</div>
+            <div class="yp-poster">
+              <div class="yp-poster-icon">${ICONS.cinema}</div>
+              <span class="yp-num">#00</span>
+            </div>
             <div class="yp-info">
               <div class="yp-title">Queue is Empty</div>
               <div class="yp-tags"><span class="yp-tag">Forward a movie to your Telegram bot</span></div>
@@ -1711,28 +1738,29 @@
       }
 
       box.innerHTML = yplayItems.map((m, i) => {
+        const isCurrent = i === activeYPlayIdx;
         const gbStr = fmtGB(m.file_size);
         const qStr = m.quality || "HD";
         const durStr = fmtDurShort(m.duration);
         const qCls = qStr === "4K" ? "yp-tag qual-4k" : "yp-tag qual";
-        const cls = i === activeYPlayIdx ? "yp-card active" : "yp-card";
+        const cls = isCurrent ? "yp-card active" : "yp-card";
         const num = String(i + 1).padStart(2, "0");
 
         return `
           <div class="${cls}" tabindex="0" onclick="loadYPlay(${i}, true)" onkeydown="if(event.key==='Enter'){event.preventDefault();loadYPlay(${i},true);}">
             <div class="yp-poster">
-              ${ICONS.film}
+              <div class="yp-poster-icon">${isCurrent ? ICONS.nowPlaying : ICONS.cinema}</div>
               <span class="yp-num">#${num}</span>
             </div>
             <div class="yp-info">
               <div class="yp-title">${esc(m.title)}</div>
               <div class="yp-tags">
+                ${isCurrent ? `<span class="yp-tag now">PLAYING</span>` : ""}
                 <span class="${qCls}">${esc(qStr)}</span>
                 <span class="yp-tag">${esc(gbStr)}</span>
                 ${durStr ? `<span class="yp-tag">${esc(durStr)}</span>` : ""}
               </div>
             </div>
-            <div class="yp-play-btn">${ICONS.playSm}</div>
           </div>
         `;
       }).join("");
