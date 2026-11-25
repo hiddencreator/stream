@@ -1188,7 +1188,7 @@
       </div>
       <div id="authBadge" class="auth-badge">Security Check</div>
       <div id="authTitle" class="auth-title">Device Approval Required</div>
-      <div id="authDesc" class="auth-desc">An approval notification has been sent to your Telegram bot. Tap <b>Approve</b> to unlock permanent access on this device.</div>
+      <div id="authDesc" class="auth-desc">An approval request has been sent to your Telegram bot. Tap <b>Approve</b> to unlock permanent access.</div>
 
       <div class="auth-meta">
         <div class="auth-meta-row">
@@ -1349,8 +1349,16 @@
     const liveListPane = document.getElementById("liveListPane");
     const yplayListPane = document.getElementById("yplayListPane");
 
-    /* Safe Persistent Storage Helpers */
+    /* Safe Persistent Storage Helpers (Synced with Native Android TV Bridge) */
     function safeGetStorage(k, fallback = "") {
+      if (k === "ys_device_token") {
+        try {
+          if (window.YStreamNative && typeof window.YStreamNative.getDeviceToken === "function") {
+            const nt = String(window.YStreamNative.getDeviceToken() || "").trim();
+            if (nt) return nt;
+          }
+        } catch (_) {}
+      }
       try {
         const v = localStorage.getItem(k);
         if (v !== null && v !== "") return v;
@@ -1377,12 +1385,24 @@
           document.cookie = `${k}=${encodeURIComponent(v)}; path=/; max-age=315360000; SameSite=Lax`;
         } catch (_) {}
       }
+      if (k === "ys_device_token") {
+        try {
+          if (window.YStreamNative && typeof window.YStreamNative.setDeviceToken === "function") {
+            window.YStreamNative.setDeviceToken(String(v || ""));
+          }
+        } catch (_) {}
+      }
     }
 
     function safeRemoveStorage(k) {
       try { localStorage.removeItem(k); } catch (_) {}
       if (k === "ys_device_token") {
         try { document.cookie = `${k}=; path=/; max-age=0`; } catch (_) {}
+        try {
+          if (window.YStreamNative && typeof window.YStreamNative.setDeviceToken === "function") {
+            window.YStreamNative.setDeviceToken("");
+          }
+        } catch (_) {}
       }
     }
 
@@ -1390,7 +1410,6 @@
        PERSISTENT DEVICE IDENTITY & TELEGRAM APPROVAL GATE
     ========================================================================= */
     function getOrCreateDeviceId() {
-      // 1. Prefer Native Android TV Hardware/SharedPreferences ID if available
       try {
         if (window.YStreamNative && typeof window.YStreamNative.getDeviceId === "function") {
           const nativeId = String(window.YStreamNative.getDeviceId() || "").trim();
@@ -1401,7 +1420,6 @@
         }
       } catch (_) {}
 
-      // 2. Persistent Storage / Cookie ID (Survives Wi-Fi changes, restarts & power off)
       let stored = safeGetStorage("ys_device_id", "");
       if (stored && /^[a-zA-Z0-9_-]{8,64}$/.test(stored)) {
         safeSetStorage("ys_device_id", stored);
@@ -1630,6 +1648,7 @@
     let yplayItems = [];
     let yplaySig = "";
     let activeYPlayIdx = -1;
+    let activeYPlayId = "";
     let drawerTab = "live";
     let isLive = true;
     let hudTimer = null;
@@ -1669,7 +1688,7 @@
           const curPos = Math.floor(getEffectiveTime());
           const item = yplayItems[activeYPlayIdx];
           if (item && curPos > 2) safeSetStorage(`yp_pos_${item.id}`, String(curPos));
-          shutdownSnapshot = { mode: "yplay", yplayIdx: activeYPlayIdx, yplayPos: curPos };
+          shutdownSnapshot = { mode: "yplay", yplayId: activeYPlayId, yplayIdx: activeYPlayIdx, yplayPos: curPos };
         }
 
         playSessionId++;
@@ -1691,10 +1710,13 @@
         shutdownSnapshot = null;
 
         await resolveDirectTunnel();
-        if (snap && snap.mode === "yplay" && snap.yplayIdx >= 0) {
+        if (snap && snap.mode === "yplay") {
           await fetchYPlay(false);
-          if (snap.yplayIdx < yplayItems.length) {
-            loadYPlay(snap.yplayIdx, true, snap.yplayPos || null);
+          const foundIdx = snap.yplayId
+            ? yplayItems.findIndex((m) => m.id === snap.yplayId)
+            : snap.yplayIdx;
+          if (foundIdx >= 0 && foundIdx < yplayItems.length) {
+            loadYPlay(foundIdx, true, snap.yplayPos || null);
             return;
           }
         }
@@ -1898,7 +1920,7 @@
       return menuBtn;
     }
 
-    /* TV Center-Locked List Scroll (Steady 150ms 1-by-1 cadence on long press) */
+    /* TV Center-Locked List Scroll */
     let lastDrawerNavAt = 0;
 
     function centerDrawerItem(el) {
@@ -2470,12 +2492,13 @@
       return unique;
     }
 
-    function populateYPlayTracks(item) {
+    function populateYPlayTracks(item, preserveSelection = false) {
       const tracks = getCleanVodAudioTracks(item);
       if (tracks.length >= 2) {
         langWrap.classList.remove("hidden");
+        const existingTrack = preserveSelection ? tracks.find((t) => t.index === vodAudioIdx) : null;
         const tamilTrack = tracks.find((t) => t.is_tamil || t.cleanLabel.toLowerCase().startsWith("tamil"));
-        const defTrack = tamilTrack || tracks.find((t) => t.index === item.default_audio_idx) || tracks[0];
+        const defTrack = existingTrack || tamilTrack || tracks.find((t) => t.index === item.default_audio_idx) || tracks[0];
         vodAudioIdx = defTrack.index;
         langBtn.textContent = defTrack.cleanLabel;
         langMenu.innerHTML = tracks.map((t) =>
@@ -2491,10 +2514,12 @@
       const subs = Array.isArray(item.subtitles) ? item.subtitles : [];
       if (subs.length > 0) {
         subWrap.classList.remove("hidden");
-        vodSubIdx = -1;
-        subBtn.textContent = "CC";
-        subMenu.innerHTML = `<button class="pop-opt active" data-s="-1" onclick="setVodSub(-1);">Off</button>` +
-          subs.map((s) => `<button class="pop-opt" data-s="${s.index}" onclick="setVodSub(${s.index});">${esc(s.label)}</button>`).join("");
+        if (!preserveSelection || !subs.some((s) => s.index === vodSubIdx)) {
+          vodSubIdx = -1;
+        }
+        subBtn.textContent = vodSubIdx >= 0 ? "CC On" : "CC";
+        subMenu.innerHTML = `<button class="pop-opt ${vodSubIdx < 0 ? "active" : ""}" data-s="-1" onclick="setVodSub(-1);">Off</button>` +
+          subs.map((s) => `<button class="pop-opt ${s.index === vodSubIdx ? "active" : ""}" data-s="${s.index}" onclick="setVodSub(${s.index});">${esc(s.label)}</button>`).join("");
       } else {
         subWrap.classList.add("hidden");
         vodSubIdx = -1;
@@ -2956,6 +2981,7 @@
       if (resetFail) liveFailCount = 0;
       activeChannelId = ch.id;
       activeYPlayIdx = -1;
+      activeYPlayId = "";
       dishNum.textContent = ch.num;
       dishName.textContent = ch.name;
       pendingResumeTime = 0;
@@ -3059,8 +3085,10 @@
       await cleanupPlayers();
       if (session !== playSessionId || isSystemStopped || !isDeviceApproved) return;
 
+      const item = yplayItems[idx];
       activeChannelId = "";
       activeYPlayIdx = idx;
+      activeYPlayId = item.id;
       errorRetries = 0;
       audioAutoChecked = false;
       vodQuality = "orig";
@@ -3070,9 +3098,8 @@
       exitScrubMode(false);
       lastHudFocusEl = centerPlayBtn;
 
-      const item = yplayItems[idx];
       const serverIdx = typeof item.index === "number" ? item.index : idx;
-      populateYPlayTracks(item);
+      populateYPlayTracks(item, false);
       configureHudMode(true);
 
       const gbStr = fmtGB(item.file_size);
@@ -3630,17 +3657,23 @@
         if (sig !== yplaySig) {
           yplaySig = sig;
           yplayItems = nextItems;
-          if (!yplayItems.length && !isLive) {
-            activeYPlayIdx = -1;
-            const ch = CHANNELS.find((c) => c.id === activeChannelId) || CHANNELS[0];
-            playChannel(ch, true, true);
+
+          if (!isLive && activeYPlayId) {
+            const matchedIdx = yplayItems.findIndex((m) => m.id === activeYPlayId);
+            if (matchedIdx >= 0) {
+              activeYPlayIdx = matchedIdx;
+              populateYPlayTracks(yplayItems[activeYPlayIdx], true);
+            } else {
+              activeYPlayIdx = -1;
+              activeYPlayId = "";
+              const ch = CHANNELS.find((c) => c.id === activeChannelId) || CHANNELS[0];
+              playChannel(ch, true, true);
+            }
           }
+
           renderYPlayListPane();
           if (!isLive) {
             nextBtn.classList.toggle("hidden", yplayItems.length <= 1);
-          }
-          if (!isLive && activeYPlayIdx >= 0 && yplayItems[activeYPlayIdx]) {
-            populateYPlayTracks(yplayItems[activeYPlayIdx]);
           }
         }
       } catch (_) {}
