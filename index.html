@@ -49,7 +49,7 @@
       user-select: none;
     }
 
-    /* 100% Fullscreen Stage */
+    /* 100% Fullscreen Video Stage */
     .stage {
       position: fixed;
       inset: 0;
@@ -69,56 +69,44 @@
       border: 0 !important;
     }
 
-    /* Simple & Elegant Loading Screen */
-    .loading-stage {
+    /* Center Loader Ring (Replaces Play/Pause in-place while video stays visible in background) */
+    .center-loader {
       position: absolute;
-      inset: 0;
-      z-index: 10;
-      background: #07090e;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: rgba(10, 13, 20, 0.65);
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 14px;
-      padding: 24px;
+      z-index: 19;
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.2s ease;
+      transition: opacity 0.16s ease;
     }
 
-    .loading-stage.show { opacity: 1; }
+    .center-loader.show {
+      opacity: 1;
+    }
 
-    .sleek-ring {
-      width: 34px;
-      height: 34px;
+    .center-loader::after {
+      content: "";
+      width: 30px;
+      height: 30px;
       border-radius: 50%;
-      border: 2.5px solid rgba(255, 255, 255, 0.14);
+      border: 2.5px solid rgba(255, 255, 255, 0.2);
       border-top-color: #ffffff;
-      animation: spinRing 0.75s linear infinite;
+      animation: spinRing 0.72s linear infinite;
     }
 
     @keyframes spinRing {
       to { transform: rotate(360deg); }
     }
 
-    .load-title {
-      font-size: clamp(1rem, 2.4vw, 1.35rem);
-      font-weight: 700;
-      color: #f8fafc;
-      text-align: center;
-      max-width: 80vw;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .load-sub {
-      font-size: 0.8rem;
-      color: var(--muted);
-      margin-top: -6px;
-    }
-
-    /* Exit Toast (Double-Back to Exit) */
+    /* Double-Back Exit Toast */
     .exit-toast {
       position: fixed;
       bottom: 34px;
@@ -135,7 +123,7 @@
       box-shadow: 0 10px 26px rgba(0, 0, 0, 0.7);
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.18s ease, transform 0.18s ease;
+      transition: opacity 0.16s ease, transform 0.16s ease;
     }
 
     .exit-toast.show {
@@ -227,7 +215,7 @@
       cursor: pointer;
     }
 
-    /* Unified Fullscreen Player HUD (Shows & Hides Everything Together) */
+    /* Unified Fullscreen Player HUD */
     .hud {
       position: absolute;
       inset: 0;
@@ -254,7 +242,7 @@
       pointer-events: auto;
     }
 
-    /* Top Bar: Settings Icon + Title (YPlay) + Dish Channel Card (Live TV) */
+    /* Top Bar */
     .hud-top {
       display: flex;
       align-items: flex-start;
@@ -302,7 +290,7 @@
       margin-top: 2px;
     }
 
-    /* Big DTH Dish Channel Banner (Unified inside HUD) */
+    /* Big DTH Dish Channel Banner (Live TV) */
     .dish-osd {
       display: flex;
       align-items: center;
@@ -354,14 +342,14 @@
       background: var(--accent);
     }
 
-    /* Center Play/Pause Button (YPlay only) */
+    /* Center Play/Pause Button (Hides cleanly while center-loader spins) */
     .center-play-btn {
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      width: 66px;
-      height: 66px;
+      width: 64px;
+      height: 64px;
       border-radius: 50%;
       background: linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, rgba(15, 18, 26, 0.78) 100%);
       border: 1.5px solid rgba(255, 255, 255, 0.2);
@@ -370,10 +358,16 @@
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      transition: background 0.18s ease, border-color 0.18s ease;
+      opacity: 1;
+      transition: opacity 0.15s ease, background 0.18s ease, border-color 0.18s ease;
     }
 
-    /* Bottom Controls & Custom YouTube Progress Bar */
+    .center-play-btn.loading-hide {
+      opacity: 0 !important;
+      pointer-events: none;
+    }
+
+    /* Bottom Controls & Borderless YouTube Progress Bar */
     .hud-bottom {
       display: flex;
       flex-direction: column;
@@ -397,18 +391,16 @@
     }
     .time-lbl.end { text-align: right; }
 
-    /* Custom Sleek YouTube Progress Track */
+    /* Borderless YouTube Progress Track (Zero white box border = zero flicker) */
     .yt-track-wrap {
       position: relative;
       flex: 1;
-      height: 32px;
+      height: 30px;
       display: flex;
       align-items: center;
       cursor: pointer;
-      border-radius: 99px;
-      padding: 0 8px;
-      border: 1.5px solid transparent;
-      transition: background 0.16s ease, border-color 0.16s ease;
+      border: none !important;
+      background: transparent !important;
     }
 
     .yt-track-bg {
@@ -417,14 +409,14 @@
       height: 4px;
       border-radius: 99px;
       background: rgba(255, 255, 255, 0.26);
-      overflow: visible;
-      transition: height 0.15s ease;
+      transition: height 0.14s ease, background 0.14s ease;
     }
 
+    .yt-track-wrap:focus .yt-track-bg,
     .yt-track-wrap:focus-visible .yt-track-bg,
     .yt-track-wrap.scrubbing .yt-track-bg {
       height: 7px;
-      background: rgba(255, 255, 255, 0.38);
+      background: rgba(255, 255, 255, 0.42);
     }
 
     .yt-track-fill {
@@ -434,49 +426,51 @@
       bottom: 0;
       width: 0%;
       border-radius: 99px;
-      background: linear-gradient(90deg, #ff2a36 0%, #ff5a63 100%);
+      background: #ff2a36;
     }
 
     .yt-track-thumb {
       position: absolute;
       top: 50%;
       left: 0%;
-      transform: translate(-50%, -50%) scale(0.8);
+      transform: translate(-50%, -50%) scale(0.75);
       width: 15px;
       height: 15px;
       border-radius: 50%;
       background: #ff2a36;
       border: 2px solid #fff;
-      box-shadow: 0 0 8px rgba(0, 0, 0, 0.7);
-      transition: transform 0.15s ease, background 0.15s ease;
+      transition: transform 0.14s ease, background 0.14s ease, box-shadow 0.14s ease;
     }
 
+    .yt-track-wrap:focus .yt-track-thumb,
     .yt-track-wrap:focus-visible .yt-track-thumb {
-      transform: translate(-50%, -50%) scale(1.18);
+      transform: translate(-50%, -50%) scale(1.25);
+      box-shadow: 0 0 0 5px rgba(255, 42, 54, 0.35);
     }
 
     .yt-track-wrap.scrubbing .yt-track-thumb {
       transform: translate(-50%, -50%) scale(1.42);
       background: #fff;
       border-color: #ff2a36;
+      box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.28);
     }
 
     .scrub-bubble {
       position: absolute;
-      bottom: 30px;
+      bottom: 26px;
       left: 0%;
       transform: translateX(-50%);
       background: #121620;
-      border: 1px solid rgba(255, 255, 255, 0.34);
+      border: 1px solid rgba(255, 255, 255, 0.26);
       color: #fff;
-      font-size: 0.76rem;
+      font-size: 0.78rem;
       font-weight: 800;
       padding: 4px 10px;
       border-radius: 8px;
       white-space: nowrap;
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.14s ease;
+      transition: opacity 0.12s ease;
     }
 
     .yt-track-wrap.scrubbing .scrub-bubble {
@@ -786,17 +780,23 @@
       color: #fca5a5;
     }
 
-    /* Glossy Fade + Minimal White Border Focus */
+    /* Glossy Fade + Minimal White Border Focus (Pill Buttons & Drawer Items Only) */
+    .icon-btn:focus,
     .icon-btn:focus-visible,
     .icon-btn:hover,
+    .ctrl-btn:focus,
     .ctrl-btn:focus-visible,
     .ctrl-btn:hover,
+    .pop-opt:focus,
     .pop-opt:focus-visible,
     .pop-opt:hover,
+    .d-tab:focus,
     .d-tab:focus-visible,
     .d-tab:hover,
+    .d-item:focus,
     .d-item:focus-visible,
     .d-item:hover,
+    .err-btn:focus,
     .err-btn:focus-visible,
     .err-btn:hover {
       background: linear-gradient(180deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.11) 100%) !important;
@@ -805,20 +805,11 @@
       transform: scale(1.04);
     }
 
+    .center-play-btn:focus,
     .center-play-btn:focus-visible,
     .center-play-btn:hover {
       background: linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0.12) 100%) !important;
       border-color: rgba(255, 255, 255, 0.85) !important;
-    }
-
-    .yt-track-wrap:focus-visible {
-      background: rgba(255, 255, 255, 0.08);
-      border-color: rgba(255, 255, 255, 0.72);
-    }
-
-    .yt-track-wrap.scrubbing {
-      background: rgba(229, 9, 20, 0.16);
-      border-color: #ffffff;
     }
 
     @keyframes clickBounce {
@@ -837,12 +828,8 @@
   <div class="stage" id="stage" tabindex="-1">
     <video id="video" tabindex="-1" playsinline preload="auto" poster="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></video>
 
-    <!-- Simple & Elegant Loading Screen -->
-    <div id="loadingStage" class="loading-stage show">
-      <div class="sleek-ring"></div>
-      <div id="loadTitle" class="load-title">Sun TV</div>
-      <div id="loadSub" class="load-sub">Loading...</div>
-    </div>
+    <!-- Center Loader Ring (Sits in exact Play/Pause spot; background video stays visible) -->
+    <div id="centerLoader" class="center-loader show"></div>
 
     <!-- Double-Back Exit Toast -->
     <div id="exitToast" class="exit-toast">Press Back again to exit</div>
@@ -866,7 +853,7 @@
       </div>
     </div>
 
-    <!-- Unified Fullscreen Player HUD (All Options + Dish Channel Card Show & Hide Together) -->
+    <!-- Unified Fullscreen Player HUD -->
     <div id="hud" class="hud">
       <div class="hud-top">
         <div class="hud-top-left">
@@ -882,7 +869,7 @@
           </div>
         </div>
 
-        <!-- Big DTH Dish Channel Banner (Live TV Only — Unified inside HUD) -->
+        <!-- Big DTH Dish Channel Banner (Live TV Only) -->
         <div id="dishOsd" class="dish-osd">
           <div id="dishNum" class="dish-num">01</div>
           <div class="dish-info">
@@ -892,11 +879,11 @@
         </div>
       </div>
 
-      <!-- Center Play/Pause (YPlay Only) -->
+      <!-- Center Play/Pause (YPlay Only — Hides smoothly when centerLoader spins) -->
       <button id="centerPlayBtn" class="center-play-btn hidden" onclick="event.stopPropagation(); toggleVodPlay();"></button>
 
       <div class="hud-bottom" onclick="event.stopPropagation()">
-        <!-- Custom YouTube Progress Bar (YPlay Only) -->
+        <!-- Borderless YouTube Progress Bar (YPlay Only) -->
         <div id="progressRow" class="yt-progress-row hidden">
           <span id="curTxt" class="time-lbl">00:00</span>
           <div id="progressBar" class="yt-track-wrap" tabindex="0" role="slider" aria-label="Seek timeline">
@@ -1007,9 +994,7 @@
 
     const stage = document.getElementById("stage");
     const video = document.getElementById("video");
-    const loadingStage = document.getElementById("loadingStage");
-    const loadTitle = document.getElementById("loadTitle");
-    const loadSub = document.getElementById("loadSub");
+    const centerLoader = document.getElementById("centerLoader");
     const exitToast = document.getElementById("exitToast");
     const dishOsd = document.getElementById("dishOsd");
     const dishNum = document.getElementById("dishNum");
@@ -1057,7 +1042,6 @@
     let hls = null;
     let shakaPlayer = null;
     let activeChannelId = "suntv";
-    let currentMediaTitle = "Sun TV";
     let yplayItems = [];
     let yplaySig = "";
     let activeYPlayIdx = -1;
@@ -1070,15 +1054,33 @@
     let drawerOpen = false;
     let isZapping = false;
 
-    /* Persistent Android TV WebView Back-Button Trap + Double-Back to Exit */
+    /* Persistent Focus Memory (Never resets to first button after closing an option) */
+    let lastHudFocusEl = menuBtn;
+    let activePopupTrigger = null;
+
+    document.addEventListener("focusin", (e) => {
+      if (hud.contains(e.target) && !e.target.closest(".pop-menu")) {
+        lastHudFocusEl = e.target;
+      }
+    });
+
+    function getBestHudFocus(preferred = null) {
+      const candidates = [preferred, lastHudFocusEl, menuBtn];
+      for (const el of candidates) {
+        if (el && hud.contains(el) && !el.classList.contains("hidden") && el.closest(".hidden") === null) {
+          return el;
+        }
+      }
+      return menuBtn;
+    }
+
+    /* Back-Button Trap + Double-Back to Exit */
     let lastBackTime = 0;
     let exitConfirmReady = false;
     let exitToastTimer = null;
 
     function armHistoryAnchor() {
-      try {
-        history.pushState({ ystreamAnchor: Date.now() }, "");
-      } catch (_) {}
+      try { history.pushState({ ystreamAnchor: Date.now() }, ""); } catch (_) {}
     }
 
     function showExitToast() {
@@ -1093,7 +1095,7 @@
 
     function processBackAction() {
       const now = Date.now();
-      if (now - lastBackTime < 140) return true;
+      if (now - lastBackTime < 150) return true;
       lastBackTime = now;
 
       if (isScrubbing) {
@@ -1102,10 +1104,10 @@
         return true;
       }
       if (hasOpenPop()) {
-        const openMenu = document.querySelector(".pop-menu.open");
-        const trigger = openMenu ? openMenu.parentElement.querySelector("button") : null;
+        const trigger = activePopupTrigger;
         closeAllPops();
-        if (trigger) trigger.focus({ preventScroll: true });
+        const target = getBestHudFocus(trigger);
+        target.focus({ preventScroll: true });
         resetHudTimer();
         return true;
       }
@@ -1117,19 +1119,16 @@
         hideHud();
         return true;
       }
-
-      /* Pure Fullscreen: Require 2nd Back Press within 2.2s to Exit */
       if (!exitConfirmReady) {
         showExitToast();
         return true;
       }
-      return false; // Allow real exit on 2nd Back press
+      return false;
     }
 
     armHistoryAnchor();
     window.addEventListener("popstate", () => {
-      const intercepted = processBackAction();
-      if (intercepted) {
+      if (processBackAction()) {
         armHistoryAnchor();
       }
     });
@@ -1138,11 +1137,11 @@
     let isScrubbing = false;
     let scrubPreviewSec = 0;
 
-    /* Double-Tap / Double-Press Seek State */
+    /* Strict Double-Tap / Double-Press Seek State */
     let lastTouchTap = 0;
     let touchSingleTimer = null;
-    let lastRemoteArrow = "";
-    let lastRemoteArrowTime = 0;
+    let lastRemoteDir = "";
+    let lastRemoteDirTime = 0;
     let pendingSeekDelta = 0;
     let seekExecTimer = null;
     let seekFlashTimer = null;
@@ -1178,24 +1177,26 @@
       el.classList.add("click-bounce");
     }
 
-    function showLoading(title, sub, immediate = false) {
+    /* Center Loader Morph (Hides Play/Pause button while loading; background video stays visible) */
+    function showLoading(immediate = false) {
       clearTimeout(loadDebounce);
-      loadTitle.textContent = title || currentMediaTitle;
-      loadSub.textContent = sub;
       if (immediate) {
-        loadingStage.classList.add("show");
+        centerLoader.classList.add("show");
+        centerPlayBtn.classList.add("loading-hide");
       } else {
         loadDebounce = setTimeout(() => {
           if (!video.paused && !playerError.classList.contains("show")) {
-            loadingStage.classList.add("show");
+            centerLoader.classList.add("show");
+            centerPlayBtn.classList.add("loading-hide");
           }
-        }, 280);
+        }, 240);
       }
     }
 
     function hideLoading() {
       clearTimeout(loadDebounce);
-      loadingStage.classList.remove("show");
+      centerLoader.classList.remove("show");
+      centerPlayBtn.classList.remove("loading-hide");
     }
 
     function syncIcons() {
@@ -1225,14 +1226,14 @@
       }
     }
 
-    /* Unified HUD Show / Hide (Channel Card + Player Options Always Together) */
+    /* Unified HUD Show / Hide */
     function isHudVisible() { return hud.classList.contains("visible"); }
 
-    function showHud(focusTarget = null, autoHideMs = 4200) {
+    function showHud(preferredFocus = null, autoHideMs = 4200) {
       if (drawerOpen) return;
       hud.classList.add("visible");
-      const target = focusTarget || (hud.contains(document.activeElement) ? document.activeElement : menuBtn);
-      if (target) target.focus({ preventScroll: true });
+      const target = getBestHudFocus(preferredFocus);
+      target.focus({ preventScroll: true });
       resetHudTimer(autoHideMs);
     }
 
@@ -1259,6 +1260,7 @@
       document.querySelectorAll(".pop-menu.open").forEach((el) => {
         if (el.id !== exceptId) el.classList.remove("open");
       });
+      if (!exceptId) activePopupTrigger = null;
     }
 
     function hasOpenPop() { return Boolean(document.querySelector(".pop-menu.open")); }
@@ -1267,12 +1269,18 @@
       const menu = document.getElementById(id);
       if (!menu) return;
       const wasOpen = menu.classList.contains("open");
+      const trigger = menu.parentElement.querySelector("button");
       closeAllPops(id);
       menu.classList.toggle("open", !wasOpen);
       if (!wasOpen) {
+        activePopupTrigger = trigger;
+        lastHudFocusEl = trigger;
         resetHudTimer(5500);
         const activeOpt = menu.querySelector(".pop-opt.active") || menu.querySelector(".pop-opt");
         if (activeOpt) activeOpt.focus({ preventScroll: true });
+      } else {
+        activePopupTrigger = null;
+        if (trigger) trigger.focus({ preventScroll: true });
       }
     }
 
@@ -1280,6 +1288,7 @@
     function openDrawer() {
       if (drawerOpen) return;
       drawerOpen = true;
+      lastHudFocusEl = menuBtn;
       exitScrubMode(false);
       closeAllPops();
       hideHud();
@@ -1466,6 +1475,7 @@
       }
       updateLiveAudioUi();
       closeAllPops();
+      lastHudFocusEl = langBtn;
       langBtn.focus({ preventScroll: true });
       resetHudTimer();
     }
@@ -1509,6 +1519,7 @@
       }
       updateLiveQualUi();
       closeAllPops();
+      lastHudFocusEl = qualBtn;
       qualBtn.focus({ preventScroll: true });
       resetHudTimer();
     }
@@ -1531,6 +1542,7 @@
       vodQuality = q;
       renderVodQualMenu();
       closeAllPops();
+      lastHudFocusEl = qualBtn;
       qualBtn.focus({ preventScroll: true });
       if (!isLive && activeYPlayIdx >= 0) restartYPlayAt(getEffectiveTime());
     }
@@ -1606,6 +1618,7 @@
       langBtn.textContent = tr ? tr.cleanLabel : "Audio";
       langMenu.querySelectorAll(".pop-opt").forEach((b) => b.classList.toggle("active", Number(b.dataset.a) === idx));
       closeAllPops();
+      lastHudFocusEl = langBtn;
       langBtn.focus({ preventScroll: true });
       if (!isLive && activeYPlayIdx >= 0) restartYPlayAt(getEffectiveTime());
     }
@@ -1614,6 +1627,7 @@
       vodSubIdx = idx;
       subMenu.querySelectorAll(".pop-opt").forEach((b) => b.classList.toggle("active", Number(b.dataset.s) === idx));
       closeAllPops();
+      lastHudFocusEl = subBtn;
       subBtn.focus({ preventScroll: true });
       if (idx < 0) {
         subBtn.textContent = "CC";
@@ -1631,17 +1645,18 @@
       speedBtn.textContent = `${rate}x`;
       document.querySelectorAll("#speedMenu .pop-opt").forEach((b) => b.classList.toggle("active", Number(b.dataset.rate) === rate));
       closeAllPops();
+      lastHudFocusEl = speedBtn;
       speedBtn.focus({ preventScroll: true });
       resetHudTimer();
     }
 
-    /* YouTube 2-Step Progress Bar Functions */
+    /* YouTube 2-Step Progress Bar (Clean Timestamp Only — No "OK" Text) */
     function renderProgressVisual(curSec, durSec) {
       const pct = durSec > 0 ? Math.max(0, Math.min(100, (curSec / durSec) * 100)) : 0;
       progressFill.style.width = `${pct}%`;
       progressThumb.style.left = `${pct}%`;
       scrubBubble.style.left = `${pct}%`;
-      scrubBubble.textContent = isScrubbing ? `${fmt(curSec)} • OK` : fmt(curSec);
+      scrubBubble.textContent = fmt(curSec);
       curTxt.textContent = fmt(curSec);
       if (durSec > 0) durTxt.textContent = fmt(durSec);
     }
@@ -1650,6 +1665,7 @@
       const dur = getEffectiveDuration();
       if (isLive || dur <= 0) return;
       isScrubbing = true;
+      lastHudFocusEl = progressBar;
       scrubPreviewSec = getEffectiveTime();
       progressBar.classList.add("scrubbing");
       progressBar.focus({ preventScroll: true });
@@ -1690,7 +1706,7 @@
       resetHudTimer();
     });
 
-    /* Seek Helpers (Double-Tap / Double-Press -10s / +10s) */
+    /* Seek Helpers (Strict Double-Tap / Double-Press -10s / +10s) */
     function getEffectiveDuration() {
       if (transcodeMode) {
         const item = yplayItems[activeYPlayIdx];
@@ -1730,7 +1746,7 @@
         const delta = pendingSeekDelta;
         pendingSeekDelta = 0;
         seekYPlayTo(getEffectiveTime() + delta);
-      }, 260);
+      }, 240);
     }
 
     function seekYPlayTo(targetSec) {
@@ -1741,7 +1757,7 @@
       if (transcodeMode) {
         restartYPlayAt(clamped);
       } else if (dur > 0) {
-        showLoading(currentMediaTitle, `Seeking to ${fmt(clamped)}...`, false);
+        showLoading(false);
         video.currentTime = clamped;
         if (vodSubIdx >= 0) loadSubtitleWindow(clamped);
       }
@@ -1750,12 +1766,17 @@
     /* Touch Tap & Double-Tap on Fullscreen Video */
     stage.addEventListener("click", (e) => {
       if (drawerOpen || playerError.classList.contains("show")) return;
-      if (hasOpenPop()) { closeAllPops(); return; }
+      if (hasOpenPop()) {
+        const trigger = activePopupTrigger;
+        closeAllPops();
+        if (trigger) trigger.focus({ preventScroll: true });
+        return;
+      }
 
       if (isLive) {
         if (video.paused) video.play().catch(() => {});
         if (isHudVisible()) hideHud();
-        else showHud(menuBtn, 4200);
+        else showHud(lastHudFocusEl, 4200);
         return;
       }
 
@@ -1765,7 +1786,7 @@
       const isLeft = x < rect.width * 0.42;
       const isRight = x > rect.width * 0.58;
 
-      if (now - lastTouchTap < 300) {
+      if (now - lastTouchTap < 320) {
         clearTimeout(touchSingleTimer);
         lastTouchTap = now;
         if (isLeft) queueSeekDelta(-10);
@@ -1776,8 +1797,8 @@
       lastTouchTap = now;
       touchSingleTimer = setTimeout(() => {
         if (isHudVisible()) hideHud();
-        else showHud(menuBtn, 4200);
-      }, 300);
+        else showHud(lastHudFocusEl, 4200);
+      }, 320);
     });
 
     /* Subtitles Parser & Loader */
@@ -1928,7 +1949,6 @@
       if (liveStage < 2 && ch.relayPath) {
         liveStage = 2;
         await resolveDirectTunnel();
-        loadSub.textContent = "Connecting backup relay...";
         startHlsUrl(`${DIRECT_STREAM_URL}${ch.relayPath}`, ch, autoPlay, true);
         return;
       }
@@ -1937,16 +1957,15 @@
         liveFailCount += 1;
         const curIdx = CHANNELS.findIndex((c) => c.id === ch.id);
         const nextCh = CHANNELS[(curIdx + 1) % CHANNELS.length];
-        currentMediaTitle = nextCh.name;
         dishNum.textContent = nextCh.num;
         dishName.textContent = nextCh.name;
-        dishCat.textContent = nextCh.cat;
-        showHud(menuBtn, 4200);
-        showLoading(nextCh.name, `${ch.name} offline • Switching...`, true);
+        dishCat.textContent = `${ch.name} offline • Switching...`;
+        showHud(lastHudFocusEl, 4200);
+        showLoading(true);
         clearTimeout(liveFailTimer);
         liveFailTimer = setTimeout(() => {
           if (isLive && activeChannelId === ch.id) playChannel(nextCh, true, false);
-        }, 700);
+        }, 650);
         return;
       }
 
@@ -1962,7 +1981,6 @@
 
       isZapping = true;
       activeChannelId = nextCh.id;
-      currentMediaTitle = nextCh.name;
       dishNum.textContent = nextCh.num;
       dishName.textContent = nextCh.name;
       dishCat.textContent = nextCh.cat;
@@ -1972,14 +1990,14 @@
       updateLiveQualUi();
 
       cleanupPlayers();
-      showHud(menuBtn, 4200);
-      showLoading(nextCh.name, `#${nextCh.num} • ${nextCh.cat}`, true);
+      showHud(lastHudFocusEl, 4200);
+      showLoading(true);
 
       clearTimeout(zapDebounceTimer);
       zapDebounceTimer = setTimeout(() => {
         isZapping = false;
         playChannel(nextCh, true, true);
-      }, 220);
+      }, 200);
     }
 
     async function playChannel(ch, autoPlay = true, resetFail = true) {
@@ -1988,7 +2006,6 @@
       if (resetFail) liveFailCount = 0;
       activeChannelId = ch.id;
       activeYPlayIdx = -1;
-      currentMediaTitle = ch.name;
       dishNum.textContent = ch.num;
       dishName.textContent = ch.name;
       dishCat.textContent = ch.cat;
@@ -2001,10 +2018,11 @@
       liveAudioOptions = [];
       selectedLiveAudio = "";
       video.playbackRate = 1;
+      lastHudFocusEl = menuBtn;
 
       configureHudMode(false);
       showHud(menuBtn, 4200);
-      showLoading(ch.name, `#${ch.num} • ${ch.cat}`, true);
+      showLoading(true);
 
       if (ch.type === "dash-clearkey" && window.shaka && shaka.Player.isBrowserSupported()) {
         shakaPlayer = new shaka.Player();
@@ -2056,7 +2074,7 @@
       const needsTranscode = Boolean(item.compat_audio) || vodQuality !== "orig" || vodAudioIdx !== 0;
       transcodeMode = needsTranscode;
 
-      showLoading(item.title, `Loading at ${fmt(clamped)}...`, true);
+      showLoading(true);
       if (transcodeMode) {
         baseOffset = clamped;
         pendingResumeTime = 0;
@@ -2085,9 +2103,9 @@
       subFetchStart = -1;
       subOverlay.classList.remove("show");
       exitScrubMode(false);
+      lastHudFocusEl = menuBtn;
 
       const item = yplayItems[idx];
-      currentMediaTitle = item.title;
       populateYPlayTracks(item);
       configureHudMode(true);
 
@@ -2098,7 +2116,7 @@
       hudTitle.textContent = item.title;
       hudSub.textContent = `${qStr} • ${gbStr}`;
       showHud(menuBtn, 4200);
-      showLoading(item.title, `${qStr} • ${gbStr}`, true);
+      showLoading(true);
 
       const saved = forceOffset !== null
         ? forceOffset
@@ -2129,6 +2147,7 @@
 
     function toggleVodPlay() {
       if (isLive) return;
+      lastHudFocusEl = centerPlayBtn;
       if (video.paused) {
         video.play().catch(() => {});
         resetHudTimer(2200);
@@ -2140,6 +2159,7 @@
 
     function toggleMute() {
       video.muted = !video.muted;
+      lastHudFocusEl = muteBtn;
       syncIcons();
       resetHudTimer();
     }
@@ -2168,7 +2188,7 @@
 
     video.addEventListener("waiting", () => {
       if (!video.paused && !isZapping) {
-        showLoading(currentMediaTitle, "Buffering...", false);
+        showLoading(false);
       }
     });
 
@@ -2176,7 +2196,7 @@
       hideLoading();
       syncIcons();
       if (!isLive && !drawerOpen && !shuttingDown && video.getAttribute("src")) {
-        showHud(centerPlayBtn, 6000);
+        showHud(lastHudFocusEl, 6000);
         clearTimeout(hudTimer);
       }
     });
@@ -2231,8 +2251,16 @@
     });
 
     /* =========================================================================
-       ANDROID TV 4-WAY REMOTE + OK + BACK CONTROLLER
+       ANDROID TV 4-WAY REMOTE + OK + BACK CONTROLLER (Normalized KeyCodes)
     ========================================================================= */
+    function getDir(e) {
+      if (e.key === "ArrowUp" || e.keyCode === 38 || e.keyCode === 19) return "UP";
+      if (e.key === "ArrowDown" || e.keyCode === 40 || e.keyCode === 20) return "DOWN";
+      if (e.key === "ArrowLeft" || e.keyCode === 37 || e.keyCode === 21) return "LEFT";
+      if (e.key === "ArrowRight" || e.keyCode === 39 || e.keyCode === 22) return "RIGHT";
+      return "";
+    }
+
     function isBackKey(e) {
       return (
         e.key === "Escape" ||
@@ -2266,9 +2294,11 @@
 
     document.addEventListener("keydown", (e) => {
       const k = e.key;
+      const dir = getDir(e);
+      const ok = isOkKey(e);
       const active = document.activeElement;
 
-      /* 1. Back Button (Never exits prematurely; Double-Back to exit) */
+      /* 1. Back Button (Restores exact option focus; Double-Back to exit) */
       if (isBackKey(e)) {
         if (processBackAction()) {
           e.preventDefault();
@@ -2301,10 +2331,10 @@
       if (playerError.classList.contains("show")) {
         const retryBtn = document.getElementById("errRetryBtn");
         const eMenuBtn = document.getElementById("errMenuBtn");
-        if (k === "ArrowLeft" || k === "ArrowRight") {
+        if (dir === "LEFT" || dir === "RIGHT") {
           e.preventDefault();
           (active === retryBtn ? eMenuBtn : retryBtn).focus();
-        } else if (isOkKey(e) && active) {
+        } else if (ok && active) {
           e.preventDefault();
           triggerBounce(active);
           active.click();
@@ -2318,17 +2348,17 @@
         const curIdx = items.indexOf(active);
 
         if (active === tabLive || active === tabYPlay) {
-          if (k === "ArrowLeft" || k === "ArrowRight") {
+          if (dir === "LEFT" || dir === "RIGHT") {
             e.preventDefault();
             const nextTab = active === tabLive ? "yplay" : "live";
             selectDrawerTab(nextTab);
             (nextTab === "live" ? tabLive : tabYPlay).focus({ preventScroll: true });
-          } else if (k === "ArrowDown" && items.length > 0) {
+          } else if (dir === "DOWN" && items.length > 0) {
             e.preventDefault();
             const activeItem = drawerList.querySelector(".d-item.active") || items[0];
             activeItem.scrollIntoView({ block: "nearest", behavior: "smooth" });
             activeItem.focus({ preventScroll: true });
-          } else if (isOkKey(e)) {
+          } else if (ok) {
             e.preventDefault();
             triggerBounce(active);
             active.click();
@@ -2337,12 +2367,12 @@
         }
 
         if (curIdx >= 0) {
-          if (k === "ArrowDown") {
+          if (dir === "DOWN") {
             e.preventDefault();
             const next = items[Math.min(items.length - 1, curIdx + 1)];
             next.scrollIntoView({ block: "nearest", behavior: "smooth" });
             next.focus({ preventScroll: true });
-          } else if (k === "ArrowUp") {
+          } else if (dir === "UP") {
             e.preventDefault();
             if (curIdx === 0) {
               (drawerTab === "live" ? tabLive : tabYPlay).focus({ preventScroll: true });
@@ -2351,7 +2381,7 @@
               prev.scrollIntoView({ block: "nearest", behavior: "smooth" });
               prev.focus({ preventScroll: true });
             }
-          } else if (isOkKey(e)) {
+          } else if (ok) {
             e.preventDefault();
             triggerBounce(items[curIdx]);
             items[curIdx].click();
@@ -2359,7 +2389,7 @@
           return;
         }
 
-        if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(k)) {
+        if (dir) {
           e.preventDefault();
           const activeItem = drawerList.querySelector(".d-item.active") || items[0];
           if (activeItem) activeItem.focus({ preventScroll: true });
@@ -2372,13 +2402,13 @@
         const openMenu = document.querySelector(".pop-menu.open");
         const opts = Array.from(openMenu.querySelectorAll(".pop-opt"));
         const idx = opts.indexOf(active);
-        if (k === "ArrowDown") {
+        if (dir === "DOWN") {
           e.preventDefault();
           opts[(idx + 1) % opts.length].focus({ preventScroll: true });
-        } else if (k === "ArrowUp") {
+        } else if (dir === "UP") {
           e.preventDefault();
           opts[(idx - 1 + opts.length) % opts.length].focus({ preventScroll: true });
-        } else if (isOkKey(e) && idx >= 0) {
+        } else if (ok && idx >= 0) {
           e.preventDefault();
           triggerBounce(opts[idx]);
           opts[idx].click();
@@ -2386,39 +2416,39 @@
         return;
       }
 
-      /* 6. LIVE TV REMOTE RULES (Up/Down = Dish Channel Change + Unified HUD; Left/Right = Options) */
+      /* 6. LIVE TV REMOTE RULES (Up/Down = Dish Channel Change; Left/Right = Available Options) */
       if (isLive) {
-        if (k === "ArrowUp") {
+        if (dir === "UP") {
           e.preventDefault();
           zapChannel(1);
           return;
         }
-        if (k === "ArrowDown") {
+        if (dir === "DOWN") {
           e.preventDefault();
           zapChannel(-1);
           return;
         }
-        if (k === "ArrowLeft" || k === "ArrowRight" || isOkKey(e)) {
+        if (dir === "LEFT" || dir === "RIGHT" || ok) {
           if (!isHudVisible()) {
             e.preventDefault();
             if (video.paused) video.play().catch(() => {});
-            showHud(menuBtn, 4200);
+            showHud(lastHudFocusEl, 4200);
             return;
           }
           resetHudTimer(4200);
-          const liveBtns = getVisibleRowButtons(); // [menuBtn, langBtn (if >=2), qualBtn (if >=2)]
+          const liveBtns = getVisibleRowButtons();
           const idx = liveBtns.indexOf(active);
-          if (k === "ArrowRight") {
+          if (dir === "RIGHT") {
             e.preventDefault();
             const next = idx >= 0 ? liveBtns[(idx + 1) % liveBtns.length] : liveBtns[0];
             next.focus({ preventScroll: true });
-          } else if (k === "ArrowLeft") {
+          } else if (dir === "LEFT") {
             e.preventDefault();
             const prev = idx >= 0 ? liveBtns[(idx - 1 + liveBtns.length) % liveBtns.length] : liveBtns[0];
             prev.focus({ preventScroll: true });
-          } else if (isOkKey(e)) {
+          } else if (ok) {
             e.preventDefault();
-            const targetBtn = (active && liveBtns.includes(active)) ? active : menuBtn;
+            const targetBtn = (active && liveBtns.includes(active)) ? active : getBestHudFocus();
             targetBtn.focus({ preventScroll: true });
             triggerBounce(targetBtn);
             targetBtn.click();
@@ -2427,26 +2457,25 @@
         return;
       }
 
-      /* 7. YPLAY PURE FULLSCREEN (HUD Hidden) */
+      /* 7. YPLAY PURE FULLSCREEN (HUD Hidden — Strict Double-Press Required for -10s / +10s) */
       if (!isHudVisible()) {
-        if (k === "ArrowLeft" || k === "ArrowRight") {
+        if (dir === "LEFT" || dir === "RIGHT") {
           e.preventDefault();
+          if (e.repeat) return; // Never seek on single long press
           const now = Date.now();
-          const side = k === "ArrowLeft" ? "left" : "right";
-          const delta = k === "ArrowLeft" ? -10 : 10;
-          if (lastRemoteArrow === k && now - lastRemoteArrowTime < 650) {
-            lastRemoteArrowTime = now;
+          const delta = dir === "LEFT" ? -10 : 10;
+          if (lastRemoteDir === dir && now - lastRemoteDirTime < 420) {
+            lastRemoteDirTime = now;
             queueSeekDelta(delta);
           } else {
-            lastRemoteArrow = k;
-            lastRemoteArrowTime = now;
-            showSeekPill(delta > 0 ? "+10s (Press again)" : "-10s (Press again)", side);
+            lastRemoteDir = dir;
+            lastRemoteDirTime = now;
           }
           return;
         }
-        if (["ArrowUp", "ArrowDown"].includes(k) || isOkKey(e)) {
+        if (dir === "UP" || dir === "DOWN" || ok) {
           e.preventDefault();
-          showHud(menuBtn, 4200);
+          showHud(lastHudFocusEl, 4200);
         }
         return;
       }
@@ -2457,29 +2486,30 @@
       const bIdx = bottomBtns.indexOf(active);
 
       if (active === progressBar) {
-        if (isOkKey(e)) {
+        if (ok) {
           e.preventDefault();
           e.stopPropagation();
           if (!isScrubbing) enterScrubMode();
           else exitScrubMode(true);
           return;
         }
-        if (k === "ArrowLeft" || k === "ArrowRight") {
+        if (dir === "LEFT" || dir === "RIGHT") {
           e.preventDefault();
           e.stopPropagation();
           if (!isScrubbing) enterScrubMode();
           const step = e.repeat ? 30 : 10;
-          stepScrubPreview(k === "ArrowRight" ? step : -step);
+          stepScrubPreview(dir === "RIGHT" ? step : -step);
           return;
         }
-        if (k === "ArrowUp") {
+        if (dir === "UP") {
           e.preventDefault();
           e.stopPropagation();
           exitScrubMode(false);
-          centerPlayBtn.focus({ preventScroll: true });
+          const upTarget = centerPlayBtn.classList.contains("loading-hide") ? menuBtn : centerPlayBtn;
+          upTarget.focus({ preventScroll: true });
           return;
         }
-        if (k === "ArrowDown") {
+        if (dir === "DOWN") {
           e.preventDefault();
           e.stopPropagation();
           exitScrubMode(false);
@@ -2490,13 +2520,11 @@
       }
 
       if (active === menuBtn) {
-        if (k === "ArrowDown") {
+        if (dir === "DOWN" || dir === "RIGHT") {
           e.preventDefault();
-          centerPlayBtn.focus({ preventScroll: true });
-        } else if (k === "ArrowRight") {
-          e.preventDefault();
-          centerPlayBtn.focus({ preventScroll: true });
-        } else if (isOkKey(e)) {
+          const downTarget = centerPlayBtn.classList.contains("loading-hide") ? progressBar : centerPlayBtn;
+          downTarget.focus({ preventScroll: true });
+        } else if (ok) {
           e.preventDefault();
           triggerBounce(menuBtn);
           menuBtn.click();
@@ -2505,13 +2533,13 @@
       }
 
       if (active === centerPlayBtn) {
-        if (k === "ArrowUp" || k === "ArrowLeft") {
+        if (dir === "UP" || dir === "LEFT") {
           e.preventDefault();
           menuBtn.focus({ preventScroll: true });
-        } else if (k === "ArrowDown" || k === "ArrowRight") {
+        } else if (dir === "DOWN" || dir === "RIGHT") {
           e.preventDefault();
           progressBar.focus({ preventScroll: true });
-        } else if (isOkKey(e)) {
+        } else if (ok) {
           e.preventDefault();
           centerPlayBtn.click();
         }
@@ -2519,16 +2547,16 @@
       }
 
       if (bIdx >= 0) {
-        if (k === "ArrowRight") {
+        if (dir === "RIGHT") {
           e.preventDefault();
           bottomBtns[Math.min(bottomBtns.length - 1, bIdx + 1)].focus({ preventScroll: true });
-        } else if (k === "ArrowLeft") {
+        } else if (dir === "LEFT") {
           e.preventDefault();
           bottomBtns[Math.max(0, bIdx - 1)].focus({ preventScroll: true });
-        } else if (k === "ArrowUp") {
+        } else if (dir === "UP") {
           e.preventDefault();
           progressBar.focus({ preventScroll: true });
-        } else if (isOkKey(e)) {
+        } else if (ok) {
           e.preventDefault();
           triggerBounce(active);
           active.click();
@@ -2536,9 +2564,9 @@
         return;
       }
 
-      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(k) || isOkKey(e)) {
+      if (dir || ok) {
         e.preventDefault();
-        menuBtn.focus({ preventScroll: true });
+        getBestHudFocus().focus({ preventScroll: true });
       }
     }, true);
 
