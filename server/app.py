@@ -19,11 +19,13 @@ from pyrogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
+    User,
 )
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 API_ID = int(os.getenv("TELEGRAM_API_ID", "6"))
 API_HASH = os.getenv("TELEGRAM_API_HASH", "eb06d4abfb49dc3eeb1aeb98ae0f581e")
+ENV_OWNER_ID = int(os.getenv("TELEGRAM_OWNER_ID", "0") or 0)
 DEFAULT_SUNTV_URL = "https://d2px1d6ssc60fw.cloudfront.net/SunTV/SunTV-HDR10-IN-index.m3u8"
 
 if not BOT_TOKEN:
@@ -35,6 +37,7 @@ CACHE_DIR = Path("/tmp/yplay_chunks")
 HLS_DIR = Path("/dev/shm/suntv_hls")
 LIBRARY_FILE = DATA_DIR / "yplay_library.json"
 CHANNELS_FILE = DATA_DIR / "channels.json"
+OWNER_FILE = DATA_DIR / "owner.json"
 SESSION_FILE = DATA_DIR / "ystream_bot"
 
 CHUNK_SIZE = 1024 * 1024  # 1 MiB
@@ -111,6 +114,29 @@ def write_json(path: Path, data):
 
 read_json(LIBRARY_FILE, [])
 read_json(CHANNELS_FILE, DEFAULT_CHANNELS)
+
+
+def get_owner_id() -> int:
+    if ENV_OWNER_ID > 0:
+        return ENV_OWNER_ID
+    data = read_json(OWNER_FILE, {"owner_id": 0})
+    try:
+        return int(data.get("owner_id") or 0)
+    except Exception:
+        return 0
+
+
+def authorize_user(user: Optional[User], allow_claim: bool = False) -> bool:
+    if not user or getattr(user, "is_bot", False):
+        return False
+    uid = int(user.id)
+    owner = get_owner_id()
+    if owner > 0:
+        return uid == owner
+    if allow_claim:
+        write_json(OWNER_FILE, {"owner_id": uid, "claimed_at": int(time.time())})
+        return True
+    return False
 
 
 def get_active_tunnel_url() -> str:
@@ -587,6 +613,7 @@ async def build_status_html() -> str:
     blk_cnt, blk_bytes = await asyncio.to_thread(get_cache_stats_sync)
     sys = await asyncio.to_thread(get_sys_stats)
     tunnel = get_active_tunnel_url()
+    owner_id = get_owner_id()
     relay_running = ffmpeg_proc is not None and ffmpeg_proc.poll() is None
 
     if relay_running:
@@ -598,6 +625,7 @@ async def build_status_html() -> str:
 
     rows = [
         ("Bot", "Connected" if tg_client.is_connected else "Offline"),
+        ("Owner Lock", str(owner_id) if owner_id else "Unlocked"),
         ("Queue", f"{len(items)} movie(s)"),
         ("Cache", f"{fmt_bytes(blk_bytes)} ({blk_cnt} blk)"),
         ("RAM", f"{sys['mem_used_mb']}/{sys['mem_total_mb']} MB"),
@@ -622,16 +650,21 @@ async def build_status_html() -> str:
     return out
 
 
-@tg_client.on_message(filters.command("start"))
+# --- Owner-Only Telegram Bot Handlers (Silent Dead Mode for Others) ---
+@tg_client.on_message(filters.private & filters.command("start"))
 async def cmd_start(_, msg: Message):
+    if not authorize_user(msg.from_user, allow_claim=True):
+        return
     await msg.reply_text(
-        "<b>YStream Bot Ready.</b>\nForward any movie to add to YPlay.\nUse /status or /clear.",
+        "<b>YStream Bot Ready (Owner Locked).</b>\nForward any movie to add to YPlay.\nUse /status or /clear.",
         parse_mode=enums.ParseMode.HTML,
     )
 
 
-@tg_client.on_message(filters.command("status"))
+@tg_client.on_message(filters.private & filters.command("status"))
 async def cmd_status(_, msg: Message):
+    if not authorize_user(msg.from_user, allow_claim=True):
+        return
     txt = await build_status_html()
     await msg.reply_text(
         txt,
@@ -640,8 +673,10 @@ async def cmd_status(_, msg: Message):
     )
 
 
-@tg_client.on_message(filters.command("clear"))
+@tg_client.on_message(filters.private & filters.command("clear"))
 async def cmd_clear(_, msg: Message):
+    if not authorize_user(msg.from_user, allow_claim=False):
+        return
     await clear_queue_and_cache()
     await msg.reply_text(
         "<b>Cleared All Movies & Cache.</b>\nNext video sent starts at <code>#1</code>.",
@@ -649,8 +684,10 @@ async def cmd_clear(_, msg: Message):
     )
 
 
-@tg_client.on_message(filters.video | filters.document | filters.animation)
+@tg_client.on_message(filters.private & (filters.video | filters.document | filters.animation))
 async def on_file(_, msg: Message):
+    if not authorize_user(msg.from_user, allow_claim=False):
+        return
     info = get_media_info(msg)
     if not info:
         return
@@ -664,6 +701,8 @@ async def on_file(_, msg: Message):
 
 @tg_client.on_callback_query()
 async def on_callback(_, cq: CallbackQuery):
+    if not authorize_user(cq.from_user, allow_claim=False):
+        return
     if cq.data == "cb:status":
         try:
             await cq.answer("Refreshing...")
