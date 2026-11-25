@@ -69,6 +69,78 @@
       border: 0 !important;
     }
 
+    /* Full-Black System Shutdown Alert Screen */
+    .shutdown-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: #000000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.18s ease;
+    }
+
+    .shutdown-screen.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .shutdown-card {
+      max-width: 420px;
+      width: 100%;
+      background: linear-gradient(180deg, #141822 0%, #0c0f16 100%);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 20px;
+      padding: 30px 26px;
+      text-align: center;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.95);
+    }
+
+    .shutdown-icon {
+      width: 56px;
+      height: 56px;
+      margin: 0 auto 16px;
+      border-radius: 50%;
+      background: rgba(229, 9, 20, 0.14);
+      border: 1.5px solid rgba(229, 9, 20, 0.45);
+      color: #ff3b46;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .shutdown-badge {
+      display: inline-block;
+      font-size: 0.68rem;
+      font-weight: 800;
+      letter-spacing: 1.4px;
+      text-transform: uppercase;
+      color: #fca5a5;
+      background: rgba(229, 9, 20, 0.16);
+      border: 1px solid rgba(229, 9, 20, 0.32);
+      padding: 3px 10px;
+      border-radius: 99px;
+      margin-bottom: 10px;
+    }
+
+    .shutdown-title {
+      font-size: 1.38rem;
+      font-weight: 800;
+      color: #ffffff;
+      letter-spacing: -0.2px;
+    }
+
+    .shutdown-desc {
+      font-size: 0.86rem;
+      color: #94a3b8;
+      margin-top: 8px;
+      line-height: 1.45;
+    }
+
     /* Center Loader Ring */
     .center-loader {
       position: absolute;
@@ -640,8 +712,7 @@
       min-height: 0;
       overflow-y: auto;
       overscroll-behavior: contain;
-      -webkit-overflow-scrolling: touch;
-      padding: 14px 14px 40px;
+      padding: 14px 14px 44px;
     }
 
     .list-pane {
@@ -871,7 +942,7 @@
         </div>
       </div>
 
-      <!-- Center Play/Pause (YPlay Only) -->
+      <!-- Center Play/Pause (YPlay Only — Pre-focused when YPlay opens) -->
       <button id="centerPlayBtn" class="center-play-btn hidden" onclick="event.stopPropagation(); toggleVodPlay();"></button>
 
       <div class="hud-bottom" onclick="event.stopPropagation()">
@@ -932,6 +1003,21 @@
     </div>
   </div>
 
+  <!-- Full-Black System Shutdown Alert Screen -->
+  <div id="shutdownScreen" class="shutdown-screen" role="alertdialog" aria-modal="true" aria-labelledby="shutdownTitle">
+    <div class="shutdown-card">
+      <div class="shutdown-icon">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+          <line x1="12" y1="2" x2="12" y2="12"></line>
+        </svg>
+      </div>
+      <div class="shutdown-badge">System Notice</div>
+      <div id="shutdownTitle" class="shutdown-title">System Shutdown</div>
+      <div class="shutdown-desc">All live streams and playback have been suspended. Playback will resume automatically once restored.</div>
+    </div>
+  </div>
+
   <!-- Slide-Over Side Menu Drawer -->
   <div id="drawerBackdrop" class="drawer-backdrop" onclick="closeDrawer(true)"></div>
   <aside id="sideDrawer" class="side-drawer" tabindex="-1" aria-label="Navigation Drawer">
@@ -978,7 +1064,7 @@
       eng: "English", en: "English", english: "English"
     };
 
-    /* Ordered Channel List: Entertainment -> Music -> News -> Infotainment (Sun TV Removed) */
+    /* Ordered Channel List: Entertainment -> Music -> News -> Infotainment */
     const CHANNELS = [
       { id: "vijaytv", num: "01", short: "VIJAY", bg: "#c2410c", name: "Vijay TV", type: "hls", url: "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:starvijayuk.smil/playlist.m3u8", logo: "assets/vijaytv.webp" },
       { id: "zeetamil", num: "02", short: "ZEE", bg: "#6d28d9", name: "Zee Tamil HD", type: "hls", url: "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:zeetamil1.smil/playlist.m3u8", logo: "assets/zeetamil.webp" },
@@ -996,6 +1082,7 @@
 
     const stage = document.getElementById("stage");
     const video = document.getElementById("video");
+    const shutdownScreen = document.getElementById("shutdownScreen");
     const centerLoader = document.getElementById("centerLoader");
     const exitToast = document.getElementById("exitToast");
     const dishOsd = document.getElementById("dishOsd");
@@ -1054,10 +1141,90 @@
     let hudTimer = null;
     let zapDebounceTimer = null;
     let loadDebounce = null;
+    let unmuteTimer = null;
     let wasPlayingBeforeDrawer = false;
     let drawerOpen = false;
     let isZapping = false;
+    let userMuted = false;
     let autoMutedForBoot = false;
+
+    /* System Shutdown / Resume State */
+    let isSystemStopped = false;
+    let shutdownSnapshot = null;
+    let eventSource = null;
+
+    async function applySystemStopped(stopped) {
+      const next = Boolean(stopped);
+      if (next === isSystemStopped) return;
+      isSystemStopped = next;
+
+      if (isSystemStopped) {
+        if (isLive) {
+          shutdownSnapshot = { mode: "live", channelId: activeChannelId };
+        } else {
+          const curPos = Math.floor(getEffectiveTime());
+          const item = yplayItems[activeYPlayIdx];
+          if (item && curPos > 2) safeSetStorage(`yp_pos_${item.id}`, String(curPos));
+          shutdownSnapshot = { mode: "yplay", yplayIdx: activeYPlayIdx, yplayPos: curPos };
+        }
+
+        playSessionId++;
+        isZapping = false;
+        closeDrawer(false);
+        hideHud();
+        hideError();
+        hideLoading();
+        await cleanupPlayers();
+
+        if (document.activeElement && document.activeElement !== document.body) {
+          document.activeElement.blur();
+        }
+        shutdownScreen.classList.add("show");
+      } else {
+        shutdownScreen.classList.remove("show");
+        const snap = shutdownSnapshot;
+        shutdownSnapshot = null;
+
+        await resolveDirectTunnel();
+        if (snap && snap.mode === "yplay" && snap.yplayIdx >= 0) {
+          await fetchYPlay(false);
+          if (snap.yplayIdx < yplayItems.length) {
+            loadYPlay(snap.yplayIdx, true, snap.yplayPos || null);
+            return;
+          }
+        }
+        const ch = CHANNELS.find((c) => c.id === (snap?.channelId || activeChannelId)) || CHANNELS[0];
+        playChannel(ch, true, true);
+      }
+    }
+
+    function connectSystemEvents() {
+      if (eventSource) {
+        try { eventSource.close(); } catch (_) {}
+        eventSource = null;
+      }
+      if (!window.EventSource) return;
+      try {
+        eventSource = new EventSource(`${DIRECT_STREAM_URL}/api/events`);
+        eventSource.onmessage = (ev) => {
+          try {
+            const msg = JSON.parse(ev.data);
+            if (msg && typeof msg.stopped === "boolean") {
+              applySystemStopped(msg.stopped);
+            }
+          } catch (_) {}
+        };
+        eventSource.onerror = () => {
+          try { eventSource.close(); } catch (_) {}
+          eventSource = null;
+          setTimeout(() => {
+            if (document.visibilityState === "visible") {
+              resolveDirectTunnel().then(connectSystemEvents);
+            }
+          }, 5000);
+        };
+      } catch (_) {}
+    }
 
     /* Safe Storage Helpers */
     function safeGetStorage(k, fallback = "") {
@@ -1089,7 +1256,8 @@
     });
 
     function getBestHudFocus(preferred = null) {
-      const candidates = [preferred, lastHudFocusEl, menuBtn];
+      const fallback = isLive ? menuBtn : centerPlayBtn;
+      const candidates = [preferred, lastHudFocusEl, fallback, menuBtn];
       for (const el of candidates) {
         if (el && hud.contains(el) && !el.classList.contains("hidden") && el.closest(".hidden") === null) {
           return el;
@@ -1098,18 +1266,21 @@
       return menuBtn;
     }
 
-    /* TV Center-Locked Smooth List Scroll (Keeps focused item centered on TV screen) */
+    /* TV Center-Locked List Scroll (Instant on hold-down, smooth on single tap) */
+    let lastDrawerNavAt = 0;
+
     function centerDrawerItem(el, instant = false) {
       if (!el || !drawerScroll) return;
       const itemCenter = el.offsetTop + (el.offsetHeight / 2);
       const targetTop = Math.max(0, itemCenter - (drawerScroll.clientHeight / 2));
-      drawerScroll.scrollTo({
-        top: targetTop,
-        behavior: instant ? "auto" : "smooth"
-      });
+      if (instant) {
+        drawerScroll.scrollTop = targetTop;
+      } else {
+        drawerScroll.scrollTo({ top: targetTop, behavior: "smooth" });
+      }
     }
 
-    /* Double-Back Exit Guard (Handles Chromium User-Activation History Rules) */
+    /* Double-Back Exit Guard */
     let lastBackTime = 0;
     let exitConfirmReady = false;
     let exitToastTimer = null;
@@ -1125,7 +1296,7 @@
 
     function ensureHistoryOnGesture() {
       if (!historyArmed) armHistoryAnchor();
-      if (autoMutedForBoot && video.muted) {
+      if (autoMutedForBoot && !userMuted && video.muted) {
         autoMutedForBoot = false;
         video.muted = false;
         syncIcons();
@@ -1150,6 +1321,14 @@
       const now = Date.now();
       if (now - lastBackTime < 160) return true;
       lastBackTime = now;
+
+      if (isSystemStopped) {
+        if (!exitConfirmReady) {
+          showExitToast();
+          return true;
+        }
+        return false;
+      }
 
       if (isScrubbing) {
         exitScrubMode(false);
@@ -1233,17 +1412,18 @@
     }
 
     function showLoading(immediate = false) {
+      if (isSystemStopped) return;
       clearTimeout(loadDebounce);
       if (immediate) {
         centerLoader.classList.add("show");
         centerPlayBtn.classList.add("loading-hide");
       } else {
         loadDebounce = setTimeout(() => {
-          if (!video.paused && !playerError.classList.contains("show")) {
+          if (!video.paused && !playerError.classList.contains("show") && !isSystemStopped) {
             centerLoader.classList.add("show");
             centerPlayBtn.classList.add("loading-hide");
           }
-        }, 240);
+        }, 220);
       }
     }
 
@@ -1255,10 +1435,11 @@
 
     function syncIcons() {
       centerPlayBtn.innerHTML = video.paused ? ICONS.play : ICONS.pause;
-      muteBtn.innerHTML = video.muted ? ICONS.volOff : ICONS.volOn;
+      muteBtn.innerHTML = userMuted ? ICONS.volOff : ICONS.volOn;
     }
 
     async function safePlayVideo() {
+      if (isSystemStopped) return;
       try {
         await video.play();
       } catch (err) {
@@ -1272,6 +1453,7 @@
     }
 
     function showError(title, msg) {
+      if (isSystemStopped) return;
       hideLoading();
       errTitle.textContent = title;
       errMsg.textContent = msg;
@@ -1282,6 +1464,7 @@
     function hideError() { playerError.classList.remove("show"); }
 
     function retryCurrentMedia() {
+      if (isSystemStopped) return;
       hideError();
       if (isLive) {
         liveFailCount = 0;
@@ -1297,7 +1480,7 @@
     function isHudVisible() { return hud.classList.contains("visible"); }
 
     function showHud(preferredFocus = null, autoHideMs = 4200) {
-      if (drawerOpen) return;
+      if (drawerOpen || isSystemStopped) return;
       hud.classList.add("visible");
       const target = getBestHudFocus(preferredFocus);
       target.focus({ preventScroll: true });
@@ -1432,7 +1615,7 @@
     }
 
     function openDrawer() {
-      if (drawerOpen) return;
+      if (drawerOpen || isSystemStopped) return;
       drawerOpen = true;
       lastHudFocusEl = menuBtn;
       exitScrubMode(false);
@@ -1469,7 +1652,7 @@
       drawerBackdrop.classList.remove("open");
       sideDrawer.classList.remove("open");
 
-      if (resumeIfNeeded && !isLive && wasPlayingBeforeDrawer) {
+      if (resumeIfNeeded && !isLive && wasPlayingBeforeDrawer && !isSystemStopped) {
         wasPlayingBeforeDrawer = false;
         safePlayVideo();
       }
@@ -1486,6 +1669,7 @@
     }
 
     function pickChannel(id) {
+      if (isSystemStopped) return;
       const ch = CHANNELS.find((c) => c.id === id);
       if (!ch) return;
       wasPlayingBeforeDrawer = false;
@@ -1494,6 +1678,7 @@
     }
 
     function pickMovie(idx) {
+      if (isSystemStopped) return;
       wasPlayingBeforeDrawer = false;
       closeDrawer(false);
       loadYPlay(idx, true);
@@ -1813,7 +1998,7 @@
     }
 
     function queueSeekDelta(sec) {
-      if (isLive) return;
+      if (isLive || isSystemStopped) return;
       const dur = getEffectiveDuration();
       if (dur <= 0) return;
       pendingSeekDelta += sec;
@@ -1828,7 +2013,7 @@
     }
 
     function seekYPlayTo(targetSec) {
-      if (isLive) return;
+      if (isLive || isSystemStopped) return;
       const dur = getEffectiveDuration();
       const clamped = Math.max(0, dur > 1 ? Math.min(dur - 1, targetSec) : targetSec);
       renderProgressVisual(clamped, dur);
@@ -1843,7 +2028,7 @@
 
     /* Touch Tap & Double-Tap on Fullscreen Video */
     stage.addEventListener("click", (e) => {
-      if (drawerOpen || playerError.classList.contains("show")) return;
+      if (isSystemStopped || drawerOpen || playerError.classList.contains("show")) return;
       if (hasOpenPop()) {
         const trigger = activePopupTrigger;
         closeAllPops();
@@ -1875,7 +2060,7 @@
       lastTouchTap = now;
       touchSingleTimer = setTimeout(() => {
         if (isHudVisible()) hideHud();
-        else showHud(lastHudFocusEl, 4200);
+        else showHud(centerPlayBtn, 4200);
       }, 320);
     });
 
@@ -1939,14 +2124,23 @@
       }
     }
 
-    /* Playback Engines with Session Race-Condition Guard */
+    /* Playback Engines (Hardware-Muted Instant Cleanup = Zero Audio Flicker) */
     async function cleanupPlayers() {
       clearTimeout(liveFailTimer);
+      clearTimeout(unmuteTimer);
       hideError();
-      if (hls) { hls.destroy(); hls = null; }
-      if (shakaPlayer) { try { await shakaPlayer.destroy(); } catch (_) {} shakaPlayer = null; }
+      video.muted = true; // Instant hardware mute prevents previous channel voice bleed
+      try { video.pause(); } catch (_) {}
+
+      if (hls) {
+        try { hls.stopLoad(); hls.detachMedia(); hls.destroy(); } catch (_) {}
+        hls = null;
+      }
+      if (shakaPlayer) {
+        try { await shakaPlayer.unload(); await shakaPlayer.destroy(); } catch (_) {}
+        shakaPlayer = null;
+      }
       try {
-        video.pause();
         video.removeAttribute("src");
         video.load();
       } catch (_) {}
@@ -1955,10 +2149,13 @@
     async function resolveDirectTunnel() {
       try {
         const ctrl = new AbortController();
-        const tid = setTimeout(() => ctrl.abort(), 5000);
+        const tid = setTimeout(() => ctrl.abort(), 4500);
         const res = await fetch(`${WORKER_URL}/health?t=${Date.now()}`, { cache: "no-store", signal: ctrl.signal });
         clearTimeout(tid);
         const data = await res.json();
+        if (data && typeof data.stopped === "boolean" && data.stopped) {
+          await applySystemStopped(true);
+        }
         if (data && typeof data.tunnel_url === "string" && data.tunnel_url.startsWith("https://")) {
           DIRECT_STREAM_URL = data.tunnel_url;
         }
@@ -1978,14 +2175,21 @@
     }
 
     function startHlsUrl(url, ch, autoPlay, session) {
-      if (session !== playSessionId) return;
+      if (session !== playSessionId || isSystemStopped) return;
       if (hls) { hls.destroy(); hls = null; }
       if (window.Hls && window.Hls.isSupported()) {
-        hls = new Hls({ enableWorker: true, lowLatencyMode: false, maxBufferLength: 14, backBufferLength: 8 });
+        hls = new Hls({
+          enableWorker: true,
+          lowLatencyMode: false,
+          maxBufferLength: 10,
+          maxMaxBufferLength: 20,
+          backBufferLength: 6,
+          startFragPrefetch: true
+        });
         hls.loadSource(url);
         hls.attachMedia(video);
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          if (session !== playSessionId || activeChannelId !== ch.id) return;
+          if (session !== playSessionId || activeChannelId !== ch.id || isSystemStopped) return;
           hideError();
           liveAvailableHeights = Array.from(new Set((hls.levels || []).map((lv) => lv.height || 0).filter((h) => h > 0))).sort((a, b) => b - a);
           updateLiveQualUi();
@@ -2017,7 +2221,7 @@
     }
 
     async function handleLiveFallback(ch, autoPlay, session, reason = "Stream offline") {
-      if (session !== playSessionId || activeChannelId !== ch.id || !isLive || isZapping) return;
+      if (session !== playSessionId || activeChannelId !== ch.id || !isLive || isZapping || isSystemStopped) return;
 
       if (liveStage === 0 && video.canPlayType("application/vnd.apple.mpegurl")) {
         liveStage = 1;
@@ -2046,7 +2250,7 @@
           if (session === playSessionId && isLive && activeChannelId === ch.id) {
             playChannel(nextCh, true, false);
           }
-        }, 650);
+        }, 550);
         return;
       }
 
@@ -2055,6 +2259,7 @@
 
     /* Fast Dish Channel Zapping (Up / Down) */
     function zapChannel(step) {
+      if (isSystemStopped) return;
       const curIdx = CHANNELS.findIndex((c) => c.id === activeChannelId);
       const baseIdx = curIdx >= 0 ? curIdx : 0;
       const nextIdx = (baseIdx + step + CHANNELS.length) % CHANNELS.length;
@@ -2078,14 +2283,15 @@
       zapDebounceTimer = setTimeout(() => {
         isZapping = false;
         playChannel(nextCh, true, true);
-      }, 200);
+      }, 130);
     }
 
     async function playChannel(ch, autoPlay = true, resetFail = true) {
+      if (isSystemStopped) return;
       const session = ++playSessionId;
       isZapping = false;
       await cleanupPlayers();
-      if (session !== playSessionId) return;
+      if (session !== playSessionId || isSystemStopped) return;
 
       if (resetFail) liveFailCount = 0;
       activeChannelId = ch.id;
@@ -2111,11 +2317,11 @@
       if (isDash && window.shaka && shaka.Player.isBrowserSupported()) {
         shakaPlayer = new shaka.Player();
         await shakaPlayer.attach(video);
-        if (session !== playSessionId) return;
+        if (session !== playSessionId || isSystemStopped) return;
 
         const cfg = {
           abr: { enabled: true },
-          streaming: { bufferingGoal: 10, rebufferingGoal: 2 }
+          streaming: { bufferingGoal: 6, rebufferingGoal: 1.5 }
         };
         if (ch.kid && ch.key) {
           cfg.drm = { clearKeys: { [ch.kid]: ch.key } };
@@ -2128,7 +2334,7 @@
         });
         try {
           await shakaPlayer.load(ch.url);
-          if (session !== playSessionId || activeChannelId !== ch.id) return;
+          if (session !== playSessionId || activeChannelId !== ch.id || isSystemStopped) return;
           hideError();
           liveAvailableHeights = Array.from(new Set(shakaPlayer.getVariantTracks().map((t) => t.height || 0).filter((h) => h > 0))).sort((a, b) => b - a);
           updateLiveQualUi();
@@ -2159,9 +2365,11 @@
     }
 
     function restartYPlayAt(targetSec) {
+      if (isSystemStopped) return;
       const item = yplayItems[activeYPlayIdx];
       if (!item) return;
       playSessionId++;
+      video.muted = true;
       const clamped = Math.max(0, Math.floor(targetSec));
       const needsTranscode = Boolean(item.compat_audio) || vodQuality !== "orig" || vodAudioIdx !== 0;
       transcodeMode = needsTranscode;
@@ -2183,11 +2391,11 @@
     }
 
     async function loadYPlay(idx, autoPlay = true, forceOffset = null) {
-      if (idx < 0 || idx >= yplayItems.length) return;
+      if (isSystemStopped || idx < 0 || idx >= yplayItems.length) return;
       const session = ++playSessionId;
       isZapping = false;
       await cleanupPlayers();
-      if (session !== playSessionId) return;
+      if (session !== playSessionId || isSystemStopped) return;
 
       activeChannelId = "";
       activeYPlayIdx = idx;
@@ -2198,7 +2406,9 @@
       subFetchStart = -1;
       subOverlay.classList.remove("show");
       exitScrubMode(false);
-      lastHudFocusEl = menuBtn;
+
+      /* Pre-focus center Play/Pause button on YPlay */
+      lastHudFocusEl = centerPlayBtn;
 
       const item = yplayItems[idx];
       populateYPlayTracks(item);
@@ -2210,7 +2420,7 @@
 
       hudTitle.textContent = item.title;
       hudSub.textContent = `${qStr} • ${gbStr}`;
-      showHud(menuBtn, 4200);
+      showHud(centerPlayBtn, 4200);
       showLoading(true);
 
       const saved = forceOffset !== null
@@ -2236,12 +2446,12 @@
     }
 
     function playNextYPlay() {
-      if (!yplayItems.length) return;
+      if (!yplayItems.length || isSystemStopped) return;
       loadYPlay(activeYPlayIdx + 1 < yplayItems.length ? activeYPlayIdx + 1 : 0, true);
     }
 
     function toggleVodPlay() {
-      if (isLive) return;
+      if (isLive || isSystemStopped) return;
       lastHudFocusEl = centerPlayBtn;
       if (video.paused) {
         safePlayVideo();
@@ -2253,8 +2463,9 @@
     }
 
     function toggleMute() {
-      video.muted = !video.muted;
+      userMuted = !userMuted;
       autoMutedForBoot = false;
+      video.muted = userMuted;
       lastHudFocusEl = muteBtn;
       syncIcons();
       resetHudTimer();
@@ -2275,15 +2486,29 @@
     video.addEventListener("loadeddata", () => { hideError(); hideLoading(); });
 
     video.addEventListener("playing", () => {
+      if (isSystemStopped) {
+        video.pause();
+        return;
+      }
       hideError();
       hideLoading();
+
+      /* Unmute cleanly 60ms after new frames start playing (Zero old-channel voice bleed) */
+      clearTimeout(unmuteTimer);
+      unmuteTimer = setTimeout(() => {
+        if (!isSystemStopped && !userMuted && !autoMutedForBoot) {
+          video.muted = false;
+        }
+        syncIcons();
+      }, 60);
+
       syncIcons();
       if (isLive) liveFailCount = 0;
       if (isHudVisible() && !isScrubbing) resetHudTimer(3200);
     });
 
     video.addEventListener("waiting", () => {
-      if (!video.paused && !isZapping) {
+      if (!video.paused && !isZapping && !isSystemStopped) {
         showLoading(false);
       }
     });
@@ -2291,14 +2516,14 @@
     video.addEventListener("pause", () => {
       hideLoading();
       syncIcons();
-      if (!isLive && !drawerOpen && !shuttingDown && video.getAttribute("src")) {
+      if (!isLive && !drawerOpen && !shuttingDown && !isSystemStopped && video.getAttribute("src")) {
         showHud(lastHudFocusEl, 6000);
         clearTimeout(hudTimer);
       }
     });
 
     video.addEventListener("error", async () => {
-      if (shuttingDown || isZapping || !video.getAttribute("src")) return;
+      if (shuttingDown || isZapping || isSystemStopped || !video.getAttribute("src")) return;
       if (isLive) {
         const ch = CHANNELS.find((c) => c.id === activeChannelId);
         if (ch) handleLiveFallback(ch, true, playSessionId, "Stream failed");
@@ -2314,7 +2539,7 @@
     });
 
     video.addEventListener("timeupdate", () => {
-      if (isLive) return;
+      if (isLive || isSystemStopped) return;
       const cur = getEffectiveTime();
       const dur = getEffectiveDuration();
 
@@ -2343,7 +2568,9 @@
       hideLoading();
       const item = yplayItems[activeYPlayIdx];
       if (item) safeRemoveStorage(`yp_pos_${item.id}`);
-      if (!isLive && activeYPlayIdx + 1 < yplayItems.length) loadYPlay(activeYPlayIdx + 1, true);
+      if (!isLive && !isSystemStopped && activeYPlayIdx + 1 < yplayItems.length) {
+        loadYPlay(activeYPlayIdx + 1, true);
+      }
     });
 
     /* =========================================================================
@@ -2394,12 +2621,18 @@
       const ok = isOkKey(e);
       const active = document.activeElement;
 
-      /* 1. Back Button (1st Back closes option/HUD or shows exit toast; 2nd Back exits) */
+      /* 1. Back Button */
       if (isBackKey(e)) {
         if (processBackAction()) {
           e.preventDefault();
           e.stopPropagation();
         }
+        return;
+      }
+
+      /* Block all media actions during System Shutdown */
+      if (isSystemStopped) {
+        e.preventDefault();
         return;
       }
 
@@ -2438,11 +2671,12 @@
         return;
       }
 
-      /* 4. Side Drawer Navigation (TV Center-Locked Focus) */
+      /* 4. Side Drawer Navigation (TV Center-Locked Focus + 1st Item from Top Tab) */
       if (drawerOpen) {
         const pane = drawerTab === "live" ? liveListPane : yplayListPane;
         const items = Array.from(pane.querySelectorAll(".d-item"));
         const curIdx = items.indexOf(active);
+        const now = Date.now();
 
         if (active === tabLive || active === tabYPlay) {
           if (dir === "LEFT" || dir === "RIGHT") {
@@ -2452,9 +2686,10 @@
             (nextTab === "live" ? tabLive : tabYPlay).focus({ preventScroll: true });
           } else if (dir === "DOWN" && items.length > 0) {
             e.preventDefault();
-            const activeItem = pane.querySelector(".d-item.active") || items[0];
-            centerDrawerItem(activeItem, false);
-            activeItem.focus({ preventScroll: true });
+            /* Always focus 1st item (#01) when moving down from the top tab */
+            const firstItem = items[0];
+            centerDrawerItem(firstItem, true);
+            firstItem.focus({ preventScroll: true });
           } else if (ok) {
             e.preventDefault();
             active.click();
@@ -2463,20 +2698,25 @@
         }
 
         if (curIdx >= 0) {
-          if (dir === "DOWN") {
+          if (dir === "DOWN" || dir === "UP") {
             e.preventDefault();
-            const next = items[Math.min(items.length - 1, curIdx + 1)];
-            centerDrawerItem(next, false);
-            next.focus({ preventScroll: true });
-          } else if (dir === "UP") {
-            e.preventDefault();
-            if (curIdx === 0) {
-              drawerScroll.scrollTo({ top: 0, behavior: "smooth" });
-              (drawerTab === "live" ? tabLive : tabYPlay).focus({ preventScroll: true });
+            /* Smooth cadence when holding Up/Down continuously */
+            if (e.repeat && now - lastDrawerNavAt < 80) return;
+            lastDrawerNavAt = now;
+
+            if (dir === "DOWN") {
+              const next = items[Math.min(items.length - 1, curIdx + 1)];
+              centerDrawerItem(next, e.repeat);
+              next.focus({ preventScroll: true });
             } else {
-              const prev = items[curIdx - 1];
-              centerDrawerItem(prev, false);
-              prev.focus({ preventScroll: true });
+              if (curIdx === 0) {
+                drawerScroll.scrollTop = 0;
+                (drawerTab === "live" ? tabLive : tabYPlay).focus({ preventScroll: true });
+              } else {
+                const prev = items[curIdx - 1];
+                centerDrawerItem(prev, e.repeat);
+                prev.focus({ preventScroll: true });
+              }
             }
           } else if (ok) {
             e.preventDefault();
@@ -2487,10 +2727,10 @@
 
         if (dir) {
           e.preventDefault();
-          const activeItem = pane.querySelector(".d-item.active") || items[0];
-          if (activeItem) {
-            centerDrawerItem(activeItem, false);
-            activeItem.focus({ preventScroll: true });
+          const firstItem = items[0];
+          if (firstItem) {
+            centerDrawerItem(firstItem, true);
+            firstItem.focus({ preventScroll: true });
           }
         }
         return;
@@ -2573,7 +2813,7 @@
         }
         if (dir === "UP" || dir === "DOWN" || ok) {
           e.preventDefault();
-          showHud(lastHudFocusEl, 4200);
+          showHud(centerPlayBtn, 4200);
         }
         return;
       }
@@ -2664,7 +2904,7 @@
 
       if (dir || ok) {
         e.preventDefault();
-        getBestHudFocus().focus({ preventScroll: true });
+        getBestHudFocus(centerPlayBtn).focus({ preventScroll: true });
       }
     }, true);
 
@@ -2700,6 +2940,9 @@
         const res = await fetch(`${WORKER_URL}/api/yplay/library?t=${Date.now()}`, { cache: "no-store", signal: ctrl.signal });
         clearTimeout(tid);
         const data = await res.json();
+        if (data && typeof data.stopped === "boolean") {
+          await applySystemStopped(data.stopped);
+        }
         const nextItems = Array.isArray(data.items) ? data.items : [];
         const sig = JSON.stringify(nextItems.map((x) => [x.id, x.quality, x.compat_audio, x.duration, (x.audio_tracks || []).length, (x.subtitles || []).length]));
         if (sig !== yplaySig) {
@@ -2715,6 +2958,23 @@
           if (!isLive && activeYPlayIdx >= 0 && yplayItems[activeYPlayIdx]) {
             populateYPlayTracks(yplayItems[activeYPlayIdx]);
           }
+        }
+      } catch (_) {}
+    }
+
+    async function pollSystemStatus() {
+      if (document.visibilityState === "hidden") return;
+      try {
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 3500);
+        const res = await fetch(`${WORKER_URL}/health?t=${Date.now()}`, { cache: "no-store", signal: ctrl.signal });
+        clearTimeout(tid);
+        const data = await res.json();
+        if (data && typeof data.stopped === "boolean") {
+          await applySystemStopped(data.stopped);
+        }
+        if (data && typeof data.tunnel_url === "string" && data.tunnel_url.startsWith("https://")) {
+          DIRECT_STREAM_URL = data.tunnel_url;
         }
       } catch (_) {}
     }
@@ -2737,8 +2997,10 @@
     document.addEventListener("visibilitychange", async () => {
       if (document.visibilityState === "visible") {
         shuttingDown = false;
+        await resolveDirectTunnel();
+        connectSystemEvents();
+        if (isSystemStopped) return;
         if (!isLive && activeYPlayIdx >= 0 && !video.getAttribute("src")) {
-          await resolveDirectTunnel();
           loadYPlay(activeYPlayIdx, false);
         } else if (isLive && video.paused && !drawerOpen) {
           safePlayVideo();
@@ -2751,9 +3013,13 @@
     buildLiveListOnce();
     renderYPlayListPane();
     resolveDirectTunnel().then(() => {
-      playChannel(CHANNELS[0], true, true);
-      fetchYPlay(false);
+      connectSystemEvents();
+      if (!isSystemStopped) {
+        playChannel(CHANNELS[0], true, true);
+        fetchYPlay(false);
+      }
     });
+    setInterval(pollSystemStatus, 4000);
     setInterval(() => fetchYPlay(true), 15000);
   </script>
 </body>
