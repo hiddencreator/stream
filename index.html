@@ -9,14 +9,13 @@
   <script src="https://cdn.jsdelivr.net/npm/shaka-player@4.11.12/dist/shaka-player.compiled.js"></script>
   <style>
     :root {
-      --bg: #05070b;
       --drawer-bg: rgba(11, 14, 21, 0.96);
       --card: rgba(255, 255, 255, 0.055);
       --active-bg: rgba(255, 255, 255, 0.14);
       --accent: #e50914;
       --text: #f8fafc;
       --muted: #94a3b8;
-      --border: rgba(255, 255, 255, 0.11);
+      --border: rgba(255, 255, 255, 0.12);
     }
 
     *, *::before, *::after {
@@ -70,15 +69,12 @@
       border: 0 !important;
     }
 
-    /* Lightweight Trendy Loading Overlay (No Heavy Blur for 60fps TV) */
+    /* Simple & Elegant Loading Screen */
     .loading-stage {
       position: absolute;
       inset: 0;
       z-index: 10;
-      background:
-        radial-gradient(circle at 24% 26%, rgba(229, 9, 20, 0.22), transparent 52%),
-        radial-gradient(circle at 76% 74%, rgba(255, 255, 255, 0.08), transparent 55%),
-        linear-gradient(145deg, #06080e 0%, #0c101a 50%, #06080e 100%);
+      background: #07090e;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -88,129 +84,63 @@
       opacity: 0;
       pointer-events: none;
       transition: opacity 0.2s ease;
-      will-change: opacity;
     }
 
     .loading-stage.show { opacity: 1; }
 
-    .wave-loader {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      height: 36px;
+    .sleek-ring {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 2.5px solid rgba(255, 255, 255, 0.14);
+      border-top-color: #ffffff;
+      animation: spinRing 0.75s linear infinite;
     }
 
-    .wave-loader span {
-      width: 5px;
-      height: 14px;
-      border-radius: 99px;
-      background: linear-gradient(180deg, #ff2a36, #ffffff);
-      animation: wavePulse 0.95s ease-in-out infinite;
-    }
-
-    .wave-loader span:nth-child(2) { animation-delay: 0.14s; }
-    .wave-loader span:nth-child(3) { animation-delay: 0.28s; }
-    .wave-loader span:nth-child(4) { animation-delay: 0.42s; }
-    .wave-loader span:nth-child(5) { animation-delay: 0.56s; }
-
-    @keyframes wavePulse {
-      0%, 100% { height: 12px; opacity: 0.4; }
-      50% { height: 34px; opacity: 1; }
-    }
-
-    .load-pill {
-      font-size: 0.72rem;
-      font-weight: 800;
-      letter-spacing: 1.3px;
-      text-transform: uppercase;
-      padding: 4px 12px;
-      border-radius: 99px;
-      background: rgba(255, 255, 255, 0.09);
-      border: 1px solid rgba(255, 255, 255, 0.16);
-      color: #e2e8f0;
+    @keyframes spinRing {
+      to { transform: rotate(360deg); }
     }
 
     .load-title {
-      font-size: clamp(1.1rem, 2.6vw, 1.55rem);
-      font-weight: 800;
-      color: #fff;
+      font-size: clamp(1rem, 2.4vw, 1.35rem);
+      font-weight: 700;
+      color: #f8fafc;
       text-align: center;
-      max-width: 82vw;
+      max-width: 80vw;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
     .load-sub {
-      font-size: 0.84rem;
+      font-size: 0.8rem;
       color: var(--muted);
       margin-top: -6px;
     }
 
-    /* Big DTH Dish Channel Banner (Top-Right on Live TV) */
-    .dish-osd {
-      position: absolute;
-      top: clamp(16px, 3vw, 28px);
-      right: clamp(16px, 3vw, 28px);
-      z-index: 19;
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      background: linear-gradient(180deg, rgba(22, 26, 36, 0.94) 0%, rgba(10, 13, 20, 0.96) 100%);
-      border: 1px solid rgba(255, 255, 255, 0.18);
-      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.7);
-      padding: 10px 18px;
-      border-radius: 16px;
+    /* Exit Toast (Double-Back to Exit) */
+    .exit-toast {
+      position: fixed;
+      bottom: 34px;
+      left: 50%;
+      transform: translate3d(-50%, 10px, 0);
+      z-index: 80;
+      background: rgba(16, 20, 28, 0.94);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      color: #fff;
+      font-size: 0.84rem;
+      font-weight: 700;
+      padding: 9px 18px;
+      border-radius: 99px;
+      box-shadow: 0 10px 26px rgba(0, 0, 0, 0.7);
       opacity: 0;
-      transform: translate3d(0, -8px, 0);
       pointer-events: none;
       transition: opacity 0.18s ease, transform 0.18s ease;
-      will-change: opacity, transform;
     }
 
-    .dish-osd.show {
+    .exit-toast.show {
       opacity: 1;
-      transform: translate3d(0, 0, 0);
-    }
-
-    .dish-num {
-      font-size: clamp(1.85rem, 3.6vw, 2.5rem);
-      font-weight: 900;
-      line-height: 1;
-      letter-spacing: -0.5px;
-      color: #fff;
-      font-variant-numeric: tabular-nums;
-      padding-right: 14px;
-      border-right: 1px solid rgba(255, 255, 255, 0.16);
-    }
-
-    .dish-info {
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-    }
-
-    .dish-name {
-      font-size: clamp(0.95rem, 2vw, 1.2rem);
-      font-weight: 800;
-      color: #fff;
-    }
-
-    .dish-live {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 0.72rem;
-      font-weight: 700;
-      color: #cbd5e1;
-    }
-
-    .live-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--accent);
+      transform: translate3d(-50%, 0, 0);
     }
 
     /* Subtitle Overlay */
@@ -297,7 +227,7 @@
       cursor: pointer;
     }
 
-    /* Fullscreen Player HUD */
+    /* Unified Fullscreen Player HUD (Shows & Hides Everything Together) */
     .hud {
       position: absolute;
       inset: 0;
@@ -324,13 +254,12 @@
       pointer-events: auto;
     }
 
-    /* Top Bar: Sleek Settings Icon + Title */
+    /* Top Bar: Settings Icon + Title (YPlay) + Dish Channel Card (Live TV) */
     .hud-top {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: space-between;
       gap: 14px;
-      padding-right: 170px;
     }
 
     .hud-top-left {
@@ -338,6 +267,7 @@
       align-items: center;
       gap: 14px;
       min-width: 0;
+      flex: 1;
     }
 
     .icon-btn {
@@ -372,7 +302,59 @@
       margin-top: 2px;
     }
 
-    /* Center Play/Pause Button (YPlay only — NO bounce) */
+    /* Big DTH Dish Channel Banner (Unified inside HUD) */
+    .dish-osd {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      background: linear-gradient(180deg, rgba(22, 26, 36, 0.94) 0%, rgba(10, 13, 20, 0.96) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.7);
+      padding: 10px 18px;
+      border-radius: 16px;
+      flex-shrink: 0;
+    }
+
+    .dish-num {
+      font-size: clamp(1.85rem, 3.6vw, 2.5rem);
+      font-weight: 900;
+      line-height: 1;
+      letter-spacing: -0.5px;
+      color: #fff;
+      font-variant-numeric: tabular-nums;
+      padding-right: 14px;
+      border-right: 1px solid rgba(255, 255, 255, 0.16);
+    }
+
+    .dish-info {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .dish-name {
+      font-size: clamp(0.95rem, 2vw, 1.2rem);
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .dish-live {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #cbd5e1;
+    }
+
+    .live-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    /* Center Play/Pause Button (YPlay only) */
     .center-play-btn {
       position: absolute;
       top: 50%;
@@ -415,16 +397,16 @@
     }
     .time-lbl.end { text-align: right; }
 
-    /* Custom Sleek YouTube Progress Track (NO bounce) */
+    /* Custom Sleek YouTube Progress Track */
     .yt-track-wrap {
       position: relative;
       flex: 1;
-      height: 30px;
+      height: 32px;
       display: flex;
       align-items: center;
       cursor: pointer;
       border-radius: 99px;
-      padding: 0 6px;
+      padding: 0 8px;
       border: 1.5px solid transparent;
       transition: background 0.16s ease, border-color 0.16s ease;
     }
@@ -442,7 +424,7 @@
     .yt-track-wrap:focus-visible .yt-track-bg,
     .yt-track-wrap.scrubbing .yt-track-bg {
       height: 7px;
-      background: rgba(255, 255, 255, 0.36);
+      background: rgba(255, 255, 255, 0.38);
     }
 
     .yt-track-fill {
@@ -470,24 +452,24 @@
     }
 
     .yt-track-wrap:focus-visible .yt-track-thumb {
-      transform: translate(-50%, -50%) scale(1.15);
+      transform: translate(-50%, -50%) scale(1.18);
     }
 
     .yt-track-wrap.scrubbing .yt-track-thumb {
-      transform: translate(-50%, -50%) scale(1.38);
+      transform: translate(-50%, -50%) scale(1.42);
       background: #fff;
       border-color: #ff2a36;
     }
 
     .scrub-bubble {
       position: absolute;
-      bottom: 28px;
+      bottom: 30px;
       left: 0%;
       transform: translateX(-50%);
       background: #121620;
-      border: 1px solid rgba(255, 255, 255, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.34);
       color: #fff;
-      font-size: 0.78rem;
+      font-size: 0.76rem;
       font-weight: 800;
       padding: 4px 10px;
       border-radius: 8px;
@@ -582,7 +564,7 @@
       color: #fff;
     }
 
-    /* Left Slide-Over Side Drawer (GPU Translate3d for instant smoothness) */
+    /* Left Slide-Over Side Drawer */
     .drawer-backdrop {
       position: fixed;
       inset: 0;
@@ -823,18 +805,20 @@
       transform: scale(1.04);
     }
 
-    /* Center Play/Pause: Glossy Fade Only (NO scale/bounce jump) */
     .center-play-btn:focus-visible,
     .center-play-btn:hover {
       background: linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0.12) 100%) !important;
       border-color: rgba(255, 255, 255, 0.85) !important;
     }
 
-    /* Progress Bar: Clean Highlight Only (NO scale/bounce jump) */
-    .yt-track-wrap:focus-visible,
-    .yt-track-wrap.scrubbing {
+    .yt-track-wrap:focus-visible {
       background: rgba(255, 255, 255, 0.08);
-      border-color: rgba(255, 255, 255, 0.75);
+      border-color: rgba(255, 255, 255, 0.72);
+    }
+
+    .yt-track-wrap.scrubbing {
+      background: rgba(229, 9, 20, 0.16);
+      border-color: #ffffff;
     }
 
     @keyframes clickBounce {
@@ -853,24 +837,15 @@
   <div class="stage" id="stage" tabindex="-1">
     <video id="video" tabindex="-1" playsinline preload="auto" poster="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></video>
 
-    <!-- Trendy Loading Overlay -->
+    <!-- Simple & Elegant Loading Screen -->
     <div id="loadingStage" class="loading-stage show">
-      <div class="wave-loader">
-        <span></span><span></span><span></span><span></span><span></span>
-      </div>
-      <div id="loadPill" class="load-pill">LIVE TV</div>
+      <div class="sleek-ring"></div>
       <div id="loadTitle" class="load-title">Sun TV</div>
-      <div id="loadSub" class="load-sub">Connecting stream...</div>
+      <div id="loadSub" class="load-sub">Loading...</div>
     </div>
 
-    <!-- Big DTH Dish Channel Banner (Top-Right) -->
-    <div id="dishOsd" class="dish-osd">
-      <div id="dishNum" class="dish-num">01</div>
-      <div class="dish-info">
-        <div id="dishName" class="dish-name">Sun TV</div>
-        <div class="dish-live"><span class="live-dot"></span> <span id="dishCat">Entertainment • Live</span></div>
-      </div>
-    </div>
+    <!-- Double-Back Exit Toast -->
+    <div id="exitToast" class="exit-toast">Press Back again to exit</div>
 
     <!-- Subtitles -->
     <div id="subOverlay" class="sub-overlay"><span id="subText" class="sub-text"></span></div>
@@ -891,7 +866,7 @@
       </div>
     </div>
 
-    <!-- Fullscreen Player HUD -->
+    <!-- Unified Fullscreen Player HUD (All Options + Dish Channel Card Show & Hide Together) -->
     <div id="hud" class="hud">
       <div class="hud-top">
         <div class="hud-top-left">
@@ -906,13 +881,22 @@
             <div id="hudSub" class="hud-sub">#01 • Entertainment • Live</div>
           </div>
         </div>
+
+        <!-- Big DTH Dish Channel Banner (Live TV Only — Unified inside HUD) -->
+        <div id="dishOsd" class="dish-osd">
+          <div id="dishNum" class="dish-num">01</div>
+          <div class="dish-info">
+            <div id="dishName" class="dish-name">Sun TV</div>
+            <div class="dish-live"><span class="live-dot"></span> <span id="dishCat">Entertainment • Live</span></div>
+          </div>
+        </div>
       </div>
 
-      <!-- Center Play/Pause (YPlay Only — No Bounce) -->
+      <!-- Center Play/Pause (YPlay Only) -->
       <button id="centerPlayBtn" class="center-play-btn hidden" onclick="event.stopPropagation(); toggleVodPlay();"></button>
 
       <div class="hud-bottom" onclick="event.stopPropagation()">
-        <!-- Custom YouTube Progress Bar (YPlay Only — No Bounce) -->
+        <!-- Custom YouTube Progress Bar (YPlay Only) -->
         <div id="progressRow" class="yt-progress-row hidden">
           <span id="curTxt" class="time-lbl">00:00</span>
           <div id="progressBar" class="yt-track-wrap" tabindex="0" role="slider" aria-label="Seek timeline">
@@ -1024,9 +1008,9 @@
     const stage = document.getElementById("stage");
     const video = document.getElementById("video");
     const loadingStage = document.getElementById("loadingStage");
-    const loadPill = document.getElementById("loadPill");
     const loadTitle = document.getElementById("loadTitle");
     const loadSub = document.getElementById("loadSub");
+    const exitToast = document.getElementById("exitToast");
     const dishOsd = document.getElementById("dishOsd");
     const dishNum = document.getElementById("dishNum");
     const dishName = document.getElementById("dishName");
@@ -1080,31 +1064,75 @@
     let drawerTab = "live";
     let isLive = true;
     let hudTimer = null;
-    let dishOsdTimer = null;
     let zapDebounceTimer = null;
     let loadDebounce = null;
     let wasPlayingBeforeDrawer = false;
     let drawerOpen = false;
     let isZapping = false;
 
-    /* Back-Button History Guard (Prevents accidental app exit when closing HUD/Popups) */
-    let guardDepth = 0;
-    let ignoreNextPop = false;
-    let lastBackHandledAt = 0;
+    /* Persistent Android TV WebView Back-Button Trap + Double-Back to Exit */
+    let lastBackTime = 0;
+    let exitConfirmReady = false;
+    let exitToastTimer = null;
 
-    function pushBackGuard() {
+    function armHistoryAnchor() {
       try {
-        history.pushState({ ystreamGuard: ++guardDepth }, "");
+        history.pushState({ ystreamAnchor: Date.now() }, "");
       } catch (_) {}
     }
 
-    function consumeBackGuard() {
-      if (guardDepth > 0) {
-        guardDepth--;
-        ignoreNextPop = true;
-        try { history.back(); } catch (_) {}
-      }
+    function showExitToast() {
+      exitConfirmReady = true;
+      exitToast.classList.add("show");
+      clearTimeout(exitToastTimer);
+      exitToastTimer = setTimeout(() => {
+        exitConfirmReady = false;
+        exitToast.classList.remove("show");
+      }, 2200);
     }
+
+    function processBackAction() {
+      const now = Date.now();
+      if (now - lastBackTime < 140) return true;
+      lastBackTime = now;
+
+      if (isScrubbing) {
+        exitScrubMode(false);
+        progressBar.focus({ preventScroll: true });
+        return true;
+      }
+      if (hasOpenPop()) {
+        const openMenu = document.querySelector(".pop-menu.open");
+        const trigger = openMenu ? openMenu.parentElement.querySelector("button") : null;
+        closeAllPops();
+        if (trigger) trigger.focus({ preventScroll: true });
+        resetHudTimer();
+        return true;
+      }
+      if (drawerOpen) {
+        closeDrawer(true);
+        return true;
+      }
+      if (isHudVisible()) {
+        hideHud();
+        return true;
+      }
+
+      /* Pure Fullscreen: Require 2nd Back Press within 2.2s to Exit */
+      if (!exitConfirmReady) {
+        showExitToast();
+        return true;
+      }
+      return false; // Allow real exit on 2nd Back press
+    }
+
+    armHistoryAnchor();
+    window.addEventListener("popstate", () => {
+      const intercepted = processBackAction();
+      if (intercepted) {
+        armHistoryAnchor();
+      }
+    });
 
     /* YouTube 2-Step Progress Scrub State */
     let isScrubbing = false;
@@ -1150,27 +1178,8 @@
       el.classList.add("click-bounce");
     }
 
-    function showDishOsd(ch, autoHideMs = 3800) {
-      dishNum.textContent = ch.num;
-      dishName.textContent = ch.name;
-      dishCat.textContent = ch.cat;
-      dishOsd.classList.add("show");
-      clearTimeout(dishOsdTimer);
-      if (autoHideMs > 0) {
-        dishOsdTimer = setTimeout(() => {
-          if (!isHudVisible()) dishOsd.classList.remove("show");
-        }, autoHideMs);
-      }
-    }
-
-    function hideDishOsd() {
-      clearTimeout(dishOsdTimer);
-      dishOsd.classList.remove("show");
-    }
-
-    function showLoading(title, sub, pill = isLive ? "LIVE TV" : "YPLAY", immediate = false) {
+    function showLoading(title, sub, immediate = false) {
       clearTimeout(loadDebounce);
-      loadPill.textContent = pill;
       loadTitle.textContent = title || currentMediaTitle;
       loadSub.textContent = sub;
       if (immediate) {
@@ -1216,51 +1225,40 @@
       }
     }
 
-    /* HUD Show / Hide */
+    /* Unified HUD Show / Hide (Channel Card + Player Options Always Together) */
     function isHudVisible() { return hud.classList.contains("visible"); }
 
     function showHud(focusTarget = null, autoHideMs = 4200) {
       if (drawerOpen) return;
-      const wasHidden = !isHudVisible();
       hud.classList.add("visible");
-      if (wasHidden) pushBackGuard();
-
-      if (isLive) {
-        const ch = CHANNELS.find((c) => c.id === activeChannelId);
-        if (ch) showDishOsd(ch, 0);
-      }
-      if (focusTarget) focusTarget.focus({ preventScroll: true });
+      const target = focusTarget || (hud.contains(document.activeElement) ? document.activeElement : menuBtn);
+      if (target) target.focus({ preventScroll: true });
       resetHudTimer(autoHideMs);
     }
 
-    function hideHud(fromBack = false) {
-      const wasVisible = isHudVisible();
-      exitScrubMode(false, true);
-      closeAllPops(true);
+    function hideHud() {
+      exitScrubMode(false);
+      closeAllPops();
       hud.classList.remove("visible");
-      if (isLive) hideDishOsd();
       if (document.activeElement && hud.contains(document.activeElement)) {
         document.activeElement.blur();
       }
-      if (wasVisible && !fromBack) consumeBackGuard();
     }
 
     function resetHudTimer(ms = 4200) {
       clearTimeout(hudTimer);
       hudTimer = setTimeout(() => {
         if (!drawerOpen && !hasOpenPop() && !isScrubbing && (isLive || !video.paused)) {
-          hideHud(false);
+          hideHud();
         }
       }, ms);
     }
 
     /* Popups */
-    function closeAllPops(fromBack = false, exceptId = "") {
-      const hadOpen = hasOpenPop();
+    function closeAllPops(exceptId = "") {
       document.querySelectorAll(".pop-menu.open").forEach((el) => {
         if (el.id !== exceptId) el.classList.remove("open");
       });
-      if (hadOpen && !exceptId && !fromBack) consumeBackGuard();
     }
 
     function hasOpenPop() { return Boolean(document.querySelector(".pop-menu.open")); }
@@ -1269,15 +1267,12 @@
       const menu = document.getElementById(id);
       if (!menu) return;
       const wasOpen = menu.classList.contains("open");
-      closeAllPops(false, id);
+      closeAllPops(id);
       menu.classList.toggle("open", !wasOpen);
       if (!wasOpen) {
-        pushBackGuard();
         resetHudTimer(5500);
         const activeOpt = menu.querySelector(".pop-opt.active") || menu.querySelector(".pop-opt");
         if (activeOpt) activeOpt.focus({ preventScroll: true });
-      } else {
-        consumeBackGuard();
       }
     }
 
@@ -1285,9 +1280,9 @@
     function openDrawer() {
       if (drawerOpen) return;
       drawerOpen = true;
-      exitScrubMode(false, true);
-      closeAllPops(true);
-      hideHud(true);
+      exitScrubMode(false);
+      closeAllPops();
+      hideHud();
 
       if (!isLive && !video.paused) {
         wasPlayingBeforeDrawer = true;
@@ -1300,7 +1295,6 @@
       drawerBackdrop.classList.add("open");
       sideDrawer.classList.add("open");
       renderDrawer();
-      pushBackGuard();
 
       setTimeout(() => {
         const activeItem = drawerList.querySelector(".d-item.active") || drawerList.querySelector(".d-item");
@@ -1313,59 +1307,17 @@
       }, 45);
     }
 
-    function closeDrawer(resumeIfNeeded = true, fromBack = false) {
+    function closeDrawer(resumeIfNeeded = true) {
       if (!drawerOpen) return;
       drawerOpen = false;
       drawerBackdrop.classList.remove("open");
       sideDrawer.classList.remove("open");
-      if (!fromBack) consumeBackGuard();
 
       if (resumeIfNeeded && !isLive && wasPlayingBeforeDrawer) {
         wasPlayingBeforeDrawer = false;
         video.play().catch(() => {});
       }
     }
-
-    /* Unified Back Button Handler (Never exits app while any option/HUD/drawer is open) */
-    function handleBackStep(fromPopstate = false) {
-      const now = Date.now();
-      if (now - lastBackHandledAt < 120) return true;
-      lastBackHandledAt = now;
-
-      if (isScrubbing) {
-        exitScrubMode(false, fromPopstate);
-        progressBar.focus({ preventScroll: true });
-        if (fromPopstate && isHudVisible()) pushBackGuard();
-        return true;
-      }
-      if (hasOpenPop()) {
-        const openMenu = document.querySelector(".pop-menu.open");
-        const trigger = openMenu ? openMenu.parentElement.querySelector("button") : null;
-        closeAllPops(fromPopstate);
-        if (trigger) trigger.focus({ preventScroll: true });
-        resetHudTimer();
-        if (fromPopstate && isHudVisible()) pushBackGuard();
-        return true;
-      }
-      if (drawerOpen) {
-        closeDrawer(true, fromPopstate);
-        return true;
-      }
-      if (isHudVisible()) {
-        hideHud(fromPopstate);
-        return true;
-      }
-      return false;
-    }
-
-    window.addEventListener("popstate", () => {
-      if (ignoreNextPop) {
-        ignoreNextPop = false;
-        return;
-      }
-      if (guardDepth > 0) guardDepth--;
-      handleBackStep(true);
-    });
 
     function selectDrawerTab(tab) {
       drawerTab = tab;
@@ -1450,19 +1402,20 @@
       const ch = CHANNELS.find((c) => c.id === id);
       if (!ch) return;
       wasPlayingBeforeDrawer = false;
-      closeDrawer(false, false);
+      closeDrawer(false);
       playChannel(ch, true, true);
     }
 
     function pickMovie(idx) {
       wasPlayingBeforeDrawer = false;
-      closeDrawer(false, false);
+      closeDrawer(false);
       loadYPlay(idx, true);
     }
 
     /* Mode Configuration: Live TV vs YPlay */
     function configureHudMode(vod) {
       isLive = !vod;
+      dishOsd.classList.toggle("hidden", vod);
       hudMeta.classList.toggle("hidden", !vod);
       centerPlayBtn.classList.toggle("hidden", !vod);
       progressRow.classList.toggle("hidden", !vod);
@@ -1512,7 +1465,7 @@
         shakaPlayer.selectAudioLanguage(String(id));
       }
       updateLiveAudioUi();
-      closeAllPops(false);
+      closeAllPops();
       langBtn.focus({ preventScroll: true });
       resetHudTimer();
     }
@@ -1555,7 +1508,7 @@
         }
       }
       updateLiveQualUi();
-      closeAllPops(false);
+      closeAllPops();
       qualBtn.focus({ preventScroll: true });
       resetHudTimer();
     }
@@ -1577,7 +1530,7 @@
     function setVodQuality(q) {
       vodQuality = q;
       renderVodQualMenu();
-      closeAllPops(false);
+      closeAllPops();
       qualBtn.focus({ preventScroll: true });
       if (!isLive && activeYPlayIdx >= 0) restartYPlayAt(getEffectiveTime());
     }
@@ -1652,7 +1605,7 @@
       const tr = tracks.find((t) => t.index === idx);
       langBtn.textContent = tr ? tr.cleanLabel : "Audio";
       langMenu.querySelectorAll(".pop-opt").forEach((b) => b.classList.toggle("active", Number(b.dataset.a) === idx));
-      closeAllPops(false);
+      closeAllPops();
       langBtn.focus({ preventScroll: true });
       if (!isLive && activeYPlayIdx >= 0) restartYPlayAt(getEffectiveTime());
     }
@@ -1660,7 +1613,7 @@
     function setVodSub(idx) {
       vodSubIdx = idx;
       subMenu.querySelectorAll(".pop-opt").forEach((b) => b.classList.toggle("active", Number(b.dataset.s) === idx));
-      closeAllPops(false);
+      closeAllPops();
       subBtn.focus({ preventScroll: true });
       if (idx < 0) {
         subBtn.textContent = "CC";
@@ -1677,7 +1630,7 @@
       video.playbackRate = rate;
       speedBtn.textContent = `${rate}x`;
       document.querySelectorAll("#speedMenu .pop-opt").forEach((b) => b.classList.toggle("active", Number(b.dataset.rate) === rate));
-      closeAllPops(false);
+      closeAllPops();
       speedBtn.focus({ preventScroll: true });
       resetHudTimer();
     }
@@ -1688,7 +1641,7 @@
       progressFill.style.width = `${pct}%`;
       progressThumb.style.left = `${pct}%`;
       scrubBubble.style.left = `${pct}%`;
-      scrubBubble.textContent = fmt(curSec);
+      scrubBubble.textContent = isScrubbing ? `${fmt(curSec)} • OK` : fmt(curSec);
       curTxt.textContent = fmt(curSec);
       if (durSec > 0) durTxt.textContent = fmt(durSec);
     }
@@ -1696,22 +1649,19 @@
     function enterScrubMode() {
       const dur = getEffectiveDuration();
       if (isLive || dur <= 0) return;
-      if (!isScrubbing) {
-        isScrubbing = true;
-        pushBackGuard();
-      }
+      isScrubbing = true;
       scrubPreviewSec = getEffectiveTime();
       progressBar.classList.add("scrubbing");
+      progressBar.focus({ preventScroll: true });
       renderProgressVisual(scrubPreviewSec, dur);
       clearTimeout(hudTimer);
     }
 
-    function exitScrubMode(commitSeek = false, fromBack = false) {
+    function exitScrubMode(commitSeek = false) {
       if (!isScrubbing) return;
       const target = scrubPreviewSec;
       isScrubbing = false;
       progressBar.classList.remove("scrubbing");
-      if (!fromBack) consumeBackGuard();
       if (commitSeek) {
         seekYPlayTo(target);
       } else {
@@ -1735,7 +1685,7 @@
       const rect = progressBar.getBoundingClientRect();
       const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
       const target = ratio * dur;
-      if (isScrubbing) exitScrubMode(false, false);
+      if (isScrubbing) exitScrubMode(false);
       seekYPlayTo(target);
       resetHudTimer();
     });
@@ -1791,7 +1741,7 @@
       if (transcodeMode) {
         restartYPlayAt(clamped);
       } else if (dur > 0) {
-        showLoading(currentMediaTitle, `Seeking to ${fmt(clamped)}...`, "YPLAY", false);
+        showLoading(currentMediaTitle, `Seeking to ${fmt(clamped)}...`, false);
         video.currentTime = clamped;
         if (vodSubIdx >= 0) loadSubtitleWindow(clamped);
       }
@@ -1800,11 +1750,11 @@
     /* Touch Tap & Double-Tap on Fullscreen Video */
     stage.addEventListener("click", (e) => {
       if (drawerOpen || playerError.classList.contains("show")) return;
-      if (hasOpenPop()) { closeAllPops(false); return; }
+      if (hasOpenPop()) { closeAllPops(); return; }
 
       if (isLive) {
         if (video.paused) video.play().catch(() => {});
-        if (isHudVisible()) hideHud(false);
+        if (isHudVisible()) hideHud();
         else showHud(menuBtn, 4200);
         return;
       }
@@ -1825,8 +1775,8 @@
 
       lastTouchTap = now;
       touchSingleTimer = setTimeout(() => {
-        if (isHudVisible()) hideHud(false);
-        else showHud(centerPlayBtn, 4200);
+        if (isHudVisible()) hideHud();
+        else showHud(menuBtn, 4200);
       }, 300);
     });
 
@@ -1988,9 +1938,11 @@
         const curIdx = CHANNELS.findIndex((c) => c.id === ch.id);
         const nextCh = CHANNELS[(curIdx + 1) % CHANNELS.length];
         currentMediaTitle = nextCh.name;
-        hudTitle.textContent = nextCh.name;
-        showDishOsd(nextCh, 4000);
-        showLoading(nextCh.name, `${ch.name} offline • Switching channel...`, "LIVE TV", true);
+        dishNum.textContent = nextCh.num;
+        dishName.textContent = nextCh.name;
+        dishCat.textContent = nextCh.cat;
+        showHud(menuBtn, 4200);
+        showLoading(nextCh.name, `${ch.name} offline • Switching...`, true);
         clearTimeout(liveFailTimer);
         liveFailTimer = setTimeout(() => {
           if (isLive && activeChannelId === ch.id) playChannel(nextCh, true, false);
@@ -2001,7 +1953,7 @@
       showError("Live TV Unavailable", `All channels failed to load (${reason}). Check internet and tap Retry.`);
     }
 
-    /* Fast Dish Channel Zapping (Up / Down) — Shows Channel Banner + Available HUD Options Together */
+    /* Fast Dish Channel Zapping (Up / Down) */
     function zapChannel(step) {
       const curIdx = CHANNELS.findIndex((c) => c.id === activeChannelId);
       const baseIdx = curIdx >= 0 ? curIdx : 0;
@@ -2011,17 +1963,17 @@
       isZapping = true;
       activeChannelId = nextCh.id;
       currentMediaTitle = nextCh.name;
-      hudTitle.textContent = nextCh.name;
+      dishNum.textContent = nextCh.num;
+      dishName.textContent = nextCh.name;
+      dishCat.textContent = nextCh.cat;
       liveAvailableHeights = [];
       liveAudioOptions = [];
       updateLiveAudioUi();
       updateLiveQualUi();
 
-      /* Stop old stream immediately so Sun TV never flashes while zapping */
       cleanupPlayers();
-      showDishOsd(nextCh, 0);
-      showHud(null, 4200);
-      showLoading(nextCh.name, `#${nextCh.num} • ${nextCh.cat}`, "LIVE TV", true);
+      showHud(menuBtn, 4200);
+      showLoading(nextCh.name, `#${nextCh.num} • ${nextCh.cat}`, true);
 
       clearTimeout(zapDebounceTimer);
       zapDebounceTimer = setTimeout(() => {
@@ -2037,8 +1989,9 @@
       activeChannelId = ch.id;
       activeYPlayIdx = -1;
       currentMediaTitle = ch.name;
-      hudTitle.textContent = ch.name;
-      hudSub.textContent = `#${ch.num} • ${ch.cat}`;
+      dishNum.textContent = ch.num;
+      dishName.textContent = ch.name;
+      dishCat.textContent = ch.cat;
       pendingResumeTime = 0;
       transcodeMode = false;
       baseOffset = 0;
@@ -2050,8 +2003,8 @@
       video.playbackRate = 1;
 
       configureHudMode(false);
-      showDishOsd(ch, isHudVisible() ? 0 : 3800);
-      showLoading(ch.name, `#${ch.num} • Tuning live channel...`, "LIVE TV", true);
+      showHud(menuBtn, 4200);
+      showLoading(ch.name, `#${ch.num} • ${ch.cat}`, true);
 
       if (ch.type === "dash-clearkey" && window.shaka && shaka.Player.isBrowserSupported()) {
         shakaPlayer = new shaka.Player();
@@ -2103,7 +2056,7 @@
       const needsTranscode = Boolean(item.compat_audio) || vodQuality !== "orig" || vodAudioIdx !== 0;
       transcodeMode = needsTranscode;
 
-      showLoading(item.title, `Loading at ${fmt(clamped)}...`, "YPLAY", true);
+      showLoading(item.title, `Loading at ${fmt(clamped)}...`, true);
       if (transcodeMode) {
         baseOffset = clamped;
         pendingResumeTime = 0;
@@ -2123,7 +2076,6 @@
       if (idx < 0 || idx >= yplayItems.length) return;
       isZapping = false;
       await cleanupPlayers();
-      hideDishOsd();
       activeChannelId = "";
       activeYPlayIdx = idx;
       errorRetries = 0;
@@ -2132,7 +2084,7 @@
       subCues = [];
       subFetchStart = -1;
       subOverlay.classList.remove("show");
-      exitScrubMode(false, true);
+      exitScrubMode(false);
 
       const item = yplayItems[idx];
       currentMediaTitle = item.title;
@@ -2145,7 +2097,8 @@
 
       hudTitle.textContent = item.title;
       hudSub.textContent = `${qStr} • ${gbStr}`;
-      showLoading(item.title, `${qStr} • ${gbStr} • Preparing stream...`, "YPLAY", true);
+      showHud(menuBtn, 4200);
+      showLoading(item.title, `${qStr} • ${gbStr}`, true);
 
       const saved = forceOffset !== null
         ? forceOffset
@@ -2210,12 +2163,12 @@
       hideLoading();
       syncIcons();
       if (isLive) liveFailCount = 0;
-      if (isHudVisible() && !isScrubbing) resetHudTimer(2800);
+      if (isHudVisible() && !isScrubbing) resetHudTimer(3200);
     });
 
     video.addEventListener("waiting", () => {
       if (!video.paused && !isZapping) {
-        showLoading(currentMediaTitle, "Buffering stream...", isLive ? "LIVE TV" : "YPLAY", false);
+        showLoading(currentMediaTitle, "Buffering...", false);
       }
     });
 
@@ -2292,6 +2245,16 @@
       );
     }
 
+    function isOkKey(e) {
+      return (
+        e.key === "Enter" ||
+        e.key === "Select" ||
+        e.key === " " ||
+        e.keyCode === 13 ||
+        e.keyCode === 23
+      );
+    }
+
     function getVisibleRowButtons() {
       const ids = isLive
         ? ["menuBtn", "langBtn", "qualBtn"]
@@ -2305,9 +2268,9 @@
       const k = e.key;
       const active = document.activeElement;
 
-      /* 1. Back Button (Closes active popup/scrub/drawer/HUD without leaving app) */
+      /* 1. Back Button (Never exits prematurely; Double-Back to exit) */
       if (isBackKey(e)) {
-        if (handleBackStep(false)) {
+        if (processBackAction()) {
           e.preventDefault();
           e.stopPropagation();
         }
@@ -2325,7 +2288,7 @@
         zapChannel(-1);
         return;
       }
-      if ((k === "MediaPlayPause" || k === " ") && !isLive && !drawerOpen) {
+      if ((k === "MediaPlayPause" || k === " ") && !isLive && !drawerOpen && active !== progressBar) {
         if (active && active.tagName === "BUTTON") return;
         e.preventDefault();
         toggleVodPlay();
@@ -2341,7 +2304,7 @@
         if (k === "ArrowLeft" || k === "ArrowRight") {
           e.preventDefault();
           (active === retryBtn ? eMenuBtn : retryBtn).focus();
-        } else if (k === "Enter" && active) {
+        } else if (isOkKey(e) && active) {
           e.preventDefault();
           triggerBounce(active);
           active.click();
@@ -2365,7 +2328,7 @@
             const activeItem = drawerList.querySelector(".d-item.active") || items[0];
             activeItem.scrollIntoView({ block: "nearest", behavior: "smooth" });
             activeItem.focus({ preventScroll: true });
-          } else if (k === "Enter") {
+          } else if (isOkKey(e)) {
             e.preventDefault();
             triggerBounce(active);
             active.click();
@@ -2388,7 +2351,7 @@
               prev.scrollIntoView({ block: "nearest", behavior: "smooth" });
               prev.focus({ preventScroll: true });
             }
-          } else if (k === "Enter") {
+          } else if (isOkKey(e)) {
             e.preventDefault();
             triggerBounce(items[curIdx]);
             items[curIdx].click();
@@ -2415,7 +2378,7 @@
         } else if (k === "ArrowUp") {
           e.preventDefault();
           opts[(idx - 1 + opts.length) % opts.length].focus({ preventScroll: true });
-        } else if (k === "Enter" && idx >= 0) {
+        } else if (isOkKey(e) && idx >= 0) {
           e.preventDefault();
           triggerBounce(opts[idx]);
           opts[idx].click();
@@ -2423,7 +2386,7 @@
         return;
       }
 
-      /* 6. LIVE TV REMOTE RULES (Up/Down = Dish Channel Change + HUD; Left/Right = Available Options) */
+      /* 6. LIVE TV REMOTE RULES (Up/Down = Dish Channel Change + Unified HUD; Left/Right = Options) */
       if (isLive) {
         if (k === "ArrowUp") {
           e.preventDefault();
@@ -2435,7 +2398,7 @@
           zapChannel(-1);
           return;
         }
-        if (k === "ArrowLeft" || k === "ArrowRight" || k === "Enter") {
+        if (k === "ArrowLeft" || k === "ArrowRight" || isOkKey(e)) {
           if (!isHudVisible()) {
             e.preventDefault();
             if (video.paused) video.play().catch(() => {});
@@ -2453,7 +2416,7 @@
             e.preventDefault();
             const prev = idx >= 0 ? liveBtns[(idx - 1 + liveBtns.length) % liveBtns.length] : liveBtns[0];
             prev.focus({ preventScroll: true });
-          } else if (k === "Enter") {
+          } else if (isOkKey(e)) {
             e.preventDefault();
             const targetBtn = (active && liveBtns.includes(active)) ? active : menuBtn;
             targetBtn.focus({ preventScroll: true });
@@ -2481,9 +2444,9 @@
           }
           return;
         }
-        if (["ArrowUp", "ArrowDown", "Enter"].includes(k)) {
+        if (["ArrowUp", "ArrowDown"].includes(k) || isOkKey(e)) {
           e.preventDefault();
-          showHud(k === "ArrowUp" ? menuBtn : centerPlayBtn, 4200);
+          showHud(menuBtn, 4200);
         }
         return;
       }
@@ -2494,14 +2457,16 @@
       const bIdx = bottomBtns.indexOf(active);
 
       if (active === progressBar) {
-        if (k === "Enter") {
+        if (isOkKey(e)) {
           e.preventDefault();
+          e.stopPropagation();
           if (!isScrubbing) enterScrubMode();
-          else exitScrubMode(true, false);
+          else exitScrubMode(true);
           return;
         }
         if (k === "ArrowLeft" || k === "ArrowRight") {
           e.preventDefault();
+          e.stopPropagation();
           if (!isScrubbing) enterScrubMode();
           const step = e.repeat ? 30 : 10;
           stepScrubPreview(k === "ArrowRight" ? step : -step);
@@ -2509,13 +2474,15 @@
         }
         if (k === "ArrowUp") {
           e.preventDefault();
-          exitScrubMode(false, false);
+          e.stopPropagation();
+          exitScrubMode(false);
           centerPlayBtn.focus({ preventScroll: true });
           return;
         }
         if (k === "ArrowDown") {
           e.preventDefault();
-          exitScrubMode(false, false);
+          e.stopPropagation();
+          exitScrubMode(false);
           bottomBtns[0]?.focus({ preventScroll: true });
           return;
         }
@@ -2526,7 +2493,10 @@
         if (k === "ArrowDown") {
           e.preventDefault();
           centerPlayBtn.focus({ preventScroll: true });
-        } else if (k === "Enter") {
+        } else if (k === "ArrowRight") {
+          e.preventDefault();
+          centerPlayBtn.focus({ preventScroll: true });
+        } else if (isOkKey(e)) {
           e.preventDefault();
           triggerBounce(menuBtn);
           menuBtn.click();
@@ -2535,13 +2505,13 @@
       }
 
       if (active === centerPlayBtn) {
-        if (k === "ArrowUp") {
+        if (k === "ArrowUp" || k === "ArrowLeft") {
           e.preventDefault();
           menuBtn.focus({ preventScroll: true });
-        } else if (k === "ArrowDown") {
+        } else if (k === "ArrowDown" || k === "ArrowRight") {
           e.preventDefault();
           progressBar.focus({ preventScroll: true });
-        } else if (k === "Enter") {
+        } else if (isOkKey(e)) {
           e.preventDefault();
           centerPlayBtn.click();
         }
@@ -2558,7 +2528,7 @@
         } else if (k === "ArrowUp") {
           e.preventDefault();
           progressBar.focus({ preventScroll: true });
-        } else if (k === "Enter") {
+        } else if (isOkKey(e)) {
           e.preventDefault();
           triggerBounce(active);
           active.click();
@@ -2566,11 +2536,11 @@
         return;
       }
 
-      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(k)) {
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(k) || isOkKey(e)) {
         e.preventDefault();
         menuBtn.focus({ preventScroll: true });
       }
-    });
+    }, true);
 
     /* Formatting & Library Sync */
     function fmt(t) {
