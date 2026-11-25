@@ -95,7 +95,6 @@ tg_client = Client(
 )
 
 ffmpeg_proc: Optional[subprocess.Popen] = None
-# Per-device active FFmpeg transcode & subtitle processes so devices never kill each other's streams
 active_play_procs: dict[str, asyncio.subprocess.Process] = {}
 active_sub_procs: dict[str, asyncio.subprocess.Process] = {}
 last_error: str = ""
@@ -103,9 +102,7 @@ last_relay_hit: float = 0.0
 msg_cache: dict[str, Message] = {}
 prewarm_tasks: dict[str, asyncio.Task] = {}
 
-# Per-device real-time SSE queues: device_id -> set[asyncio.Queue]
 device_subscribers: dict[str, set[asyncio.Queue]] = {}
-# Pending file shares awaiting device selection: share_id -> {"item": dict, "selected": set[str]}
 pending_shares: dict[str, dict] = {}
 last_device_disk_sync: dict[str, float] = {}
 
@@ -190,6 +187,17 @@ def authorize_user(user: Optional[User], allow_claim: bool = False) -> bool:
         write_json(OWNER_FILE, {"owner_id": uid, "claimed_at": int(time.time())})
         return True
     return False
+
+
+async def ensure_owner_peer() -> int:
+    owner_id = get_owner_id()
+    if owner_id <= 0 or not tg_client.is_connected:
+        return owner_id
+    try:
+        await tg_client.resolve_peer(owner_id)
+    except Exception:
+        pass
+    return owner_id
 
 
 def sanitize_device_id(raw: str) -> str:
@@ -746,7 +754,7 @@ def save_media_for_devices(item: dict, target_devices: list[str]) -> tuple[bool,
 
 # --- Telegram UI Builders (Approval, /device Remote, File Share Selector) ---
 async def send_device_approval_alert(dev: dict, is_reaccess: bool = False):
-    owner_id = get_owner_id()
+    owner_id = await ensure_owner_peer()
     if owner_id <= 0:
         return
     did = dev["device_id"]
@@ -1371,6 +1379,7 @@ async def relay_idle_watcher():
 @app.on_event("startup")
 async def startup():
     await tg_client.start()
+    await ensure_owner_peer()
     try:
         await tg_client.set_bot_commands([
             BotCommand("device", "Manage Devices & Remote Control"),
@@ -1436,7 +1445,6 @@ async def device_register(request: Request):
                     "device_token": stored_tok,
                     "stopped": SYSTEM_STOPPED or bool(dev.get("stopped", False)),
                 }
-            # Allow one-time claim if device hasn't confirmed receipt yet
             if stored_tok and not dev.get("token_claimed", False):
                 save_devices_store()
                 return {
@@ -1445,7 +1453,6 @@ async def device_register(request: Request):
                     "device_token": stored_tok,
                     "stopped": SYSTEM_STOPPED or bool(dev.get("stopped", False)),
                 }
-            # Token claimed previously but missing/mismatched now: require re-approval
             dev["status"] = "pending"
             dev["device_token"] = ""
             dev["token_claimed"] = False
@@ -1465,7 +1472,7 @@ async def device_register(request: Request):
             return {"status": status, "device_id": did}
 
         last_notified = int(dev.get("last_notified_at") or 0)
-        if force_request or (now - last_notified) > 30:
+        if force_request or (now - last_notified) > 15:
             await send_device_approval_alert(dev, is_reaccess=force_request)
         else:
             save_devices_store()
@@ -1510,7 +1517,6 @@ async def device_status(request: Request, did: str = "", dtok: str = ""):
                 "device_id": dev_id,
                 "stopped": SYSTEM_STOPPED or bool(dev.get("stopped", False)),
             }
-        # Hand off token until client proves receipt by sending dtok back
         if stored_tok and not dev.get("token_claimed", False):
             return {
                 "status": "approved",
