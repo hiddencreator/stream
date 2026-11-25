@@ -9,11 +9,9 @@
   <style>
     :root {
       --bg: #05070b;
-      --drawer-bg: rgba(11, 15, 24, 0.94);
-      --card: rgba(255, 255, 255, 0.05);
-      --card-hover: rgba(255, 255, 255, 0.11);
-      --active-bg: rgba(59, 130, 246, 0.22);
-      --active-border: #3b82f6;
+      --drawer-bg: rgba(12, 15, 22, 0.94);
+      --card: rgba(255, 255, 255, 0.045);
+      --active-bg: rgba(255, 255, 255, 0.12);
       --accent: #e50914;
       --text: #f8fafc;
       --muted: #94a3b8;
@@ -61,29 +59,27 @@
       background: #000;
     }
 
-    /* Trendy Ambient Loading / Blank Screen Overlay */
+    /* Trendy Ambient Loading Overlay */
     .loading-stage {
       position: absolute;
       inset: 0;
       z-index: 10;
       background:
-        radial-gradient(circle at 22% 28%, rgba(229, 9, 20, 0.22), transparent 52%),
-        radial-gradient(circle at 78% 72%, rgba(59, 130, 246, 0.24), transparent 55%),
-        linear-gradient(145deg, #06080f 0%, #0b101d 50%, #06080f 100%);
+        radial-gradient(circle at 24% 26%, rgba(229, 9, 20, 0.2), transparent 52%),
+        radial-gradient(circle at 76% 74%, rgba(255, 255, 255, 0.08), transparent 55%),
+        linear-gradient(145deg, #06080e 0%, #0c101a 50%, #06080e 100%);
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 16px;
+      gap: 15px;
       padding: 24px;
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.28s ease;
+      transition: opacity 0.25s ease;
     }
 
-    .loading-stage.show {
-      opacity: 1;
-    }
+    .loading-stage.show { opacity: 1; }
 
     .wave-loader {
       display: flex;
@@ -97,7 +93,7 @@
       width: 5px;
       height: 14px;
       border-radius: 99px;
-      background: linear-gradient(180deg, #ff3b46, #3b82f6);
+      background: linear-gradient(180deg, #ff2a36, #ffffff);
       animation: wavePulse 1s ease-in-out infinite;
     }
 
@@ -107,20 +103,20 @@
     .wave-loader span:nth-child(5) { animation-delay: 0.56s; }
 
     @keyframes wavePulse {
-      0%, 100% { height: 12px; opacity: 0.45; }
+      0%, 100% { height: 12px; opacity: 0.4; }
       50% { height: 34px; opacity: 1; }
     }
 
     .load-pill {
       font-size: 0.72rem;
       font-weight: 800;
-      letter-spacing: 1.2px;
+      letter-spacing: 1.3px;
       text-transform: uppercase;
       padding: 4px 12px;
       border-radius: 99px;
       background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      color: #93c5fd;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      color: #e2e8f0;
     }
 
     .load-title {
@@ -140,12 +136,77 @@
       margin-top: -8px;
     }
 
+    /* Big DTH Dish Channel Banner (Top-Right on Live TV) */
+    .dish-osd {
+      position: absolute;
+      top: clamp(16px, 3vw, 28px);
+      right: clamp(16px, 3vw, 28px);
+      z-index: 19;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      background: linear-gradient(180deg, rgba(24, 28, 38, 0.88) 0%, rgba(10, 13, 20, 0.92) 100%);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65);
+      padding: 10px 18px;
+      border-radius: 16px;
+      opacity: 0;
+      transform: translateY(-8px);
+      pointer-events: none;
+      transition: opacity 0.22s ease, transform 0.22s ease;
+    }
+
+    .dish-osd.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .dish-num {
+      font-size: clamp(1.85rem, 3.6vw, 2.5rem);
+      font-weight: 900;
+      line-height: 1;
+      letter-spacing: -0.5px;
+      color: #fff;
+      font-variant-numeric: tabular-nums;
+      padding-right: 14px;
+      border-right: 1px solid rgba(255, 255, 255, 0.16);
+    }
+
+    .dish-info {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .dish-name {
+      font-size: clamp(0.95rem, 2vw, 1.2rem);
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .dish-live {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #cbd5e1;
+    }
+
+    .live-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
     /* Subtitle Overlay */
     .sub-overlay {
       position: absolute;
       left: 8%;
       right: 8%;
-      bottom: 14%;
+      bottom: 15%;
       z-index: 12;
       text-align: center;
       pointer-events: none;
@@ -165,14 +226,14 @@
       white-space: pre-line;
     }
 
-    /* Double-Tap / Seek Flash Pill */
+    /* Double-Tap Seek Pill */
     .seek-flash {
       position: absolute;
       top: 50%;
       transform: translateY(-50%);
-      background: rgba(12, 16, 26, 0.82);
+      background: rgba(16, 20, 28, 0.84);
       backdrop-filter: blur(10px);
-      border: 1px solid rgba(255, 255, 255, 0.16);
+      border: 1px solid rgba(255, 255, 255, 0.2);
       color: #fff;
       font-size: 0.95rem;
       font-weight: 800;
@@ -206,8 +267,8 @@
     .err-card {
       max-width: 380px;
       width: 100%;
-      background: rgba(18, 24, 38, 0.96);
-      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(18, 22, 32, 0.96);
+      border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 16px;
       padding: 20px;
       text-align: center;
@@ -216,31 +277,32 @@
     .err-msg { font-size: 0.84rem; color: var(--muted); margin-top: 6px; line-height: 1.4; }
     .err-actions { margin-top: 16px; display: flex; justify-content: center; gap: 10px; }
     .err-btn {
-      background: var(--accent);
+      background: rgba(255, 255, 255, 0.12);
       color: #fff;
       padding: 9px 20px;
       border-radius: 10px;
       font-size: 0.86rem;
       font-weight: 700;
-      border: 2px solid transparent;
+      border: 1.5px solid transparent;
+      cursor: pointer;
     }
 
-    /* YouTube-Style Fullscreen HUD */
+    /* Fullscreen Player HUD */
     .hud {
       position: absolute;
       inset: 0;
       z-index: 16;
       background: linear-gradient(
         to bottom,
-        rgba(0, 0, 0, 0.78) 0%,
-        rgba(0, 0, 0, 0.08) 28%,
-        rgba(0, 0, 0, 0.12) 66%,
-        rgba(0, 0, 0, 0.88) 100%
+        rgba(0, 0, 0, 0.72) 0%,
+        rgba(0, 0, 0, 0.04) 26%,
+        rgba(0, 0, 0, 0.08) 66%,
+        rgba(0, 0, 0, 0.86) 100%
       );
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      padding: clamp(14px, 2.6vw, 26px);
+      padding: clamp(16px, 2.8vw, 28px);
       opacity: 0;
       pointer-events: none;
       transition: opacity 0.22s ease;
@@ -251,12 +313,13 @@
       pointer-events: auto;
     }
 
-    /* Top Bar (Top-Left Menu Button + Now Playing Info) */
+    /* Top Bar: Sleek Settings Icon + Title */
     .hud-top {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 14px;
+      padding-right: 170px;
     }
 
     .hud-top-left {
@@ -266,28 +329,26 @@
       min-width: 0;
     }
 
-    .menu-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(18, 24, 38, 0.82);
+    .icon-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.06) 100%);
       backdrop-filter: blur(10px);
       color: #fff;
-      border: 2px solid rgba(255, 255, 255, 0.16);
-      padding: 10px 16px;
-      border-radius: 12px;
-      font-size: 0.9rem;
-      font-weight: 700;
+      border: 1.5px solid rgba(255, 255, 255, 0.14);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       cursor: pointer;
       flex-shrink: 0;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease, border-color 0.2s ease;
     }
 
-    .hud-meta {
-      min-width: 0;
-    }
+    .hud-meta { min-width: 0; }
 
     .hud-title {
-      font-size: clamp(0.98rem, 2.2vw, 1.35rem);
+      font-size: clamp(0.98rem, 2.2vw, 1.32rem);
       font-weight: 800;
       color: #fff;
       white-space: nowrap;
@@ -296,30 +357,9 @@
     }
 
     .hud-sub {
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       color: #cbd5e1;
       margin-top: 2px;
-    }
-
-    .live-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      background: rgba(229, 9, 20, 0.24);
-      border: 1px solid rgba(229, 9, 20, 0.55);
-      color: #fff;
-      font-size: 0.76rem;
-      font-weight: 800;
-      padding: 6px 12px;
-      border-radius: 99px;
-      flex-shrink: 0;
-    }
-
-    .live-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #ff2a36;
     }
 
     /* Center Play/Pause Button (YPlay only) */
@@ -328,51 +368,134 @@
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      width: 68px;
-      height: 68px;
+      width: 66px;
+      height: 66px;
       border-radius: 50%;
-      background: rgba(15, 20, 32, 0.78);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.16) 0%, rgba(15, 18, 26, 0.72) 100%);
       backdrop-filter: blur(10px);
-      border: 2px solid rgba(255, 255, 255, 0.2);
+      border: 1.5px solid rgba(255, 255, 255, 0.18);
       color: #fff;
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease, border-color 0.2s ease;
     }
 
-    .center-play-btn.hidden {
-      display: none !important;
-    }
+    .center-play-btn.hidden { display: none !important; }
 
-    /* Bottom Controls */
+    /* Bottom Controls & Custom YouTube Progress Bar */
     .hud-bottom {
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 14px;
       width: 100%;
     }
 
-    .seek-row {
+    .yt-progress-row {
       display: flex;
       align-items: center;
-      gap: 12px;
-      font-size: 0.82rem;
+      gap: 14px;
+      width: 100%;
+    }
+
+    .yt-progress-row.hidden { display: none !important; }
+
+    .time-lbl {
+      font-size: 0.8rem;
       font-weight: 700;
       color: #f1f5f9;
       font-variant-numeric: tabular-nums;
+      min-width: 44px;
     }
+    .time-lbl.end { text-align: right; }
 
-    .seek-row.hidden {
-      display: none !important;
-    }
-
-    .seek-row input[type="range"] {
+    /* Custom Sleek YouTube Progress Track */
+    .yt-track-wrap {
+      position: relative;
       flex: 1;
-      accent-color: var(--accent);
-      height: 6px;
+      height: 28px;
+      display: flex;
+      align-items: center;
       cursor: pointer;
       border-radius: 99px;
+      padding: 0 4px;
+      border: 1.5px solid transparent;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease, border-color 0.2s ease;
+    }
+
+    .yt-track-bg {
+      position: relative;
+      width: 100%;
+      height: 4px;
+      border-radius: 99px;
+      background: rgba(255, 255, 255, 0.24);
+      overflow: visible;
+      transition: height 0.18s ease;
+    }
+
+    .yt-track-wrap:focus-visible .yt-track-bg,
+    .yt-track-wrap.scrubbing .yt-track-bg {
+      height: 7px;
+      background: rgba(255, 255, 255, 0.34);
+    }
+
+    .yt-track-fill {
+      position: absolute;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: 0%;
+      border-radius: 99px;
+      background: linear-gradient(90deg, #ff2a36 0%, #ff5a63 100%);
+    }
+
+    .yt-track-thumb {
+      position: absolute;
+      top: 50%;
+      left: 0%;
+      transform: translate(-50%, -50%) scale(0.75);
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      background: #ff2a36;
+      border: 2px solid #fff;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.65);
+      transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.18s ease;
+    }
+
+    .yt-track-wrap:focus-visible .yt-track-thumb {
+      transform: translate(-50%, -50%) scale(1.15);
+    }
+
+    .yt-track-wrap.scrubbing .yt-track-thumb {
+      transform: translate(-50%, -50%) scale(1.4);
+      background: #fff;
+      border-color: #ff2a36;
+      box-shadow: 0 0 16px rgba(255, 255, 255, 0.9);
+    }
+
+    .scrub-bubble {
+      position: absolute;
+      bottom: 24px;
+      left: 0%;
+      transform: translateX(-50%);
+      background: rgba(16, 20, 28, 0.92);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: #fff;
+      font-size: 0.76rem;
+      font-weight: 800;
+      padding: 4px 10px;
+      border-radius: 8px;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s ease;
+    }
+
+    .yt-track-wrap.scrubbing .scrub-bubble {
+      opacity: 1;
     }
 
     .controls-row {
@@ -386,17 +509,17 @@
     .ctrl-grp {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 9px;
       flex-wrap: wrap;
     }
 
     .ctrl-btn {
-      background: rgba(255, 255, 255, 0.12);
-      backdrop-filter: blur(8px);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.13) 0%, rgba(255, 255, 255, 0.06) 100%);
+      backdrop-filter: blur(10px);
       color: #fff;
-      border: 2px solid transparent;
-      padding: 8px 13px;
-      border-radius: 10px;
+      border: 1.5px solid rgba(255, 255, 255, 0.1);
+      padding: 8px 14px;
+      border-radius: 11px;
       font-size: 0.82rem;
       font-weight: 700;
       display: inline-flex;
@@ -405,30 +528,27 @@
       gap: 6px;
       min-height: 38px;
       cursor: pointer;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease, border-color 0.2s ease;
     }
 
-    .ctrl-btn.hidden {
-      display: none !important;
-    }
+    .ctrl-btn.hidden { display: none !important; }
 
     /* Popover Menus */
-    .pop-wrap {
-      position: relative;
-    }
+    .pop-wrap { position: relative; }
 
     .pop-menu {
       position: absolute;
       bottom: 46px;
       right: 0;
-      background: rgba(12, 17, 28, 0.97);
-      backdrop-filter: blur(14px);
+      background: rgba(14, 17, 25, 0.96);
+      backdrop-filter: blur(16px);
       border: 1px solid rgba(255, 255, 255, 0.16);
       border-radius: 12px;
       padding: 6px;
       display: flex;
       flex-direction: column;
       gap: 4px;
-      min-width: 124px;
+      min-width: 126px;
       max-height: 220px;
       overflow-y: auto;
       opacity: 0;
@@ -448,17 +568,18 @@
       width: 100%;
       text-align: center;
       background: transparent;
-      border: 2px solid transparent;
+      border: 1.5px solid transparent;
       padding: 8px 12px;
       border-radius: 8px;
       font-size: 0.82rem;
       font-weight: 700;
       color: #cbd5e1;
       cursor: pointer;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.18s ease, border-color 0.18s ease;
     }
 
     .pop-opt.active {
-      background: rgba(229, 9, 20, 0.28);
+      background: rgba(255, 255, 255, 0.14);
       color: #fff;
     }
 
@@ -467,17 +588,14 @@
       position: fixed;
       inset: 0;
       z-index: 50;
-      background: rgba(0, 0, 0, 0.58);
+      background: rgba(0, 0, 0, 0.56);
       backdrop-filter: blur(4px);
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.24s ease;
+      transition: opacity 0.22s ease;
     }
 
-    .drawer-backdrop.open {
-      opacity: 1;
-      pointer-events: auto;
-    }
+    .drawer-backdrop.open { opacity: 1; pointer-events: auto; }
 
     .side-drawer {
       position: fixed;
@@ -493,12 +611,10 @@
       display: flex;
       flex-direction: column;
       transform: translateX(-102%);
-      transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+      transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
     }
 
-    .side-drawer.open {
-      transform: translateX(0);
-    }
+    .side-drawer.open { transform: translateX(0); }
 
     .drawer-head {
       padding: 16px 16px 12px;
@@ -522,26 +638,18 @@
       color: #fff;
     }
 
-    .drawer-brand span {
-      color: var(--accent);
-    }
+    .drawer-brand span { color: var(--accent); }
 
-    .drawer-hint {
-      font-size: 0.72rem;
-      color: var(--muted);
-    }
+    .drawer-hint { font-size: 0.72rem; color: var(--muted); }
 
-    .drawer-tabs {
-      display: flex;
-      gap: 8px;
-    }
+    .drawer-tabs { display: flex; gap: 8px; }
 
     .d-tab {
       flex: 1;
       padding: 10px 12px;
       border-radius: 10px;
       background: rgba(255, 255, 255, 0.06);
-      border: 2px solid transparent;
+      border: 1.5px solid transparent;
       color: var(--muted);
       font-size: 0.86rem;
       font-weight: 800;
@@ -550,11 +658,11 @@
       justify-content: center;
       gap: 7px;
       cursor: pointer;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.18s ease, border-color 0.18s ease;
     }
 
     .d-tab.active {
-      background: var(--active-bg);
-      border-color: rgba(59, 130, 246, 0.55);
+      background: rgba(255, 255, 255, 0.13);
       color: #fff;
     }
 
@@ -578,10 +686,9 @@
       gap: 9px;
     }
 
-    /* Drawer Channel & Movie Items */
     .d-item {
       background: var(--card);
-      border: 2px solid transparent;
+      border: 1.5px solid transparent;
       border-radius: 12px;
       padding: 10px 12px;
       display: flex;
@@ -589,11 +696,12 @@
       justify-content: space-between;
       gap: 11px;
       cursor: pointer;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.18s ease, border-color 0.18s ease;
     }
 
     .d-item.active {
       background: var(--active-bg);
-      border-color: rgba(59, 130, 246, 0.65);
+      border-color: rgba(255, 255, 255, 0.26);
     }
 
     .d-item-left {
@@ -639,7 +747,7 @@
       width: 44px;
       height: 54px;
       border-radius: 9px;
-      background: linear-gradient(160deg, #1e293b 0%, #0f172a 100%);
+      background: linear-gradient(160deg, #1e2430 0%, #0f131a 100%);
       border: 1px solid rgba(255, 255, 255, 0.14);
       display: flex;
       flex-direction: column;
@@ -652,7 +760,7 @@
 
     .d-item.active .yp-badge {
       background: linear-gradient(160deg, #dc2626 0%, #7f1d1d 100%);
-      border-color: rgba(252, 165, 165, 0.45);
+      border-color: rgba(255, 255, 255, 0.4);
     }
 
     .yp-num {
@@ -663,10 +771,7 @@
       background: rgba(0, 0, 0, 0.45);
     }
 
-    .d-info {
-      min-width: 0;
-      flex: 1;
-    }
+    .d-info { min-width: 0; flex: 1; }
 
     .d-title {
       font-size: 0.9rem;
@@ -697,27 +802,64 @@
     }
 
     .d-tag.live {
-      background: rgba(229, 9, 20, 0.26);
+      background: rgba(229, 9, 20, 0.28);
       color: #fca5a5;
     }
 
-    /* High-Contrast TV Remote Focus Ring */
-    .menu-btn:focus-visible,
-    .center-play-btn:focus-visible,
+    /* Sleek Glossy White Focus + Minimal White Border + Clicky Bounce */
+    .icon-btn:focus-visible,
+    .icon-btn:hover,
     .ctrl-btn:focus-visible,
+    .ctrl-btn:hover,
     .pop-opt:focus-visible,
+    .pop-opt:hover,
     .d-tab:focus-visible,
+    .d-tab:hover,
     .d-item:focus-visible,
+    .d-item:hover,
     .err-btn:focus-visible,
-    #seekInput:focus-visible {
-      border-color: #ffffff !important;
-      background: rgba(59, 130, 246, 0.42) !important;
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.75);
-      transform: scale(1.03);
+    .err-btn:hover {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.11) 100%) !important;
+      border-color: rgba(255, 255, 255, 0.85) !important;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 6px 18px rgba(0, 0, 0, 0.45);
+      transform: scale(1.05);
     }
 
-    .center-play-btn:focus-visible {
-      transform: translate(-50%, -50%) scale(1.08);
+    .center-play-btn:focus-visible,
+    .center-play-btn:hover {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0.12) 100%) !important;
+      border-color: rgba(255, 255, 255, 0.88) !important;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 8px 22px rgba(0, 0, 0, 0.5);
+      transform: translate(-50%, -50%) scale(1.07);
+    }
+
+    .yt-track-wrap:focus-visible,
+    .yt-track-wrap.scrubbing {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.72);
+      transform: scaleY(1.08);
+    }
+
+    @keyframes clickBounce {
+      0% { transform: scale(1.05); }
+      40% { transform: scale(0.91); }
+      75% { transform: scale(1.09); }
+      100% { transform: scale(1.05); }
+    }
+
+    @keyframes centerClickBounce {
+      0% { transform: translate(-50%, -50%) scale(1.07); }
+      40% { transform: translate(-50%, -50%) scale(0.91); }
+      75% { transform: translate(-50%, -50%) scale(1.11); }
+      100% { transform: translate(-50%, -50%) scale(1.07); }
+    }
+
+    .click-bounce {
+      animation: clickBounce 0.26s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .center-play-btn.click-bounce {
+      animation: centerClickBounce 0.26s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
   </style>
 </head>
@@ -735,6 +877,15 @@
       <div id="loadSub" class="load-sub">Connecting stream...</div>
     </div>
 
+    <!-- Big DTH Dish Channel Banner (Top-Right) -->
+    <div id="dishOsd" class="dish-osd">
+      <div id="dishNum" class="dish-num">01</div>
+      <div class="dish-info">
+        <div id="dishName" class="dish-name">Sun TV</div>
+        <div class="dish-live"><span class="live-dot"></span> <span id="dishCat">Entertainment • Live</span></div>
+      </div>
+    </div>
+
     <!-- Subtitles -->
     <div id="subOverlay" class="sub-overlay"><span id="subText" class="sub-text"></span></div>
 
@@ -749,72 +900,84 @@
         <div id="errMsg" class="err-msg">Unable to connect right now.</div>
         <div class="err-actions">
           <button id="errRetryBtn" class="err-btn" onclick="retryCurrentMedia()">Retry</button>
-          <button id="errMenuBtn" class="err-btn" style="background:rgba(255,255,255,0.14);" onclick="openDrawer()">Open Menu</button>
+          <button id="errMenuBtn" class="err-btn" onclick="openDrawer()">Channels / YPlay</button>
         </div>
       </div>
     </div>
 
-    <!-- YouTube-Style Fullscreen Player HUD -->
+    <!-- Fullscreen Player HUD -->
     <div id="hud" class="hud">
       <div class="hud-top">
         <div class="hud-top-left">
-          <button id="menuBtn" class="menu-btn" onclick="event.stopPropagation(); openDrawer();">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-            <span>Menu</span>
+          <!-- Sleek Settings/Menu Icon (No Text) -->
+          <button id="menuBtn" class="icon-btn" aria-label="Menu" onclick="event.stopPropagation(); triggerBounce(this); openDrawer();">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
           </button>
-          <div class="hud-meta">
+          <div class="hud-meta" id="hudMeta">
             <div id="hudTitle" class="hud-title">Sun TV</div>
             <div id="hudSub" class="hud-sub">#01 • Entertainment • Live</div>
           </div>
         </div>
-        <div id="liveChip" class="live-chip"><span class="live-dot"></span> LIVE</div>
       </div>
 
-      <button id="centerPlayBtn" class="center-play-btn hidden" onclick="event.stopPropagation(); toggleVodPlay();"></button>
+      <!-- Center Play/Pause (YPlay Only) -->
+      <button id="centerPlayBtn" class="center-play-btn hidden" onclick="event.stopPropagation(); triggerBounce(this); toggleVodPlay();"></button>
 
       <div class="hud-bottom" onclick="event.stopPropagation()">
-        <div id="seekRow" class="seek-row hidden">
-          <span id="curTxt">00:00</span>
-          <input id="seekInput" type="range" min="0" max="1000" value="0" step="1" />
-          <span id="durTxt">00:00</span>
+        <!-- Custom YouTube Progress Bar (YPlay Only) -->
+        <div id="progressRow" class="yt-progress-row hidden">
+          <span id="curTxt" class="time-lbl">00:00</span>
+          <div id="progressBar" class="yt-track-wrap" tabindex="0" role="slider" aria-label="Seek timeline">
+            <div class="yt-track-bg">
+              <div id="progressFill" class="yt-track-fill"></div>
+              <div id="progressThumb" class="yt-track-thumb"></div>
+            </div>
+            <div id="scrubBubble" class="scrub-bubble">00:00</div>
+          </div>
+          <span id="durTxt" class="time-lbl end">00:00</span>
         </div>
 
         <div class="controls-row">
-          <div class="ctrl-grp">
-            <button id="nextBtn" class="ctrl-btn hidden" onclick="playNextYPlay()">
+          <div class="ctrl-grp" id="leftCtrlGrp">
+            <button id="nextBtn" class="ctrl-btn hidden" onclick="triggerBounce(this); playNextYPlay();">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M5 4l10 8-10 8V4zm12 0h2v16h-2V4z"/></svg>
               <span>Next</span>
             </button>
-            <button id="muteBtn" class="ctrl-btn" onclick="toggleMute()"></button>
+            <button id="muteBtn" class="ctrl-btn hidden" onclick="triggerBounce(this); toggleMute();"></button>
           </div>
 
-          <div class="ctrl-grp">
+          <div class="ctrl-grp" id="rightCtrlGrp">
+            <!-- Language (Shown only when >= 2 languages exist) -->
             <div id="langWrap" class="pop-wrap hidden">
-              <button id="langBtn" class="ctrl-btn" onclick="togglePop('langMenu')">Audio</button>
+              <button id="langBtn" class="ctrl-btn" onclick="triggerBounce(this); togglePop('langMenu');">Tamil</button>
               <div id="langMenu" class="pop-menu"></div>
             </div>
 
+            <!-- Caption (Shown only when subtitles exist in YPlay) -->
             <div id="subWrap" class="pop-wrap hidden">
-              <button id="subBtn" class="ctrl-btn" onclick="togglePop('subMenu')">CC</button>
+              <button id="subBtn" class="ctrl-btn" onclick="triggerBounce(this); togglePop('subMenu');">CC</button>
               <div id="subMenu" class="pop-menu"></div>
             </div>
 
-            <div class="pop-wrap">
-              <button id="qualBtn" class="ctrl-btn" onclick="togglePop('qualMenu')">Auto</button>
+            <!-- Quality (Shown on YPlay; on Live TV shown only if >= 2 qualities exist) -->
+            <div id="qualWrap" class="pop-wrap hidden">
+              <button id="qualBtn" class="ctrl-btn" onclick="triggerBounce(this); togglePop('qualMenu');">Auto</button>
               <div id="qualMenu" class="pop-menu"></div>
             </div>
 
+            <!-- Speed (YPlay Only) -->
             <div id="speedWrap" class="pop-wrap hidden">
-              <button id="speedBtn" class="ctrl-btn" onclick="togglePop('speedMenu')">1x</button>
+              <button id="speedBtn" class="ctrl-btn" onclick="triggerBounce(this); togglePop('speedMenu');">1x</button>
               <div id="speedMenu" class="pop-menu">
-                <button class="pop-opt active" data-rate="1" onclick="setSpeed(1)">1x</button>
-                <button class="pop-opt" data-rate="1.15" onclick="setSpeed(1.15)">1.15x</button>
-                <button class="pop-opt" data-rate="1.25" onclick="setSpeed(1.25)">1.25x</button>
-                <button class="pop-opt" data-rate="1.5" onclick="setSpeed(1.5)">1.5x</button>
+                <button class="pop-opt active" data-rate="1" onclick="triggerBounce(this); setSpeed(1);">1x</button>
+                <button class="pop-opt" data-rate="1.15" onclick="triggerBounce(this); setSpeed(1.15);">1.15x</button>
+                <button class="pop-opt" data-rate="1.25" onclick="triggerBounce(this); setSpeed(1.25);">1.25x</button>
+                <button class="pop-opt" data-rate="1.5" onclick="triggerBounce(this); setSpeed(1.5);">1.5x</button>
               </div>
             </div>
-
-            <button id="fsBtn" class="ctrl-btn" onclick="toggleFullscreen()"></button>
           </div>
         </div>
       </div>
@@ -830,11 +993,11 @@
         <div class="drawer-hint">BACK to Fullscreen</div>
       </div>
       <div class="drawer-tabs">
-        <button id="tabLive" class="d-tab active" onclick="selectDrawerTab('live')">
+        <button id="tabLive" class="d-tab active" onclick="triggerBounce(this); selectDrawerTab('live');">
           <span>Live TV</span>
           <span id="liveBadge" class="d-badge">6</span>
         </button>
-        <button id="tabYPlay" class="d-tab" onclick="selectDrawerTab('yplay')">
+        <button id="tabYPlay" class="d-tab" onclick="triggerBounce(this); selectDrawerTab('yplay');">
           <span>YPlay</span>
           <span id="yplayBadge" class="d-badge">0</span>
         </button>
@@ -852,18 +1015,25 @@
       pause: `<svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`,
       volOn: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>`,
       volOff: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>`,
-      fsEnter: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>`,
-      fsExit: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>`,
       cinema: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8H4Z"/><path d="m4 11-.88-2.87a2 2 0 0 1 1.33-2.5l11.48-3.5a2 2 0 0 1 2.5 1.32l.87 2.87L4 11.01Z"/></svg>`
     };
 
+    const LANG_MAP = {
+      tam: "Tamil", ta: "Tamil", tamil: "Tamil",
+      hin: "Hindi", hi: "Hindi", hindi: "Hindi",
+      tel: "Telugu", te: "Telugu", telugu: "Telugu",
+      mal: "Malayalam", ml: "Malayalam", malayalam: "Malayalam",
+      kan: "Kannada", kn: "Kannada", kannada: "Kannada",
+      eng: "English", en: "English", english: "English"
+    };
+
     const CHANNELS = [
-      { id: "suntv", num: "#01", short: "SUN", bg: "#d92323", name: "Sun TV", cat: "Entertainment • Live", type: "hls", url: "https://d2px1d6ssc60fw.cloudfront.net/SunTV/SunTV-HDR10-IN-index.m3u8", relayPath: "/live/suntv/index.m3u8", logo: "assets/suntv.webp" },
-      { id: "zeetamil", num: "#02", short: "ZEE", bg: "#6d28d9", name: "Zee Tamil HD", cat: "Entertainment • HD", type: "hls", url: "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:zeetamil1.smil/playlist.m3u8", logo: "assets/zeetamil.webp" },
-      { id: "colorstamil", num: "#03", short: "COLORS", bg: "#be185d", name: "Colors Tamil HD", cat: "Entertainment • HD", type: "hls", url: "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:colorstamilhd11.smil/playlist.m3u8", logo: "assets/colorstamil.webp" },
-      { id: "makkaltv", num: "#04", short: "MAKKAL", bg: "#047857", name: "Makkal TV", cat: "General • Live", type: "hls", url: "https://5k8q87azdy4v-hls-live.wmncdn.net/MAKKAL/271ddf829afeece44d8732757fba1a66.sdp/playlist.m3u8", logo: "assets/makkaltv.webp" },
-      { id: "historytv18", num: "#05", short: "HIST", bg: "#b45309", name: "History TV18 HD", cat: "Infotainment • HD", type: "dash-clearkey", url: "https://login.bheem.tv/bpk-tv/22652/output/index.mpd", kid: "c6cb0bcbeac25fb286fed851e41de38c", key: "955c54f2cac8783fafccae5e5f9cdf8d", logo: "assets/historytv18.webp" },
-      { id: "discoverytamil", num: "#06", short: "DISC", bg: "#0369a1", name: "Discovery Tamil", cat: "Infotainment • HD", type: "dash-clearkey", url: "https://login.bheem.tv/bpk-tv/22652/output/index.mpd", kid: "c6cb0bcbeac25fb286fed851e41de38c", key: "955c54f2cac8783fafccae5e5f9cdf8d", logo: "assets/discoverytamil.webp" }
+      { id: "suntv", num: "01", short: "SUN", bg: "#d92323", name: "Sun TV", cat: "Entertainment • Live", type: "hls", url: "https://d2px1d6ssc60fw.cloudfront.net/SunTV/SunTV-HDR10-IN-index.m3u8", relayPath: "/live/suntv/index.m3u8", logo: "assets/suntv.webp" },
+      { id: "zeetamil", num: "02", short: "ZEE", bg: "#6d28d9", name: "Zee Tamil HD", cat: "Entertainment • HD", type: "hls", url: "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:zeetamil1.smil/playlist.m3u8", logo: "assets/zeetamil.webp" },
+      { id: "colorstamil", num: "03", short: "COLORS", bg: "#be185d", name: "Colors Tamil HD", cat: "Entertainment • HD", type: "hls", url: "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:colorstamilhd11.smil/playlist.m3u8", logo: "assets/colorstamil.webp" },
+      { id: "makkaltv", num: "04", short: "MAKKAL", bg: "#047857", name: "Makkal TV", cat: "General • Live", type: "hls", url: "https://5k8q87azdy4v-hls-live.wmncdn.net/MAKKAL/271ddf829afeece44d8732757fba1a66.sdp/playlist.m3u8", logo: "assets/makkaltv.webp" },
+      { id: "historytv18", num: "05", short: "HIST", bg: "#b45309", name: "History TV18 HD", cat: "Infotainment • HD", type: "dash-clearkey", url: "https://login.bheem.tv/bpk-tv/22652/output/index.mpd", kid: "c6cb0bcbeac25fb286fed851e41de38c", key: "955c54f2cac8783fafccae5e5f9cdf8d", logo: "assets/historytv18.webp" },
+      { id: "discoverytamil", num: "06", short: "DISC", bg: "#0369a1", name: "Discovery Tamil", cat: "Infotainment • HD", type: "dash-clearkey", url: "https://login.bheem.tv/bpk-tv/22652/output/index.mpd", kid: "c6cb0bcbeac25fb286fed851e41de38c", key: "955c54f2cac8783fafccae5e5f9cdf8d", logo: "assets/discoverytamil.webp" }
     ];
 
     const stage = document.getElementById("stage");
@@ -872,6 +1042,10 @@
     const loadPill = document.getElementById("loadPill");
     const loadTitle = document.getElementById("loadTitle");
     const loadSub = document.getElementById("loadSub");
+    const dishOsd = document.getElementById("dishOsd");
+    const dishNum = document.getElementById("dishNum");
+    const dishName = document.getElementById("dishName");
+    const dishCat = document.getElementById("dishCat");
     const subOverlay = document.getElementById("subOverlay");
     const subText = document.getElementById("subText");
     const seekLeftFlash = document.getElementById("seekLeftFlash");
@@ -881,12 +1055,15 @@
     const errMsg = document.getElementById("errMsg");
     const hud = document.getElementById("hud");
     const menuBtn = document.getElementById("menuBtn");
+    const hudMeta = document.getElementById("hudMeta");
     const hudTitle = document.getElementById("hudTitle");
     const hudSub = document.getElementById("hudSub");
-    const liveChip = document.getElementById("liveChip");
     const centerPlayBtn = document.getElementById("centerPlayBtn");
-    const seekRow = document.getElementById("seekRow");
-    const seekInput = document.getElementById("seekInput");
+    const progressRow = document.getElementById("progressRow");
+    const progressBar = document.getElementById("progressBar");
+    const progressFill = document.getElementById("progressFill");
+    const progressThumb = document.getElementById("progressThumb");
+    const scrubBubble = document.getElementById("scrubBubble");
     const curTxt = document.getElementById("curTxt");
     const durTxt = document.getElementById("durTxt");
     const nextBtn = document.getElementById("nextBtn");
@@ -897,11 +1074,11 @@
     const subWrap = document.getElementById("subWrap");
     const subBtn = document.getElementById("subBtn");
     const subMenu = document.getElementById("subMenu");
+    const qualWrap = document.getElementById("qualWrap");
     const qualBtn = document.getElementById("qualBtn");
     const qualMenu = document.getElementById("qualMenu");
     const speedWrap = document.getElementById("speedWrap");
     const speedBtn = document.getElementById("speedBtn");
-    const fsBtn = document.getElementById("fsBtn");
     const drawerBackdrop = document.getElementById("drawerBackdrop");
     const sideDrawer = document.getElementById("sideDrawer");
     const tabLive = document.getElementById("tabLive");
@@ -914,15 +1091,20 @@
     let yplayItems = [];
     let yplaySig = "";
     let activeYPlayIdx = -1;
-    let drawerTab = "live"; // Pre-selected Live TV
+    let drawerTab = "live";
     let isLive = true;
-    let seeking = false;
     let hudTimer = null;
+    let dishOsdTimer = null;
+    let zapDebounceTimer = null;
     let loadDebounce = null;
     let wasPlayingBeforeDrawer = false;
     let drawerOpen = false;
 
-    /* Seek / Double-Tap State */
+    /* YouTube 2-Step Progress Scrub State */
+    let isScrubbing = false;
+    let scrubPreviewSec = 0;
+
+    /* Double-Tap / Double-Press Seek State */
     let lastTouchTap = 0;
     let touchSingleTimer = null;
     let lastRemoteArrow = "";
@@ -940,6 +1122,10 @@
     let currentSpeed = 1;
     let shuttingDown = false;
     let selectedLiveQuality = "auto";
+    let liveAvailableHeights = [];
+    let liveAudioOptions = [];
+    let selectedLiveAudio = "";
+
     let vodQuality = "orig";
     let vodAudioIdx = 0;
     let vodSubIdx = -1;
@@ -950,6 +1136,31 @@
     let subCues = [];
     let subFetchStart = -1;
     let subLoading = false;
+
+    function triggerBounce(el) {
+      if (!el) return;
+      el.classList.remove("click-bounce");
+      void el.offsetWidth;
+      el.classList.add("click-bounce");
+    }
+
+    function showDishOsd(ch, autoHideMs = 3400) {
+      dishNum.textContent = ch.num;
+      dishName.textContent = ch.name;
+      dishCat.textContent = ch.cat;
+      dishOsd.classList.add("show");
+      clearTimeout(dishOsdTimer);
+      if (autoHideMs > 0) {
+        dishOsdTimer = setTimeout(() => {
+          if (!isHudVisible()) dishOsd.classList.remove("show");
+        }, autoHideMs);
+      }
+    }
+
+    function hideDishOsd() {
+      clearTimeout(dishOsdTimer);
+      dishOsd.classList.remove("show");
+    }
 
     function showLoading(title, sub, pill = isLive ? "LIVE TV" : "YPLAY", immediate = false) {
       clearTimeout(loadDebounce);
@@ -975,7 +1186,6 @@
     function syncIcons() {
       centerPlayBtn.innerHTML = video.paused ? ICONS.play : ICONS.pause;
       muteBtn.innerHTML = video.muted ? ICONS.volOff : ICONS.volOn;
-      fsBtn.innerHTML = document.fullscreenElement ? ICONS.fsExit : ICONS.fsEnter;
     }
 
     function showError(title, msg) {
@@ -986,9 +1196,7 @@
       setTimeout(() => document.getElementById("errRetryBtn").focus(), 40);
     }
 
-    function hideError() {
-      playerError.classList.remove("show");
-    }
+    function hideError() { playerError.classList.remove("show"); }
 
     function retryCurrentMedia() {
       hideError();
@@ -1003,31 +1211,33 @@
     }
 
     /* HUD Show / Hide */
-    function isHudVisible() {
-      return hud.classList.contains("visible");
-    }
+    function isHudVisible() { return hud.classList.contains("visible"); }
 
-    function showHud(focusTarget = null, autoHideMs = 4000) {
+    function showHud(focusTarget = null, autoHideMs = 4200) {
       if (drawerOpen) return;
       hud.classList.add("visible");
-      if (focusTarget) {
-        focusTarget.focus({ preventScroll: true });
+      if (isLive) {
+        const ch = CHANNELS.find((c) => c.id === activeChannelId);
+        if (ch) showDishOsd(ch, 0);
       }
+      if (focusTarget) focusTarget.focus({ preventScroll: true });
       resetHudTimer(autoHideMs);
     }
 
     function hideHud() {
+      exitScrubMode(false);
       closeAllPops();
       hud.classList.remove("visible");
+      if (isLive) hideDishOsd();
       if (document.activeElement && hud.contains(document.activeElement)) {
         document.activeElement.blur();
       }
     }
 
-    function resetHudTimer(ms = 4000) {
+    function resetHudTimer(ms = 4200) {
       clearTimeout(hudTimer);
       hudTimer = setTimeout(() => {
-        if (!drawerOpen && !hasOpenPop() && (isLive || !video.paused)) {
+        if (!drawerOpen && !hasOpenPop() && !isScrubbing && (isLive || !video.paused)) {
           hideHud();
         }
       }, ms);
@@ -1040,9 +1250,7 @@
       });
     }
 
-    function hasOpenPop() {
-      return Boolean(document.querySelector(".pop-menu.open"));
-    }
+    function hasOpenPop() { return Boolean(document.querySelector(".pop-menu.open")); }
 
     function togglePop(id) {
       closeAllPops(id);
@@ -1057,10 +1265,11 @@
       }
     }
 
-    /* Side Drawer (Auto-Pause YPlay on Open, Auto-Resume on Back) */
+    /* Slide-Over Side Drawer (Focuses Active 2nd/Nth Channel or Movie Directly) */
     function openDrawer() {
       if (drawerOpen) return;
       drawerOpen = true;
+      exitScrubMode(false);
       closeAllPops();
       hideHud();
 
@@ -1076,14 +1285,17 @@
       sideDrawer.classList.add("open");
       renderDrawer();
 
-      try {
-        history.pushState({ ystreamDrawer: true }, "");
-      } catch (_) {}
+      try { history.pushState({ ystreamDrawer: true }, ""); } catch (_) {}
 
       setTimeout(() => {
-        const activeTabEl = drawerTab === "live" ? tabLive : tabYPlay;
-        activeTabEl.focus({ preventScroll: true });
-      }, 40);
+        const activeItem = drawerList.querySelector(".d-item.active") || drawerList.querySelector(".d-item");
+        if (activeItem) {
+          activeItem.scrollIntoView({ block: "center", behavior: "instant" });
+          activeItem.focus({ preventScroll: true });
+        } else {
+          (drawerTab === "live" ? tabLive : tabYPlay).focus({ preventScroll: true });
+        }
+      }, 45);
     }
 
     function closeDrawer(resumeIfNeeded = true) {
@@ -1099,13 +1311,9 @@
     }
 
     window.addEventListener("popstate", () => {
-      if (hasOpenPop()) {
-        closeAllPops();
-      } else if (drawerOpen) {
-        closeDrawer(true);
-      } else if (isHudVisible()) {
-        hideHud();
-      }
+      if (hasOpenPop()) closeAllPops();
+      else if (drawerOpen) closeDrawer(true);
+      else if (isHudVisible()) hideHud();
     });
 
     function selectDrawerTab(tab) {
@@ -1124,7 +1332,7 @@
         drawerList.innerHTML = CHANNELS.map((ch) => {
           const isCur = isLive && ch.id === activeChannelId;
           return `
-            <div class="d-item ${isCur ? "active" : ""}" tabindex="0" onclick='pickChannel("${ch.id}")'>
+            <div class="d-item ${isCur ? "active" : ""}" tabindex="0" onclick='triggerBounce(this); pickChannel("${ch.id}");'>
               <div class="d-item-left">
                 <div class="ch-logo">
                   <div class="ch-fallback" style="background:${ch.bg};">${esc(ch.short)}</div>
@@ -1133,7 +1341,7 @@
                 <div class="d-info">
                   <div class="d-title">${esc(ch.name)}</div>
                   <div class="d-meta">
-                    <span>${esc(ch.num)}</span>
+                    <span>#${esc(ch.num)}</span>
                     <span>•</span>
                     <span>${esc(ch.cat)}</span>
                   </div>
@@ -1165,7 +1373,7 @@
           const gbStr = fmtGB(m.file_size);
           const durStr = fmtDurShort(m.duration);
           return `
-            <div class="d-item ${isCur ? "active" : ""}" tabindex="0" onclick="pickMovie(${i})">
+            <div class="d-item ${isCur ? "active" : ""}" tabindex="0" onclick="triggerBounce(this); pickMovie(${i});">
               <div class="d-item-left">
                 <div class="yp-badge">
                   ${ICONS.cinema}
@@ -1201,46 +1409,79 @@
       loadYPlay(idx, true);
     }
 
-    /* Mode Switch (Live TV vs YPlay HUD) */
+    /* Mode Configuration: Live TV vs YPlay */
     function configureHudMode(vod) {
       isLive = !vod;
-      liveChip.style.display = vod ? "none" : "inline-flex";
+      hudMeta.style.display = vod ? "block" : "none";
       centerPlayBtn.classList.toggle("hidden", !vod);
-      seekRow.classList.toggle("hidden", !vod);
-      nextBtn.classList.toggle("hidden", !vod);
+      progressRow.classList.toggle("hidden", !vod);
+      nextBtn.classList.toggle("hidden", !(vod && yplayItems.length > 1));
+      muteBtn.classList.toggle("hidden", !vod); // Never show Mute on Live TV
       speedWrap.classList.toggle("hidden", !vod);
+
       if (!vod) {
-        langWrap.classList.add("hidden");
         subWrap.classList.add("hidden");
         subOverlay.classList.remove("show");
+        updateLiveAudioUi();
+        updateLiveQualUi();
+      } else {
+        qualWrap.classList.remove("hidden");
+        renderVodQualMenu();
       }
-      renderQualMenu();
     }
 
-    /* Quality, Audio & Subtitles */
-    let liveAvailableHeights = [];
+    /* Live TV Audio (Only when >= 2 languages exist) */
+    function normLangName(raw, idx) {
+      const k = String(raw || "").trim().toLowerCase();
+      if (LANG_MAP[k]) return LANG_MAP[k];
+      if (k && k !== "und" && k !== "unknown") return k.toUpperCase();
+      return `Audio ${idx + 1}`;
+    }
 
-    function renderQualMenu() {
-      if (isLive) {
-        const opts = [`<button class="pop-opt ${selectedLiveQuality === "auto" ? "active" : ""}" data-q="auto" onclick="setLiveQuality('auto')">Auto</button>`];
-        for (const h of liveAvailableHeights) {
-          const label = h >= 2160 ? "4K" : `${h}p`;
-          opts.push(`<button class="pop-opt ${selectedLiveQuality === h ? "active" : ""}" data-q="${h}" onclick="setLiveQuality(${h})">${label}</button>`);
-        }
-        qualMenu.innerHTML = opts.join("");
-        qualBtn.textContent = selectedLiveQuality === "auto" ? "Auto" : (selectedLiveQuality >= 2160 ? "4K" : `${selectedLiveQuality}p`);
-      } else {
-        const list = [
-          { q: "orig", label: "Original" },
-          { q: "720", label: "720p" },
-          { q: "480", label: "480p" },
-          { q: "360", label: "360p" }
-        ];
-        qualMenu.innerHTML = list.map((x) =>
-          `<button class="pop-opt ${vodQuality === x.q ? "active" : ""}" data-q="${x.q}" onclick="setVodQuality('${x.q}')">${x.label}</button>`
-        ).join("");
-        qualBtn.textContent = vodQuality === "orig" ? "Orig" : `${vodQuality}p`;
+    function updateLiveAudioUi() {
+      if (!isLive) return;
+      if (liveAudioOptions.length < 2) {
+        langWrap.classList.add("hidden");
+        langMenu.innerHTML = "";
+        return;
       }
+      langWrap.classList.remove("hidden");
+      const activeObj = liveAudioOptions.find((x) => String(x.id) === String(selectedLiveAudio)) || liveAudioOptions[0];
+      langBtn.textContent = activeObj.label;
+      langMenu.innerHTML = liveAudioOptions.map((x) =>
+        `<button class="pop-opt ${String(x.id) === String(activeObj.id) ? "active" : ""}" data-la="${esc(x.id)}" onclick="triggerBounce(this); setLiveAudio('${esc(x.id)}');">${esc(x.label)}</button>`
+      ).join("");
+    }
+
+    function setLiveAudio(id) {
+      selectedLiveAudio = id;
+      if (hls && Array.isArray(hls.audioTracks)) {
+        hls.audioTrack = Number(id);
+      } else if (shakaPlayer) {
+        shakaPlayer.selectAudioLanguage(String(id));
+      }
+      updateLiveAudioUi();
+      closeAllPops();
+      langBtn.focus({ preventScroll: true });
+      resetHudTimer();
+    }
+
+    /* Live TV Quality (Only when >= 2 qualities exist) */
+    function updateLiveQualUi() {
+      if (!isLive) return;
+      if (liveAvailableHeights.length < 2) {
+        qualWrap.classList.add("hidden");
+        qualMenu.innerHTML = "";
+        return;
+      }
+      qualWrap.classList.remove("hidden");
+      const opts = [`<button class="pop-opt ${selectedLiveQuality === "auto" ? "active" : ""}" data-q="auto" onclick="triggerBounce(this); setLiveQuality('auto');">Auto</button>`];
+      for (const h of liveAvailableHeights) {
+        const label = h >= 2160 ? "4K" : `${h}p`;
+        opts.push(`<button class="pop-opt ${selectedLiveQuality === h ? "active" : ""}" data-q="${h}" onclick="triggerBounce(this); setLiveQuality(${h});">${label}</button>`);
+      }
+      qualMenu.innerHTML = opts.join("");
+      qualBtn.textContent = selectedLiveQuality === "auto" ? "Auto" : (selectedLiveQuality >= 2160 ? "4K" : `${selectedLiveQuality}p`);
     }
 
     function setLiveQuality(q) {
@@ -1262,34 +1503,109 @@
           if (tracks.length) shakaPlayer.selectVariantTrack(tracks[0], true);
         }
       }
-      renderQualMenu();
+      updateLiveQualUi();
       closeAllPops();
       qualBtn.focus({ preventScroll: true });
       resetHudTimer();
     }
 
+    /* YPlay Quality, Deduplicated Audio (Default Tamil) & Subtitles */
+    function renderVodQualMenu() {
+      const list = [
+        { q: "orig", label: "Original" },
+        { q: "720", label: "720p" },
+        { q: "480", label: "480p" },
+        { q: "360", label: "360p" }
+      ];
+      qualMenu.innerHTML = list.map((x) =>
+        `<button class="pop-opt ${vodQuality === x.q ? "active" : ""}" data-q="${x.q}" onclick="triggerBounce(this); setVodQuality('${x.q}');">${x.label}</button>`
+      ).join("");
+      qualBtn.textContent = vodQuality === "orig" ? "Orig" : `${vodQuality}p`;
+    }
+
     function setVodQuality(q) {
       vodQuality = q;
-      renderQualMenu();
+      renderVodQualMenu();
       closeAllPops();
       qualBtn.focus({ preventScroll: true });
-      if (!isLive && activeYPlayIdx >= 0) {
-        restartYPlayAt(getEffectiveTime());
+      if (!isLive && activeYPlayIdx >= 0) restartYPlayAt(getEffectiveTime());
+    }
+
+    function getCleanVodAudioTracks(item) {
+      const raw = Array.isArray(item.audio_tracks) ? item.audio_tracks : [];
+      if (!raw.length) return [];
+
+      // Deduplicate identical (label + codec) tracks so same language doesn't repeat twice
+      const seen = new Set();
+      const unique = [];
+      for (const t of raw) {
+        const baseLabel = String(t.label || "Audio").trim();
+        const codec = String(t.codec || "").toLowerCase();
+        const key = `${baseLabel.toLowerCase()}|${codec}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        unique.push({ ...t, cleanLabel: baseLabel });
+      }
+
+      // If 2 tracks still share same name (e.g. Tamil AAC vs Tamil EAC3), disambiguate cleanly
+      const counts = {};
+      for (const u of unique) counts[u.cleanLabel] = (counts[u.cleanLabel] || 0) + 1;
+      const seenNum = {};
+      for (const u of unique) {
+        if (counts[u.cleanLabel] > 1) {
+          const c = (u.codec || "").toLowerCase();
+          if (c === "eac3" || c === "ac3" || c === "dts") u.cleanLabel = `${u.cleanLabel} (5.1)`;
+          else {
+            seenNum[u.cleanLabel] = (seenNum[u.cleanLabel] || 0) + 1;
+            if (seenNum[u.cleanLabel] > 1) u.cleanLabel = `${u.cleanLabel} (${seenNum[u.cleanLabel]})`;
+          }
+        }
+      }
+      return unique;
+    }
+
+    function populateYPlayTracks(item) {
+      const tracks = getCleanVodAudioTracks(item);
+      if (tracks.length >= 2) {
+        langWrap.classList.remove("hidden");
+        const tamilTrack = tracks.find((t) => t.is_tamil || t.cleanLabel.toLowerCase().startsWith("tamil"));
+        const defTrack = tamilTrack || tracks.find((t) => t.index === item.default_audio_idx) || tracks[0];
+        vodAudioIdx = defTrack.index;
+        langBtn.textContent = defTrack.cleanLabel;
+        langMenu.innerHTML = tracks.map((t) =>
+          `<button class="pop-opt ${t.index === vodAudioIdx ? "active" : ""}" data-a="${t.index}" onclick="triggerBounce(this); setVodAudio(${t.index});">${esc(t.cleanLabel)}</button>`
+        ).join("");
+      } else {
+        langWrap.classList.add("hidden");
+        const tamilSingle = tracks.find((t) => t.is_tamil);
+        vodAudioIdx = tamilSingle ? tamilSingle.index : (typeof item.default_audio_idx === "number" ? item.default_audio_idx : 0);
+        langMenu.innerHTML = "";
+      }
+
+      const subs = Array.isArray(item.subtitles) ? item.subtitles : [];
+      if (subs.length > 0) {
+        subWrap.classList.remove("hidden");
+        vodSubIdx = -1;
+        subBtn.textContent = "CC";
+        subMenu.innerHTML = `<button class="pop-opt active" data-s="-1" onclick="triggerBounce(this); setVodSub(-1);">Off</button>` +
+          subs.map((s) => `<button class="pop-opt" data-s="${s.index}" onclick="triggerBounce(this); setVodSub(${s.index});">${esc(s.label)}</button>`).join("");
+      } else {
+        subWrap.classList.add("hidden");
+        vodSubIdx = -1;
+        subMenu.innerHTML = "";
       }
     }
 
     function setVodAudio(idx) {
       vodAudioIdx = idx;
       const item = yplayItems[activeYPlayIdx];
-      const tracks = (item && Array.isArray(item.audio_tracks)) ? item.audio_tracks : [];
+      const tracks = item ? getCleanVodAudioTracks(item) : [];
       const tr = tracks.find((t) => t.index === idx);
-      langBtn.textContent = tr ? tr.label : "Audio";
+      langBtn.textContent = tr ? tr.cleanLabel : "Audio";
       langMenu.querySelectorAll(".pop-opt").forEach((b) => b.classList.toggle("active", Number(b.dataset.a) === idx));
       closeAllPops();
       langBtn.focus({ preventScroll: true });
-      if (!isLive && activeYPlayIdx >= 0) {
-        restartYPlayAt(getEffectiveTime());
-      }
+      if (!isLive && activeYPlayIdx >= 0) restartYPlayAt(getEffectiveTime());
     }
 
     function setVodSub(idx) {
@@ -1317,36 +1633,60 @@
       resetHudTimer();
     }
 
-    function populateYPlayTracks(item) {
-      const tracks = Array.isArray(item.audio_tracks) ? item.audio_tracks : [];
-      if (tracks.length > 1) {
-        langWrap.classList.remove("hidden");
-        const defIdx = typeof item.default_audio_idx === "number" ? item.default_audio_idx : 0;
-        vodAudioIdx = defIdx;
-        const defTrack = tracks.find((t) => t.index === defIdx) || tracks[0];
-        langBtn.textContent = defTrack.label;
-        langMenu.innerHTML = tracks.map((t) =>
-          `<button class="pop-opt ${t.index === defIdx ? "active" : ""}" data-a="${t.index}" onclick="setVodAudio(${t.index})">${esc(t.label)}</button>`
-        ).join("");
-      } else {
-        langWrap.classList.add("hidden");
-        vodAudioIdx = 0;
-        langMenu.innerHTML = "";
-      }
-
-      const subs = Array.isArray(item.subtitles) ? item.subtitles : [];
-      if (subs.length > 0) {
-        subWrap.classList.remove("hidden");
-        vodSubIdx = -1;
-        subBtn.textContent = "CC";
-        subMenu.innerHTML = `<button class="pop-opt active" data-s="-1" onclick="setVodSub(-1)">Off</button>` +
-          subs.map((s) => `<button class="pop-opt" data-s="${s.index}" onclick="setVodSub(${s.index})">${esc(s.label)}</button>`).join("");
-      } else {
-        subWrap.classList.add("hidden");
-        vodSubIdx = -1;
-        subMenu.innerHTML = "";
-      }
+    /* YouTube 2-Step Progress Bar Functions */
+    function renderProgressVisual(curSec, durSec) {
+      const pct = durSec > 0 ? Math.max(0, Math.min(100, (curSec / durSec) * 100)) : 0;
+      progressFill.style.width = `${pct}%`;
+      progressThumb.style.left = `${pct}%`;
+      scrubBubble.style.left = `${pct}%`;
+      scrubBubble.textContent = fmt(curSec);
+      curTxt.textContent = fmt(curSec);
+      if (durSec > 0) durTxt.textContent = fmt(durSec);
     }
+
+    function enterScrubMode() {
+      const dur = getEffectiveDuration();
+      if (isLive || dur <= 0) return;
+      isScrubbing = true;
+      scrubPreviewSec = getEffectiveTime();
+      progressBar.classList.add("scrubbing");
+      renderProgressVisual(scrubPreviewSec, dur);
+      clearTimeout(hudTimer);
+    }
+
+    function exitScrubMode(commitSeek = false) {
+      if (!isScrubbing) return;
+      const target = scrubPreviewSec;
+      isScrubbing = false;
+      progressBar.classList.remove("scrubbing");
+      if (commitSeek) {
+        seekYPlayTo(target);
+      } else {
+        renderProgressVisual(getEffectiveTime(), getEffectiveDuration());
+      }
+      resetHudTimer();
+    }
+
+    function stepScrubPreview(deltaSec) {
+      const dur = getEffectiveDuration();
+      if (dur <= 0) return;
+      scrubPreviewSec = Math.max(0, Math.min(dur - 1, scrubPreviewSec + deltaSec));
+      renderProgressVisual(scrubPreviewSec, dur);
+    }
+
+    progressBar.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (isLive) return;
+      const dur = getEffectiveDuration();
+      if (dur <= 0) return;
+      const rect = progressBar.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      const target = ratio * dur;
+      isScrubbing = false;
+      progressBar.classList.remove("scrubbing");
+      seekYPlayTo(target);
+      resetHudTimer();
+    });
 
     /* Seek Helpers (Double-Tap / Double-Press -10s / +10s) */
     function getEffectiveDuration() {
@@ -1395,6 +1735,7 @@
       if (isLive) return;
       const dur = getEffectiveDuration();
       const clamped = Math.max(0, dur > 1 ? Math.min(dur - 1, targetSec) : targetSec);
+      renderProgressVisual(clamped, dur);
       if (transcodeMode) {
         restartYPlayAt(clamped);
       } else if (dur > 0) {
@@ -1407,15 +1748,12 @@
     /* Touch Tap & Double-Tap on Fullscreen Video */
     stage.addEventListener("click", (e) => {
       if (drawerOpen || playerError.classList.contains("show")) return;
-      if (hasOpenPop()) {
-        closeAllPops();
-        return;
-      }
+      if (hasOpenPop()) { closeAllPops(); return; }
 
       if (isLive) {
         if (video.paused) video.play().catch(() => {});
         if (isHudVisible()) hideHud();
-        else showHud(menuBtn, 4000);
+        else showHud(menuBtn, 4200);
         return;
       }
 
@@ -1436,7 +1774,7 @@
       lastTouchTap = now;
       touchSingleTimer = setTimeout(() => {
         if (isHudVisible()) hideHud();
-        else showHud(centerPlayBtn, 4000);
+        else showHud(centerPlayBtn, 4200);
       }, 300);
     });
 
@@ -1515,6 +1853,18 @@
       } catch (_) {}
     }
 
+    function extractUniqueLiveAudio(list) {
+      const seen = new Set();
+      const out = [];
+      list.forEach((item, idx) => {
+        const label = normLangName(item.lang, idx);
+        if (seen.has(label)) return;
+        seen.add(label);
+        out.push({ id: item.id, label });
+      });
+      return out;
+    }
+
     function startHlsUrl(url, ch, autoPlay, isRelay = false) {
       if (hls) { hls.destroy(); hls = null; }
       if (window.Hls && window.Hls.isSupported()) {
@@ -1524,9 +1874,17 @@
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           hideError();
           liveAvailableHeights = Array.from(new Set((hls.levels || []).map((lv) => lv.height || 0).filter((h) => h > 0))).sort((a, b) => b - a);
-          renderQualMenu();
+          updateLiveQualUi();
           hls.currentLevel = -1;
-          hudSub.textContent = isRelay ? `${ch.num} • ${ch.cat} (Relay)` : `${ch.num} • ${ch.cat}`;
+
+          const aTracks = (hls.audioTracks || []).map((t, idx) => ({ id: idx, lang: t.lang || t.name || "" }));
+          liveAudioOptions = extractUniqueLiveAudio(aTracks);
+          if (liveAudioOptions.length >= 2) {
+            const tam = liveAudioOptions.find((x) => x.label === "Tamil") || liveAudioOptions[0];
+            selectedLiveAudio = String(tam.id);
+            hls.audioTrack = Number(tam.id);
+          }
+          updateLiveAudioUi();
           if (autoPlay) video.play().catch(() => {});
         });
         hls.on(Hls.Events.ERROR, (_, data) => {
@@ -1535,7 +1893,9 @@
         });
       } else {
         liveAvailableHeights = [];
-        renderQualMenu();
+        liveAudioOptions = [];
+        updateLiveQualUi();
+        updateLiveAudioUi();
         video.src = url;
         video.load();
         if (autoPlay) video.play().catch(() => {});
@@ -1549,7 +1909,9 @@
         liveStage = 1;
         await cleanupPlayers();
         liveAvailableHeights = [];
-        renderQualMenu();
+        liveAudioOptions = [];
+        updateLiveQualUi();
+        updateLiveAudioUi();
         video.src = ch.url;
         video.load();
         if (autoPlay) video.play().catch(() => {});
@@ -1567,6 +1929,7 @@
         liveFailCount += 1;
         const curIdx = CHANNELS.findIndex((c) => c.id === ch.id);
         const nextCh = CHANNELS[(curIdx + 1) % CHANNELS.length];
+        showDishOsd(nextCh, 4000);
         showLoading(nextCh.name, `${ch.name} offline • Switching channel...`, "LIVE TV", true);
         clearTimeout(liveFailTimer);
         liveFailTimer = setTimeout(() => {
@@ -1576,6 +1939,23 @@
       }
 
       showError("Live TV Unavailable", `All channels failed to load (${reason}). Check internet and tap Retry.`);
+    }
+
+    /* Fast Dish Channel Zapping (Up / Down) */
+    function zapChannel(step) {
+      const curIdx = CHANNELS.findIndex((c) => c.id === activeChannelId);
+      const baseIdx = curIdx >= 0 ? curIdx : 0;
+      const nextIdx = (baseIdx + step + CHANNELS.length) % CHANNELS.length;
+      const nextCh = CHANNELS[nextIdx];
+
+      activeChannelId = nextCh.id;
+      showDishOsd(nextCh, 3600);
+      showLoading(nextCh.name, `#${nextCh.num} • ${nextCh.cat}`, "LIVE TV", true);
+
+      clearTimeout(zapDebounceTimer);
+      zapDebounceTimer = setTimeout(() => {
+        playChannel(nextCh, true, true);
+      }, 260);
     }
 
     async function playChannel(ch, autoPlay = true, resetFail = true) {
@@ -1589,12 +1969,13 @@
       liveStage = 0;
       selectedLiveQuality = "auto";
       liveAvailableHeights = [];
+      liveAudioOptions = [];
+      selectedLiveAudio = "";
       video.playbackRate = 1;
 
       configureHudMode(false);
-      hudTitle.textContent = ch.name;
-      hudSub.textContent = `${ch.num} • ${ch.cat}`;
-      showLoading(ch.name, `${ch.num} • Tuning live channel...`, "LIVE TV", true);
+      showDishOsd(ch, isHudVisible() ? 0 : 3400);
+      showLoading(ch.name, `#${ch.num} • Tuning live channel...`, "LIVE TV", true);
 
       if (ch.type === "dash-clearkey" && window.shaka && shaka.Player.isBrowserSupported()) {
         shakaPlayer = new shaka.Player();
@@ -1611,7 +1992,16 @@
           await shakaPlayer.load(ch.url);
           hideError();
           liveAvailableHeights = Array.from(new Set(shakaPlayer.getVariantTracks().map((t) => t.height || 0).filter((h) => h > 0))).sort((a, b) => b - a);
-          renderQualMenu();
+          updateLiveQualUi();
+
+          const langs = (shakaPlayer.getAudioLanguages() || []).map((l) => ({ id: l, lang: l }));
+          liveAudioOptions = extractUniqueLiveAudio(langs);
+          if (liveAudioOptions.length >= 2) {
+            const tam = liveAudioOptions.find((x) => x.label === "Tamil") || liveAudioOptions[0];
+            selectedLiveAudio = String(tam.id);
+            shakaPlayer.selectAudioLanguage(String(tam.id));
+          }
+          updateLiveAudioUi();
           if (autoPlay) video.play().catch(() => {});
         } catch (_) {
           handleLiveFallback(ch, autoPlay, "Stream offline");
@@ -1653,6 +2043,7 @@
     async function loadYPlay(idx, autoPlay = true, forceOffset = null) {
       if (idx < 0 || idx >= yplayItems.length) return;
       await cleanupPlayers();
+      hideDishOsd();
       activeChannelId = "";
       activeYPlayIdx = idx;
       errorRetries = 0;
@@ -1661,6 +2052,7 @@
       subCues = [];
       subFetchStart = -1;
       subOverlay.classList.remove("show");
+      exitScrubMode(false);
 
       const item = yplayItems[idx];
       populateYPlayTracks(item);
@@ -1689,15 +2081,11 @@
       }
 
       const initDur = Number(item.duration || 0);
-      durTxt.textContent = initDur > 0 ? fmt(initDur) : "00:00";
-      curTxt.textContent = fmt(saved > 5 ? saved : 0);
-      seekInput.value = (initDur > 0 && saved > 5) ? String(Math.round((saved / initDur) * 1000)) : "0";
+      renderProgressVisual(saved > 5 ? saved : 0, initDur);
 
       video.load();
       video.playbackRate = currentSpeed;
-      if (autoPlay) {
-        video.play().catch(() => hideLoading());
-      }
+      if (autoPlay) video.play().catch(() => hideLoading());
     }
 
     function playNextYPlay() {
@@ -1722,21 +2110,6 @@
       resetHudTimer();
     }
 
-    async function toggleFullscreen() {
-      try {
-        if (!document.fullscreenElement) {
-          if (document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen();
-          else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen();
-        } else {
-          if (document.exitFullscreen) await document.exitFullscreen();
-        }
-      } catch (_) {}
-      syncIcons();
-      resetHudTimer();
-    }
-
-    document.addEventListener("fullscreenchange", syncIcons);
-
     /* Video Events */
     video.addEventListener("loadedmetadata", () => {
       hideError();
@@ -1749,23 +2122,18 @@
       }
     });
 
-    video.addEventListener("loadeddata", () => {
-      hideError();
-      hideLoading();
-    });
+    video.addEventListener("loadeddata", () => { hideError(); hideLoading(); });
 
     video.addEventListener("playing", () => {
       hideError();
       hideLoading();
       syncIcons();
       if (isLive) liveFailCount = 0;
-      if (isHudVisible()) resetHudTimer(2500);
+      if (isHudVisible() && !isScrubbing) resetHudTimer(2500);
     });
 
     video.addEventListener("waiting", () => {
-      if (!video.paused) {
-        showLoading(hudTitle.textContent, "Buffering stream...", isLive ? "LIVE TV" : "YPLAY", false);
-      }
+      if (!video.paused) showLoading(hudTitle.textContent, "Buffering stream...", isLive ? "LIVE TV" : "YPLAY", false);
     });
 
     video.addEventListener("pause", () => {
@@ -1794,7 +2162,7 @@
     });
 
     video.addEventListener("timeupdate", () => {
-      if (isLive || seeking) return;
+      if (isLive) return;
       const cur = getEffectiveTime();
       const dur = getEffectiveDuration();
 
@@ -1806,11 +2174,9 @@
         }
       }
 
-      if (dur > 0) {
-        seekInput.value = String(Math.round((cur / dur) * 1000));
-        durTxt.textContent = fmt(dur);
+      if (!isScrubbing) {
+        renderProgressVisual(cur, dur);
       }
-      curTxt.textContent = fmt(cur);
       renderActiveSubtitle(cur);
 
       const now = Date.now();
@@ -1825,26 +2191,13 @@
       hideLoading();
       const item = yplayItems[activeYPlayIdx];
       if (item) localStorage.removeItem(`yp_pos_${item.id}`);
-      if (!isLive && activeYPlayIdx + 1 < yplayItems.length) {
-        loadYPlay(activeYPlayIdx + 1, true);
-      }
-    });
-
-    seekInput.addEventListener("input", () => {
-      seeking = true;
-      const dur = getEffectiveDuration();
-      if (dur > 0) curTxt.textContent = fmt((Number(seekInput.value) / 1000) * dur);
-    });
-    seekInput.addEventListener("change", () => {
-      const dur = getEffectiveDuration();
-      if (!isLive && dur > 0) seekYPlayTo((Number(seekInput.value) / 1000) * dur);
-      seeking = false;
-      resetHudTimer();
+      if (!isLive && activeYPlayIdx + 1 < yplayItems.length) loadYPlay(activeYPlayIdx + 1, true);
     });
 
     /* =========================================================================
-       ANDROID TV 4-WAY REMOTE + OK + BACK CONTROLLER (YouTube TV Style)
-       Note: Home key is NEVER intercepted so system exits cleanly.
+       ANDROID TV 4-WAY REMOTE + OK + BACK CONTROLLER
+       - Live TV: Up/Down = Channel Zap like Dish; Left/Right = Minimal HUD buttons
+       - YPlay: Progress bar requires OK to enter Scrub Mode, Left/Right to slide, OK to play
     ========================================================================= */
     function isBackKey(e) {
       return (
@@ -1858,10 +2211,10 @@
       );
     }
 
-    function getVisibleBottomButtons() {
+    function getVisibleRowButtons() {
       const ids = isLive
-        ? ["qualBtn", "muteBtn", "fsBtn"]
-        : ["nextBtn", "muteBtn", "langBtn", "subBtn", "qualBtn", "speedBtn", "fsBtn"];
+        ? ["menuBtn", "langBtn", "qualBtn"]
+        : ["nextBtn", "muteBtn", "langBtn", "subBtn", "qualBtn", "speedBtn"];
       return ids
         .map((id) => document.getElementById(id))
         .filter((el) => el && !el.classList.contains("hidden") && el.closest(".hidden") === null);
@@ -1871,8 +2224,14 @@
       const k = e.key;
       const active = document.activeElement;
 
-      /* 1. Back Button Handling */
+      /* 1. Back Button */
       if (isBackKey(e)) {
+        if (isScrubbing) {
+          e.preventDefault();
+          exitScrubMode(false);
+          progressBar.focus({ preventScroll: true });
+          return;
+        }
         if (hasOpenPop()) {
           e.preventDefault();
           const openMenu = document.querySelector(".pop-menu.open");
@@ -1892,10 +2251,20 @@
           hideHud();
           return;
         }
-        return; // Allow system exit if already pure fullscreen
+        return;
       }
 
-      /* 2. Media Hardware Keys */
+      /* 2. Hardware Channel / Media Keys */
+      if ((k === "ChannelUp" || k === "PageUp") && isLive && !drawerOpen) {
+        e.preventDefault();
+        zapChannel(1);
+        return;
+      }
+      if ((k === "ChannelDown" || k === "PageDown") && isLive && !drawerOpen) {
+        e.preventDefault();
+        zapChannel(-1);
+        return;
+      }
       if ((k === "MediaPlayPause" || k === " ") && !isLive && !drawerOpen) {
         if (active && active.tagName === "BUTTON") return;
         e.preventDefault();
@@ -1905,18 +2274,22 @@
       if (k === "MediaFastForward" && !isLive) { e.preventDefault(); queueSeekDelta(10); return; }
       if (k === "MediaRewind" && !isLive) { e.preventDefault(); queueSeekDelta(-10); return; }
 
-      /* 3. Error Overlay Focus */
+      /* 3. Error Overlay */
       if (playerError.classList.contains("show")) {
         const retryBtn = document.getElementById("errRetryBtn");
         const eMenuBtn = document.getElementById("errMenuBtn");
         if (k === "ArrowLeft" || k === "ArrowRight") {
           e.preventDefault();
           (active === retryBtn ? eMenuBtn : retryBtn).focus();
+        } else if (k === "Enter" && active) {
+          e.preventDefault();
+          triggerBounce(active);
+          active.click();
         }
         return;
       }
 
-      /* 4. Side Drawer D-Pad Navigation */
+      /* 4. Side Drawer Navigation */
       if (drawerOpen) {
         const items = Array.from(drawerList.querySelectorAll(".d-item"));
         const curIdx = items.indexOf(active);
@@ -1930,8 +2303,12 @@
           } else if (k === "ArrowDown" && items.length > 0) {
             e.preventDefault();
             const activeItem = drawerList.querySelector(".d-item.active") || items[0];
-            activeItem.focus({ preventScroll: true });
             activeItem.scrollIntoView({ block: "nearest", behavior: "smooth" });
+            activeItem.focus({ preventScroll: true });
+          } else if (k === "Enter") {
+            e.preventDefault();
+            triggerBounce(active);
+            active.click();
           }
           return;
         }
@@ -1940,19 +2317,20 @@
           if (k === "ArrowDown") {
             e.preventDefault();
             const next = items[Math.min(items.length - 1, curIdx + 1)];
-            next.focus({ preventScroll: true });
             next.scrollIntoView({ block: "nearest", behavior: "smooth" });
+            next.focus({ preventScroll: true });
           } else if (k === "ArrowUp") {
             e.preventDefault();
             if (curIdx === 0) {
               (drawerTab === "live" ? tabLive : tabYPlay).focus({ preventScroll: true });
             } else {
               const prev = items[curIdx - 1];
-              prev.focus({ preventScroll: true });
               prev.scrollIntoView({ block: "nearest", behavior: "smooth" });
+              prev.focus({ preventScroll: true });
             }
           } else if (k === "Enter") {
             e.preventDefault();
+            triggerBounce(items[curIdx]);
             items[curIdx].click();
           }
           return;
@@ -1960,12 +2338,13 @@
 
         if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(k)) {
           e.preventDefault();
-          (drawerTab === "live" ? tabLive : tabYPlay).focus({ preventScroll: true });
+          const activeItem = drawerList.querySelector(".d-item.active") || items[0];
+          if (activeItem) activeItem.focus({ preventScroll: true });
         }
         return;
       }
 
-      /* 5. Open Popup Submenu Navigation */
+      /* 5. Open Popup Submenu */
       if (hasOpenPop()) {
         const openMenu = document.querySelector(".pop-menu.open");
         const opts = Array.from(openMenu.querySelectorAll(".pop-opt"));
@@ -1978,14 +2357,56 @@
           opts[(idx - 1 + opts.length) % opts.length].focus({ preventScroll: true });
         } else if (k === "Enter" && idx >= 0) {
           e.preventDefault();
+          triggerBounce(opts[idx]);
           opts[idx].click();
         }
         return;
       }
 
-      /* 6. Pure Fullscreen (HUD Hidden) */
+      /* 6. LIVE TV REMOTE RULES (Up/Down = Dish Channel Change; Left/Right = Minimal Controls) */
+      if (isLive) {
+        if (k === "ArrowUp") {
+          e.preventDefault();
+          if (isHudVisible()) hideHud();
+          zapChannel(1);
+          return;
+        }
+        if (k === "ArrowDown") {
+          e.preventDefault();
+          if (isHudVisible()) hideHud();
+          zapChannel(-1);
+          return;
+        }
+        if (k === "ArrowLeft" || k === "ArrowRight" || k === "Enter") {
+          if (!isHudVisible()) {
+            e.preventDefault();
+            if (video.paused) video.play().catch(() => {});
+            showHud(menuBtn, 4200);
+            return;
+          }
+          resetHudTimer(4200);
+          const liveBtns = getVisibleRowButtons(); // [menuBtn, langBtn?, qualBtn?]
+          const idx = liveBtns.indexOf(active);
+          if (k === "ArrowRight") {
+            e.preventDefault();
+            const next = idx >= 0 ? liveBtns[(idx + 1) % liveBtns.length] : liveBtns[0];
+            next.focus({ preventScroll: true });
+          } else if (k === "ArrowLeft") {
+            e.preventDefault();
+            const prev = idx >= 0 ? liveBtns[(idx - 1 + liveBtns.length) % liveBtns.length] : liveBtns[0];
+            prev.focus({ preventScroll: true });
+          } else if (k === "Enter" && active && liveBtns.includes(active)) {
+            e.preventDefault();
+            triggerBounce(active);
+            active.click();
+          }
+        }
+        return;
+      }
+
+      /* 7. YPLAY PURE FULLSCREEN (HUD Hidden) */
       if (!isHudVisible()) {
-        if (!isLive && (k === "ArrowLeft" || k === "ArrowRight")) {
+        if (k === "ArrowLeft" || k === "ArrowRight") {
           e.preventDefault();
           const now = Date.now();
           const side = k === "ArrowLeft" ? "left" : "right";
@@ -2000,29 +2421,54 @@
           }
           return;
         }
-
-        if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter"].includes(k)) {
+        if (["ArrowUp", "ArrowDown", "Enter"].includes(k)) {
           e.preventDefault();
-          if (isLive) {
-            if (video.paused) video.play().catch(() => {});
-            showHud(menuBtn, 4500);
-          } else {
-            showHud(k === "ArrowUp" ? menuBtn : centerPlayBtn, 4500);
-          }
+          showHud(k === "ArrowUp" ? menuBtn : centerPlayBtn, 4200);
         }
         return;
       }
 
-      /* 7. HUD Visible: 1-by-1 Deterministic Row Navigation */
-      resetHudTimer(4500);
-      const bottomBtns = getVisibleBottomButtons();
+      /* 8. YPLAY HUD VISIBLE: YouTube 2-Step Progress Bar + 1-by-1 Controls */
+      resetHudTimer(4200);
+      const bottomBtns = getVisibleRowButtons();
       const bIdx = bottomBtns.indexOf(active);
+
+      if (active === progressBar) {
+        if (k === "Enter") {
+          e.preventDefault();
+          triggerBounce(progressBar);
+          if (!isScrubbing) enterScrubMode();
+          else exitScrubMode(true); // Play from selected timestamp
+          return;
+        }
+        if (isScrubbing && (k === "ArrowLeft" || k === "ArrowRight")) {
+          e.preventDefault();
+          stepScrubPreview(k === "ArrowRight" ? 10 : -10);
+          return;
+        }
+        if (k === "ArrowUp") {
+          e.preventDefault();
+          exitScrubMode(false);
+          centerPlayBtn.focus({ preventScroll: true });
+          return;
+        }
+        if (k === "ArrowDown") {
+          e.preventDefault();
+          exitScrubMode(false);
+          bottomBtns[0]?.focus({ preventScroll: true });
+          return;
+        }
+        return;
+      }
 
       if (active === menuBtn) {
         if (k === "ArrowDown") {
           e.preventDefault();
-          if (isLive) bottomBtns[0]?.focus({ preventScroll: true });
-          else centerPlayBtn.focus({ preventScroll: true });
+          centerPlayBtn.focus({ preventScroll: true });
+        } else if (k === "Enter") {
+          e.preventDefault();
+          triggerBounce(menuBtn);
+          menuBtn.click();
         }
         return;
       }
@@ -2033,21 +2479,11 @@
           menuBtn.focus({ preventScroll: true });
         } else if (k === "ArrowDown") {
           e.preventDefault();
-          seekInput.focus({ preventScroll: true });
-        }
-        return;
-      }
-
-      if (active === seekInput) {
-        if (k === "ArrowUp") {
+          progressBar.focus({ preventScroll: true });
+        } else if (k === "Enter") {
           e.preventDefault();
-          centerPlayBtn.focus({ preventScroll: true });
-        } else if (k === "ArrowDown") {
-          e.preventDefault();
-          bottomBtns[0]?.focus({ preventScroll: true });
-        } else if (k === "ArrowLeft" || k === "ArrowRight") {
-          e.preventDefault();
-          queueSeekDelta(k === "ArrowRight" ? 10 : -10);
+          triggerBounce(centerPlayBtn);
+          centerPlayBtn.click();
         }
         return;
       }
@@ -2061,8 +2497,11 @@
           bottomBtns[Math.max(0, bIdx - 1)].focus({ preventScroll: true });
         } else if (k === "ArrowUp") {
           e.preventDefault();
-          if (isLive) menuBtn.focus({ preventScroll: true });
-          else seekInput.focus({ preventScroll: true });
+          progressBar.focus({ preventScroll: true });
+        } else if (k === "Enter") {
+          e.preventDefault();
+          triggerBounce(active);
+          active.click();
         }
         return;
       }
@@ -2108,6 +2547,9 @@
           yplaySig = sig;
           yplayItems = nextItems;
           document.getElementById("yplayBadge").textContent = String(yplayItems.length);
+          if (!isLive) {
+            nextBtn.classList.toggle("hidden", yplayItems.length <= 1);
+          }
           if (refreshUi && drawerOpen && drawerTab === "yplay") renderDrawer();
           if (!isLive && activeYPlayIdx >= 0 && yplayItems[activeYPlayIdx]) {
             populateYPlayTracks(yplayItems[activeYPlayIdx]);
