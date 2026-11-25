@@ -75,8 +75,8 @@ jobs:
                   applicationId "com.ystream.app"
                   minSdk 23
                   targetSdk 34
-                  versionCode 8
-                  versionName "8.0-TV"
+                  versionCode 9
+                  versionName "9.0-TV"
               }
               signingConfigs {
                   release {
@@ -245,6 +245,7 @@ jobs:
           import android.view.ViewGroup;
           import android.view.Window;
           import android.view.WindowManager;
+          import android.webkit.CookieManager;
           import android.webkit.JavascriptInterface;
           import android.webkit.WebChromeClient;
           import android.webkit.WebResourceError;
@@ -293,7 +294,7 @@ jobs:
                       } else {
                           persistentDeviceId = "tv_" + UUID.randomUUID().toString().replace("-", "");
                       }
-                      prefs.edit().putString("ys_device_id", persistentDeviceId).apply();
+                      prefs.edit().putString("ys_device_id", persistentDeviceId).commit();
                   }
 
                   String mfg = Build.MANUFACTURER != null ? Build.MANUFACTURER.trim() : "";
@@ -319,6 +320,22 @@ jobs:
                   @JavascriptInterface
                   public String getDeviceName() {
                       return persistentDeviceName;
+                  }
+
+                  @JavascriptInterface
+                  public String getDeviceToken() {
+                      SharedPreferences prefs = getSharedPreferences("ystream_device_prefs", Context.MODE_PRIVATE);
+                      String tok = prefs.getString("ys_device_token", "");
+                      return tok != null ? tok : "";
+                  }
+
+                  @JavascriptInterface
+                  public void setDeviceToken(String token) {
+                      SharedPreferences prefs = getSharedPreferences("ystream_device_prefs", Context.MODE_PRIVATE);
+                      prefs.edit().putString("ys_device_token", token != null ? token : "").commit();
+                      try {
+                          CookieManager.getInstance().flush();
+                      } catch (Exception ignored) {}
                   }
               }
 
@@ -381,6 +398,11 @@ jobs:
                   webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
                   webView.setFocusable(true);
                   webView.setFocusableInTouchMode(true);
+
+                  try {
+                      CookieManager.getInstance().setAcceptCookie(true);
+                      CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
+                  } catch (Exception ignored) {}
 
                   WebSettings s = webView.getSettings();
                   s.setJavaScriptEnabled(true);
@@ -477,6 +499,9 @@ jobs:
               @Override
               protected void onPause() {
                   isForeground = false;
+                  try {
+                      CookieManager.getInstance().flush();
+                  } catch (Exception ignored) {}
                   super.onPause();
               }
 
