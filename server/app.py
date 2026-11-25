@@ -1063,20 +1063,20 @@ async def yplay_play_stream(index: int, request: Request, t: float = 0.0, q: str
     seek_sec = max(0.0, float(t or 0.0))
     audio_idx = max(0, int(a or 0))
     q_clean = str(q or "orig").lower()
+    is_transcode = q_clean in ("720", "480", "360")
 
-    # 100% Lip-Sync A/V Alignment:
-    # - Start (seek_sec <= 0.1): preserve exact container PTS from byte 0.
-    # - Seek: -noaccurate_seek with -c:v copy cuts video & audio on the exact same keyframe.
-    cmd = ["ffmpeg", "-nostdin", "-loglevel", "error", "-fflags", "+genpts"]
+    cmd = ["ffmpeg", "-nostdin", "-loglevel", "error"]
     if seek_sec > 0.1:
-        cmd.extend(["-noaccurate_seek", "-ss", f"{seek_sec:.2f}"])
+        if not is_transcode:
+            cmd.append("-noaccurate_seek")
+        cmd.extend(["-ss", f"{seek_sec:.2f}"])
 
     cmd.extend([
         "-i", f"http://127.0.0.1:8000/api/yplay/stream/{index}",
         "-map", "0:v:0", "-map", f"0:a:{audio_idx}?",
     ])
 
-    if q_clean in ("720", "480", "360"):
+    if is_transcode:
         h = int(q_clean)
         rate = "1600k" if h == 720 else ("850k" if h == 480 else "480k")
         buf = "3200k" if h == 720 else ("1700k" if h == 480 else "960k")
@@ -1084,17 +1084,17 @@ async def yplay_play_stream(index: int, request: Request, t: float = 0.0, q: str
             "-vf", f"scale=-2:{h}",
             "-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency",
             "-crf", "26", "-maxrate", rate, "-bufsize", buf,
-            "-pix_fmt", "yuv420p", "-threads", "2",
+            "-pix_fmt", "yuv420p", "-fps_mode", "cfr", "-threads", "2",
         ])
     else:
         cmd.extend(["-c:v", "copy"])
 
     cmd.extend([
         "-c:a", "aac", "-ac", "2", "-b:a", "128k",
-        "-af", "aresample=async=1:min_hard_comp=0.100000:first_pts=0",
+        "-af", "aresample=async=1000",
         "-avoid_negative_ts", "make_zero",
         "-f", "mp4",
-        "-movflags", "frag_keyframe+empty_moov+default_base_moof",
+        "-movflags", "frag_keyframe+empty_moov+default_base_moof+negative_cts_offsets",
         "pipe:1",
     ])
 
