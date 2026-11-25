@@ -66,8 +66,8 @@ jobs:
                   applicationId "com.ystream.app"
                   minSdk 23
                   targetSdk 34
-                  versionCode 2
-                  versionName "2.0-TV"
+                  versionCode 3
+                  versionName "3.0-TV"
               }
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
@@ -102,6 +102,8 @@ jobs:
           cat <<'EOF' > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+              <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
               <uses-feature android:name="android.software.leanback" android:required="false" />
               <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
               <application
@@ -113,6 +115,7 @@ jobs:
                   <activity
                       android:name=".MainActivity"
                       android:exported="true"
+                      android:launchMode="singleTask"
                       android:screenOrientation="landscape"
                       android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
                       android:configChanges="orientation|screenSize|keyboardHidden|uiMode">
@@ -122,16 +125,57 @@ jobs:
                           <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
                   </activity>
+                  <receiver
+                      android:name=".BootReceiver"
+                      android:enabled="true"
+                      android:exported="true"
+                      android:directBootAware="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.BOOT_COMPLETED" />
+                          <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                          <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+                          <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                          <category android:name="android.intent.category.DEFAULT" />
+                      </intent-filter>
+                  </receiver>
               </application>
           </manifest>
+          EOF
+
+          cat <<'EOF' > app/src/main/java/com/ystream/app/BootReceiver.java
+          package com.ystream.app;
+
+          import android.content.BroadcastReceiver;
+          import android.content.Context;
+          import android.content.Intent;
+
+          public class BootReceiver extends BroadcastReceiver {
+              @Override
+              public void onReceive(Context context, Intent intent) {
+                  if (intent == null || intent.getAction() == null) return;
+                  String action = intent.getAction();
+                  if (Intent.ACTION_BOOT_COMPLETED.equals(action)
+                          || "android.intent.action.QUICKBOOT_POWERON".equals(action)
+                          || "com.htc.intent.action.QUICKBOOT_POWERON".equals(action)
+                          || Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)) {
+                      Intent launch = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
+                      if (launch != null) {
+                          launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                          context.startActivity(launch);
+                      }
+                  }
+              }
+          }
           EOF
 
           cat <<'EOF' > app/src/main/java/com/ystream/app/MainActivity.java
           package com.ystream.app;
 
           import android.app.Activity;
+          import android.content.Context;
           import android.content.pm.ActivityInfo;
           import android.graphics.Color;
+          import android.media.AudioManager;
           import android.os.Bundle;
           import android.view.KeyEvent;
           import android.view.View;
@@ -143,6 +187,7 @@ jobs:
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
           import android.widget.FrameLayout;
+          import android.widget.Toast;
 
           public class MainActivity extends Activity {
               private WebView webView;
@@ -150,12 +195,22 @@ jobs:
               private View customView;
               private WebChromeClient.CustomViewCallback customViewCallback;
               private WebChromeClient chromeClient;
+              private long lastFallbackBackTime = 0L;
 
               private void enableImmersive() {
                   getWindow().getDecorView().setSystemUiVisibility(
                           View.SYSTEM_UI_FLAG_FULLSCREEN
                           | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                           | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+              }
+
+              private void requestTvAudio() {
+                  try {
+                      AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+                      if (am != null) {
+                          am.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
+                      }
+                  } catch (Exception ignored) {}
               }
 
               @Override
@@ -165,6 +220,7 @@ jobs:
                   setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
                   getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
                   enableImmersive();
+                  requestTvAudio();
 
                   rootLayout = new FrameLayout(this);
                   rootLayout.setBackgroundColor(Color.BLACK);
@@ -192,6 +248,7 @@ jobs:
                       @Override
                       public void onPageFinished(WebView view, String url) {
                           super.onPageFinished(view, url);
+                          requestTvAudio();
                           view.requestFocus();
                       }
                   });
@@ -237,24 +294,61 @@ jobs:
               }
 
               @Override
+              protected void onResume() {
+                  super.onResume();
+                  enableImmersive();
+                  requestTvAudio();
+              }
+
+              @Override
               public void onWindowFocusChanged(boolean hasFocus) {
                   super.onWindowFocusChanged(hasFocus);
                   if (hasFocus) enableImmersive();
               }
 
+              private void handleTvBack() {
+                  if (customView != null) {
+                      chromeClient.onHideCustomView();
+                      return;
+                  }
+                  if (webView != null) {
+                      webView.evaluateJavascript(
+                              "(function(){ return (typeof processBackAction === 'function') ? processBackAction() : 'NO_JS'; })()",
+                              value -> {
+                                  if ("true".equals(value)) {
+                                      return;
+                                  }
+                                  if ("false".equals(value)) {
+                                      finish();
+                                      return;
+                                  }
+                                  long now = System.currentTimeMillis();
+                                  if (now - lastFallbackBackTime < 2200) {
+                                      finish();
+                                  } else {
+                                      lastFallbackBackTime = now;
+                                      Toast.makeText(MainActivity.this, "Press Back again to exit", Toast.LENGTH_SHORT).show();
+                                  }
+                              });
+                  } else {
+                      finish();
+                  }
+              }
+
               @Override
               public boolean onKeyDown(int keyCode, KeyEvent event) {
                   if (keyCode == KeyEvent.KEYCODE_BACK) {
-                      if (customView != null) {
-                          chromeClient.onHideCustomView();
-                          return true;
+                      if (event.getRepeatCount() == 0) {
+                          handleTvBack();
                       }
-                      if (webView != null && webView.canGoBack()) {
-                          webView.goBack();
-                          return true;
-                      }
+                      return true;
                   }
                   return super.onKeyDown(keyCode, event);
+              }
+
+              @Override
+              public void onBackPressed() {
+                  handleTvBack();
               }
           }
           EOF
