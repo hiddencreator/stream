@@ -46,6 +46,7 @@ SESSION_FILE = DATA_DIR / "ystream_bot"
 CHUNK_SIZE = 1024 * 1024  # 1 MiB
 MAX_CACHE_BYTES = int(1.5 * 1024 * 1024 * 1024)  # 1.5 GB cap
 ONLINE_WINDOW_SEC = 28
+REJECT_COOLDOWN_SEC = 60
 MAX_PENDING_DEVICES = 15
 RELAY_IDLE_SEC = 45
 START_TIME = time.time()
@@ -98,12 +99,14 @@ tg_client = Client(
 ffmpeg_proc: Optional[subprocess.Popen] = None
 active_play_proc: Optional[asyncio.subprocess.Process] = None
 last_error: str = ""
+last_system_error: str = "None"
 last_relay_hit: float = 0.0
 msg_cache: dict[str, Message] = {}
 prewarm_tasks: dict[str, asyncio.Task] = {}
 device_subscribers: dict[str, set[asyncio.Queue]] = {}
 active_sse_counts: dict[str, int] = {}
 approval_notify_ts: dict[str, float] = {}
+error_alert_ts: dict[str, float] = {}
 
 
 def read_json(path: Path, default):
@@ -126,6 +129,51 @@ read_json(CHANNELS_FILE, DEFAULT_CHANNELS)
 read_json(DEVICES_FILE, {"selected_device_id": "", "devices": {}})
 read_json(PENDING_FILE, {})
 SYSTEM_STOPPED: bool = bool(read_json(STATE_FILE, {"stopped": False}).get("stopped", False))
+
+
+def get_owner_id() -> int:
+    if ENV_OWNER_ID > 0:
+        return ENV_OWNER_ID
+    data = read_json(OWNER_FILE, {"owner_id": 0})
+    try:
+        return int(data.get("owner_id") or 0)
+    except Exception:
+        return 0
+
+
+def authorize_user(user: Optional[User], allow_claim: bool = False) -> bool:
+    if not user or getattr(user, "is_bot", False):
+        return False
+    uid = int(user.id)
+    owner = get_owner_id()
+    if owner > 0:
+        return uid == owner
+    if allow_claim:
+        write_json(OWNER_FILE, {"owner_id": uid, "claimed_at": int(time.time())})
+        return True
+    return False
+
+
+async def report_error_to_owner(key: str, title: str, detail: str):
+    global last_system_error
+    clean_detail = str(detail or "Unknown error").strip()[:280]
+    last_system_error = f"{title}: {clean_detail}"
+    owner_id = get_owner_id()
+    if owner_id <= 0 or not tg_client.is_connected:
+        return
+    now = time.time()
+    if now - error_alert_ts.get(key, 0.0) < 60.0:
+        return
+    error_alert_ts[key] = now
+    msg_txt = (
+        f"⚠️ <b>YStream System Alert</b>\n\n"
+        f"<b>Issue:</b> {html.escape(title)}\n"
+        f"<b>Details:</b> <code>{html.escape(clean_detail)}</code>"
+    )
+    try:
+        await tg_client.send_message(owner_id, msg_txt, parse_mode=enums.ParseMode.HTML)
+    except Exception as exc:
+        print(f"[Error alert send failed] {exc}")
 
 
 def get_devices_store() -> dict:
@@ -255,29 +303,6 @@ def set_system_stopped(stopped: bool):
     SYSTEM_STOPPED = bool(stopped)
     write_json(STATE_FILE, {"stopped": SYSTEM_STOPPED, "updated_at": int(time.time())})
     push_all_devices_event({"type": "system_state", "stopped": SYSTEM_STOPPED, "ts": int(time.time())})
-
-
-def get_owner_id() -> int:
-    if ENV_OWNER_ID > 0:
-        return ENV_OWNER_ID
-    data = read_json(OWNER_FILE, {"owner_id": 0})
-    try:
-        return int(data.get("owner_id") or 0)
-    except Exception:
-        return 0
-
-
-def authorize_user(user: Optional[User], allow_claim: bool = False) -> bool:
-    if not user or getattr(user, "is_bot", False):
-        return False
-    uid = int(user.id)
-    owner = get_owner_id()
-    if owner > 0:
-        return uid == owner
-    if allow_claim:
-        write_json(OWNER_FILE, {"owner_id": uid, "claimed_at": int(time.time())})
-        return True
-    return False
 
 
 def get_active_tunnel_url() -> str:
@@ -594,7 +619,6 @@ def parse_ffprobe_data(data: dict, allow_duration: bool = True, file_size: int =
 
         if candidates:
             best_dur = max(candidates)
-            # Reject truncated-buffer 9s artifacts on large movie files (>25 MB)
             if not (file_size > 25 * 1024 * 1024 and best_dur < 45):
                 dur = best_dur
 
@@ -622,7 +646,6 @@ def probe_media_sync(item_id: str, total_size: int = 0, existing_dur: int = 0) -
                 out.write(b0.read_bytes())
                 if b1.exists():
                     out.write(b1.read_bytes())
-            # NEVER read duration from truncated 2MB probe.tmp (fixes 9-second bug!)
             raw_head = run_ffprobe_json(str(tmp_probe), analyze_us=2500000, timeout_sec=6)
             if raw_head:
                 parsed_tracks = parse_ffprobe_data(raw_head, allow_duration=False, file_size=total_size)
@@ -632,7 +655,6 @@ def probe_media_sync(item_id: str, total_size: int = 0, existing_dur: int = 0) -
             except Exception:
                 pass
 
-    # Probe full HTTP range stream to get exact container duration + tracks if needed
     need_full_probe = (existing_dur <= 0) or (parsed_tracks is None)
     if need_full_probe:
         raw_full = run_ffprobe_json(
@@ -771,7 +793,7 @@ async def prewarm_for_device(device_id: str, item: dict):
     except asyncio.CancelledError:
         pass
     except Exception as exc:
-        print(f"[Prewarm {task_key}] {exc}")
+        await report_error_to_owner(f"prewarm:{item_id}", "Movie Prewarm Error", str(exc))
     finally:
         prewarm_tasks.pop(task_key, None)
 
@@ -817,7 +839,7 @@ def build_device_dashboard() -> tuple[str, InlineKeyboardMarkup]:
         text = (
             "<b>📱 YStream Device Manager</b>\n\n"
             "No devices registered yet.\n"
-            "Open YStream on your TV or browser to trigger an instant approval request."
+            "When a user opens YStream and taps <b>Send Request</b>, an instant approval alert will appear here."
         )
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh", callback_data="dev:list")]])
         return text, kb
@@ -833,14 +855,14 @@ def build_device_dashboard() -> tuple[str, InlineKeyboardMarkup]:
 
     sorted_devs = sorted(
         devices.items(),
-        key=lambda kv: (0 if kv[1].get("status") == "approved" else 1, -int(kv[1].get("last_seen") or 0)),
+        key=lambda kv: (0 if kv[1].get("status") == "approved" else (1 if kv[1].get("status") == "pending" else 2), -int(kv[1].get("last_seen") or 0)),
     )
 
     for idx, (did, dev) in enumerate(sorted_devs, start=1):
         status = dev.get("status", "pending")
         online = is_device_online(did, dev)
-        state_dot = "🟢" if (status == "approved" and online) else ("⏳" if status == "pending" else ("🚫" if status == "revoked" else "⚫"))
-        status_lbl = "Online" if (status == "approved" and online) else ("Pending Approval" if status == "pending" else ("Removed / Revoked" if status == "revoked" else "Offline"))
+        state_dot = "🟢" if (status == "approved" and online) else ("⏳" if status == "pending" else ("🚫" if status == "rejected" else "⚫"))
+        status_lbl = "Online" if (status == "approved" and online) else ("Pending Approval" if status == "pending" else ("Rejected / Removed" if status == "rejected" else "Offline"))
         is_target = (did == selected_id and status == "approved")
         target_tag = " • 🎯 TARGET" if is_target else ""
         q_count = len(dev.get("movies", []))
@@ -856,8 +878,11 @@ def build_device_dashboard() -> tuple[str, InlineKeyboardMarkup]:
             sel_label = f"✅ Target: {dev.get('name', did)[:14]}" if is_target else f"🎯 Select {dev.get('name', did)[:14]}"
             row_btns.append(InlineKeyboardButton(sel_label, callback_data=f"dev:select:{did}"))
             row_btns.append(InlineKeyboardButton("⚙️ Manage", callback_data=f"dev:manage:{did}"))
+        elif status == "pending":
+            row_btns.append(InlineKeyboardButton(f"✅ Approve {dev.get('name', did)[:12]}", callback_data=f"dev:approve:{did}"))
+            row_btns.append(InlineKeyboardButton("❌ Reject", callback_data=f"dev:reject:{did}"))
         else:
-            row_btns.append(InlineKeyboardButton(f"✅ Approve {dev.get('name', did)[:14]}", callback_data=f"dev:approve:{did}"))
+            row_btns.append(InlineKeyboardButton(f"✅ Approve {dev.get('name', did)[:12]}", callback_data=f"dev:approve:{did}"))
             row_btns.append(InlineKeyboardButton("⚙️ Manage", callback_data=f"dev:manage:{did}"))
         buttons.append(row_btns)
 
@@ -906,9 +931,11 @@ def build_single_device_panel(did: str) -> tuple[str, InlineKeyboardMarkup]:
             rows.append([InlineKeyboardButton("🎯 Select as Movie Target", callback_data=f"dev:select:{did}")])
         if movies:
             rows.append([InlineKeyboardButton(f"🗑 Clear Device Movies ({len(movies)})", callback_data=f"dev:clear:{did}")])
-        rows.append([InlineKeyboardButton("🚫 Remove & Revoke Access", callback_data=f"dev:revoke:{did}")])
+        rows.append([InlineKeyboardButton("🚫 Remove & Reject Access", callback_data=f"dev:reject:{did}")])
     else:
-        rows.append([InlineKeyboardButton("✅ Approve / Re-Approve Access", callback_data=f"dev:approve:{did}")])
+        rows.append([InlineKeyboardButton("✅ Approve Access", callback_data=f"dev:approve:{did}")])
+        if status == "pending":
+            rows.append([InlineKeyboardButton("❌ Reject Request", callback_data=f"dev:reject:{did}")])
         rows.append([InlineKeyboardButton("🗑 Delete Record Permanently", callback_data=f"dev:delete:{did}")])
 
     rows.append([
@@ -953,36 +980,42 @@ async def build_status_html() -> str:
     table = "\n".join(lines)
 
     out = f"<b>📊 YStream System Diagnosis</b>\n<pre>{html.escape(table)}</pre>"
+    out += f"\n\n<b>Last Error:</b> <code>{html.escape(last_system_error)}</code>"
     if tunnel:
-        out += f"\n\n<b>Tunnel URL:</b>\n<code>{html.escape(tunnel)}</code>"
+        out += f"\n<b>Tunnel URL:</b>\n<code>{html.escape(tunnel)}</code>"
     return out
 
 
-async def notify_owner_device_request(did: str, dev: dict, is_reaccess: bool = False):
+async def send_owner_approval_card(did: str, dev: dict) -> tuple[bool, str]:
     owner_id = get_owner_id()
-    if owner_id <= 0 or not tg_client.is_connected:
-        return
+    if owner_id <= 0:
+        return False, "Owner ID not set (send /start to bot first)"
+    if not tg_client.is_connected:
+        return False, "Telegram bot disconnected"
+
     now = time.time()
-    if now - approval_notify_ts.get(did, 0.0) < 25.0:
-        return
+    if now - approval_notify_ts.get(did, 0.0) < 15.0:
+        return True, "Already sent"
     approval_notify_ts[did] = now
 
-    header = "🔄 <b>Device Re-Access Request</b>" if is_reaccess else "🔔 <b>New Device Access Request</b>"
     text = (
-        f"{header}\n\n"
+        f"🔔 <b>New Device Access Request</b>\n\n"
         f"<b>Device:</b> {html.escape(dev.get('name', did))}\n"
         f"<b>Platform:</b> {html.escape(dev.get('platform', 'Unknown'))}\n"
         f"<b>Device ID:</b> <code>{html.escape(did)}</code>\n\n"
-        f"Approve permanent access for this device?"
+        f"Tap <b>Approve</b> to allow instant access or <b>Reject</b> to block:"
     )
     kb = InlineKeyboardMarkup([[
         InlineKeyboardButton("✅ Approve", callback_data=f"dev:approve:{did}"),
-        InlineKeyboardButton("❌ Cancel", callback_data=f"dev:reject:{did}"),
+        InlineKeyboardButton("❌ Reject", callback_data=f"dev:reject:{did}"),
     ]])
     try:
         await tg_client.send_message(owner_id, text, parse_mode=enums.ParseMode.HTML, reply_markup=kb)
+        return True, "Sent"
     except Exception as exc:
-        print(f"[Notify owner error] {exc}")
+        err_msg = str(exc)
+        print(f"[Notify owner error] {err_msg}")
+        return False, err_msg
 
 
 # --- Owner-Only Telegram Bot Commands ---
@@ -1102,7 +1135,6 @@ async def on_file(_, msg: Message):
     sel_id = store.get("selected_device_id", "")
     sel_dev = store["devices"].get(sel_id) if sel_id else None
 
-    # Never add a movie without a valid selected approved device!
     if not sel_dev or sel_dev.get("status") != "approved":
         approved_devs = [
             (did, d) for did, d in store["devices"].items() if d.get("status") == "approved"
@@ -1110,7 +1142,7 @@ async def on_file(_, msg: Message):
         if not approved_devs:
             await msg.reply_text(
                 "<b>⚠️ No Approved Devices Found</b>\n\n"
-                "Open YStream on your TV or browser and approve the device first.",
+                "Open YStream on your TV or browser, tap <b>Send Request</b>, and approve it first.",
                 parse_mode=enums.ParseMode.HTML,
             )
             return
@@ -1254,8 +1286,9 @@ async def on_callback(_, cq: CallbackQuery):
             if not store.get("selected_device_id"):
                 store["selected_device_id"] = did
             save_devices_store(store)
+            approval_notify_ts.pop(did, None)
             push_device_event(did, {"type": "device_status", "status": "approved", "device_name": dev.get("name", did)})
-            await cq.answer("Device Approved!")
+            await cq.answer("✅ Device Approved!")
             txt, kb = build_single_device_panel(did)
             await cq.message.edit_text(txt, parse_mode=enums.ParseMode.HTML, reply_markup=kb)
             return
@@ -1267,12 +1300,14 @@ async def on_callback(_, cq: CallbackQuery):
             if not dev:
                 await cq.answer("Device not found", show_alert=True)
                 return
-            dev["status"] = "revoked"
+            dev["status"] = "rejected"
+            dev["rejected_at"] = int(time.time())
             if store.get("selected_device_id") == did:
                 store["selected_device_id"] = ""
             save_devices_store(store)
-            push_device_event(did, {"type": "device_status", "status": "revoked"})
-            await cq.answer("Access Revoked Immediately")
+            approval_notify_ts.pop(did, None)
+            push_device_event(did, {"type": "device_status", "status": "rejected", "retry_after": REJECT_COOLDOWN_SEC})
+            await cq.answer("❌ Device Rejected")
             txt, kb = build_single_device_panel(did)
             await cq.message.edit_text(txt, parse_mode=enums.ParseMode.HTML, reply_markup=kb)
             return
@@ -1304,13 +1339,14 @@ async def on_callback(_, cq: CallbackQuery):
             if store.get("selected_device_id") == did:
                 store["selected_device_id"] = ""
             save_devices_store(store)
+            approval_notify_ts.pop(did, None)
             if dev:
                 for m in dev.get("movies", []):
                     oid = m.get("id")
                     if oid and not is_item_referenced_anywhere(oid):
                         await asyncio.to_thread(delete_item_cache_sync, oid)
-            push_device_event(did, {"type": "device_status", "status": "revoked"})
-            await cq.answer("Device deleted")
+            push_device_event(did, {"type": "device_status", "status": "rejected", "retry_after": REJECT_COOLDOWN_SEC})
+            await cq.answer("Device record deleted")
             txt, kb = build_device_dashboard()
             await cq.message.edit_text(txt, parse_mode=enums.ParseMode.HTML, reply_markup=kb)
             return
@@ -1356,7 +1392,11 @@ async def on_callback(_, cq: CallbackQuery):
             )
             return
     except Exception as exc:
-        print(f"[Callback error] {exc}")
+        await report_error_to_owner("callback_err", "Bot Action Error", str(exc))
+        try:
+            await cq.answer("Error occurred — check alert message", show_alert=True)
+        except Exception:
+            pass
 
 
 # --- On-Demand Lightweight Relay ---
@@ -1419,8 +1459,9 @@ async def start_suntv_relay():
     ]
     try:
         ffmpeg_proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
-    except Exception:
+    except Exception as exc:
         last_error = "FFmpeg error"
+        await report_error_to_owner("ffmpeg_spawn", "FFmpeg Start Failed", str(exc))
         return False
 
     for _ in range(24):
@@ -1478,17 +1519,8 @@ async def shutdown():
         pass
 
 
-# --- Device Registration, Approval & Real-Time SSE Endpoints ---
-@app.post("/api/device/register")
-async def api_device_register(payload: dict = Body(...)):
-    did = clean_device_id(payload.get("device_id", ""))
-    if not did:
-        raise HTTPException(status_code=400, detail="Invalid device_id")
-
-    raw_name = str(payload.get("name") or "Smart Device").strip()[:42] or "Smart Device"
-    platform = str(payload.get("platform") or "Web").strip()[:28] or "Web"
-    explicit_notify = bool(payload.get("notify", False))
-
+# --- Manual Device Request, Approval & Real-Time SSE Endpoints ---
+async def process_manual_device_request(did: str, raw_name: str, platform: str) -> dict:
     store = get_devices_store()
     devices = store["devices"]
     now = int(time.time())
@@ -1500,13 +1532,35 @@ async def api_device_register(payload: dict = Body(...)):
             dev["name"] = raw_name
         if platform:
             dev["platform"] = platform
+
+        st = dev.get("status", "pending")
+        if st == "approved":
+            save_devices_store(store)
+            return {"ok": True, "status": "approved", "device_id": did, "name": dev.get("name", raw_name), "stopped": SYSTEM_STOPPED}
+
+        if st == "rejected":
+            rejected_at = int(dev.get("rejected_at") or 0)
+            elapsed = now - rejected_at
+            if elapsed < REJECT_COOLDOWN_SEC:
+                save_devices_store(store)
+                return {
+                    "ok": False,
+                    "status": "rejected",
+                    "retry_after": REJECT_COOLDOWN_SEC - elapsed,
+                    "device_id": did,
+                    "name": dev.get("name", raw_name),
+                    "stopped": SYSTEM_STOPPED,
+                }
+
+        dev["status"] = "pending"
         save_devices_store(store)
-
-        if dev.get("status") == "pending" and explicit_notify:
-            asyncio.create_task(notify_owner_device_request(did, dev, is_reaccess=False))
-
+        sent_ok, sent_msg = await send_owner_approval_card(did, dev)
+        if not sent_ok:
+            await report_error_to_owner("notify_fail", "Approval Alert Delivery Failed", sent_msg)
         return {
-            "status": dev.get("status", "pending"),
+            "ok": sent_ok,
+            "status": "pending",
+            "notify_status": sent_msg,
             "device_id": did,
             "name": dev.get("name", raw_name),
             "stopped": SYSTEM_STOPPED,
@@ -1514,6 +1568,7 @@ async def api_device_register(payload: dict = Body(...)):
 
     pending_cnt = sum(1 for d in devices.values() if d.get("status") == "pending")
     if pending_cnt >= MAX_PENDING_DEVICES:
+        await report_error_to_owner("pending_flood", "Pending Device Queue Full", f"Blocked excess request from {raw_name} ({did})")
         raise HTTPException(status_code=429, detail="Too many pending device requests")
 
     new_dev = {
@@ -1528,52 +1583,48 @@ async def api_device_register(payload: dict = Body(...)):
     }
     devices[did] = new_dev
     save_devices_store(store)
-    asyncio.create_task(notify_owner_device_request(did, new_dev, is_reaccess=False))
+
+    sent_ok, sent_msg = await send_owner_approval_card(did, new_dev)
+    if not sent_ok:
+        await report_error_to_owner("notify_fail", "Approval Alert Delivery Failed", sent_msg)
 
     return {
+        "ok": sent_ok,
         "status": "pending",
+        "notify_status": sent_msg,
         "device_id": did,
         "name": raw_name,
         "stopped": SYSTEM_STOPPED,
     }
 
 
-@app.post("/api/device/reaccess")
-async def api_device_reaccess(payload: dict = Body(...)):
-    did = clean_device_id(payload.get("device_id", ""))
+@app.post("/api/device/request")
+async def api_device_request_post(request: Request):
+    # Supports both text/plain (no CORS preflight!) and application/json
+    payload = {}
+    try:
+        raw_bytes = await request.body()
+        if raw_bytes:
+            payload = json.loads(raw_bytes.decode("utf-8", errors="ignore"))
+    except Exception:
+        payload = {}
+
+    did = clean_device_id(payload.get("device_id") or request.query_params.get("device_id", ""))
     if not did:
         raise HTTPException(status_code=400, detail="Invalid device_id")
+    raw_name = str(payload.get("name") or request.query_params.get("name") or "Smart Device").strip()[:42] or "Smart Device"
+    platform = str(payload.get("platform") or request.query_params.get("platform") or "Web").strip()[:28] or "Web"
+    return await process_manual_device_request(did, raw_name, platform)
 
-    raw_name = str(payload.get("name") or "Smart Device").strip()[:42] or "Smart Device"
-    platform = str(payload.get("platform") or "Web").strip()[:28] or "Web"
 
-    store = get_devices_store()
-    devices = store["devices"]
-    now = int(time.time())
-    dev = devices.get(did)
-
-    if not dev:
-        dev = {
-            "device_id": did,
-            "name": raw_name,
-            "platform": platform,
-            "status": "pending",
-            "created_at": now,
-            "last_seen": now,
-            "movies": [],
-            "progress": {},
-        }
-        devices[did] = dev
-    else:
-        if dev.get("status") == "approved":
-            return {"status": "approved", "device_id": did, "name": dev.get("name", raw_name), "stopped": SYSTEM_STOPPED}
-        dev["status"] = "pending"
-        dev["last_seen"] = now
-
-    save_devices_store(store)
-    approval_notify_ts.pop(did, None)
-    asyncio.create_task(notify_owner_device_request(did, dev, is_reaccess=True))
-    return {"status": "pending", "device_id": did, "name": dev.get("name", raw_name), "stopped": SYSTEM_STOPPED}
+@app.get("/api/device/request")
+async def api_device_request_get(device_id: str = "", name: str = "Smart Device", platform: str = "Web"):
+    did = clean_device_id(device_id)
+    if not did:
+        raise HTTPException(status_code=400, detail="Invalid device_id")
+    raw_name = str(name or "Smart Device").strip()[:42] or "Smart Device"
+    plat = str(platform or "Web").strip()[:28] or "Web"
+    return await process_manual_device_request(did, raw_name, plat)
 
 
 @app.get("/health")
@@ -1581,20 +1632,34 @@ async def health(device_id: str = ""):
     did = clean_device_id(device_id)
     dev_status = "unregistered"
     dev_name = ""
+    retry_after = 0
+
     if did:
         store = get_devices_store()
         dev = store["devices"].get(did)
         if dev:
-            dev_status = dev.get("status", "pending")
-            dev_name = dev.get("name", "")
-            dev["last_seen"] = int(time.time())
+            now = int(time.time())
+            dev["last_seen"] = now
             save_devices_store(store)
+            dev_name = dev.get("name", "")
+            raw_st = dev.get("status", "pending")
+            if raw_st == "rejected":
+                elapsed = now - int(dev.get("rejected_at") or 0)
+                if elapsed < REJECT_COOLDOWN_SEC:
+                    dev_status = "rejected"
+                    retry_after = REJECT_COOLDOWN_SEC - elapsed
+                else:
+                    # Cooldown finished: user can manually click Send Request again on fresh open
+                    dev_status = "unregistered"
+            else:
+                dev_status = raw_st
 
     return {
         "status": "ok",
         "stopped": SYSTEM_STOPPED,
         "device_status": dev_status,
         "device_name": dev_name,
+        "retry_after": retry_after,
         "bot_connected": tg_client.is_connected,
         "tunnel_url": get_active_tunnel_url(),
     }
@@ -1615,9 +1680,18 @@ async def api_events(request: Request, device_id: str = ""):
         try:
             store = get_devices_store()
             dev = store["devices"].get(did)
+            init_status = "unregistered"
+            if dev:
+                raw_st = dev.get("status", "pending")
+                if raw_st == "rejected":
+                    elapsed = int(time.time()) - int(dev.get("rejected_at") or 0)
+                    init_status = "rejected" if elapsed < REJECT_COOLDOWN_SEC else "unregistered"
+                else:
+                    init_status = raw_st
+
             init_payload = json.dumps({
                 "type": "init",
-                "status": dev.get("status", "unregistered") if dev else "unregistered",
+                "status": init_status,
                 "device_name": dev.get("name", "") if dev else "",
                 "stopped": SYSTEM_STOPPED,
                 "ts": int(time.time()),
@@ -1682,7 +1756,15 @@ async def yplay_library(request: Request, device_id: str = ""):
 
 
 @app.post("/api/yplay/progress")
-async def yplay_save_progress(request: Request, payload: dict = Body(...)):
+async def yplay_save_progress(request: Request):
+    payload = {}
+    try:
+        raw_bytes = await request.body()
+        if raw_bytes:
+            payload = json.loads(raw_bytes.decode("utf-8", errors="ignore"))
+    except Exception:
+        payload = {}
+
     did, _ = require_approved_device(request, str(payload.get("device_id") or ""))
     item_id = str(payload.get("item_id") or "").strip()
     pos = max(0, int(payload.get("position") or 0))
@@ -1809,8 +1891,9 @@ async def yplay_stream(item_id: str, request: Request, device_id: str = ""):
                         take = min(len(tail_bytes) - cur_off, end_byte - pos + 1)
                         yield tail_bytes[cur_off : cur_off + take]
                         pos += take
-            except Exception:
+            except Exception as exc:
                 msg_cache.pop(item_id, None)
+                await report_error_to_owner(f"stream:{item_id}", "Telegram Stream Interrupted", str(exc))
                 break
 
         asyncio.create_task(asyncio.to_thread(prune_cache_sync))
