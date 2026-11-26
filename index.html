@@ -3,6 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex" />
+  <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet, noimageindex" />
+  <meta name="bingbot" content="noindex, nofollow, noarchive, nosnippet" />
+  <meta name="referrer" content="no-referrer" />
   <title>YStream</title>
   <link rel="preconnect" href="https://ystream.hiddencreator-account.workers.dev" />
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
@@ -72,159 +76,6 @@
 
     video.has-frame {
       opacity: 1;
-    }
-
-    /* Full-Black Device Security & Manual Request Gate */
-    .gate-screen {
-      position: fixed;
-      inset: 0;
-      z-index: 9500;
-      background: #000000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.18s ease;
-    }
-
-    .gate-screen.show {
-      opacity: 1;
-      pointer-events: auto;
-    }
-
-    .gate-card {
-      max-width: 430px;
-      width: 100%;
-      background: linear-gradient(180deg, #151924 0%, #0b0e15 100%);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 22px;
-      padding: 30px 26px;
-      text-align: center;
-      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.96);
-    }
-
-    .gate-icon {
-      width: 58px;
-      height: 58px;
-      margin: 0 auto 16px;
-      border-radius: 50%;
-      background: rgba(59, 130, 246, 0.14);
-      border: 1.5px solid rgba(59, 130, 246, 0.45);
-      color: #60a5fa;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .gate-icon.rejected {
-      background: rgba(229, 9, 20, 0.14);
-      border-color: rgba(229, 9, 20, 0.48);
-      color: #ff3b46;
-    }
-
-    .gate-badge {
-      display: inline-block;
-      font-size: 0.68rem;
-      font-weight: 800;
-      letter-spacing: 1.4px;
-      text-transform: uppercase;
-      color: #93c5fd;
-      background: rgba(59, 130, 246, 0.16);
-      border: 1px solid rgba(59, 130, 246, 0.34);
-      padding: 3px 11px;
-      border-radius: 99px;
-      margin-bottom: 10px;
-    }
-
-    .gate-badge.rejected {
-      color: #fca5a5;
-      background: rgba(229, 9, 20, 0.16);
-      border-color: rgba(229, 9, 20, 0.34);
-    }
-
-    .gate-title {
-      font-size: 1.38rem;
-      font-weight: 800;
-      color: #ffffff;
-      letter-spacing: -0.2px;
-    }
-
-    .gate-desc {
-      font-size: 0.86rem;
-      color: #94a3b8;
-      margin-top: 8px;
-      line-height: 1.48;
-    }
-
-    .gate-meta {
-      margin-top: 16px;
-      padding: 10px 14px;
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.045);
-      border: 1px solid rgba(255, 255, 255, 0.09);
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      font-size: 0.78rem;
-      color: #cbd5e1;
-    }
-
-    .gate-meta code {
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      color: #fff;
-      font-weight: 700;
-      font-size: 0.8rem;
-    }
-
-    .gate-loader {
-      margin-top: 20px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-    }
-
-    .gate-spinner {
-      width: 30px;
-      height: 30px;
-      border-radius: 50%;
-      border: 2.5px solid rgba(255, 255, 255, 0.18);
-      border-top-color: #60a5fa;
-      animation: spinRing 0.75s linear infinite;
-    }
-
-    .gate-wait-txt {
-      font-size: 0.82rem;
-      font-weight: 700;
-      color: #93c5fd;
-    }
-
-    .gate-actions {
-      margin-top: 20px;
-      display: flex;
-      justify-content: center;
-    }
-
-    .gate-btn {
-      background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
-      color: #ffffff;
-      border: 1.5px solid rgba(255, 255, 255, 0.28);
-      padding: 11px 26px;
-      border-radius: 12px;
-      font-size: 0.9rem;
-      font-weight: 800;
-      cursor: pointer;
-    }
-
-    .gate-btn:focus,
-    .gate-btn:focus-visible,
-    .gate-btn:hover {
-      background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%) !important;
-      border-color: #ffffff !important;
-      transform: scale(1.04);
     }
 
     /* Full-Black System Shutdown Alert Screen */
@@ -342,7 +193,7 @@
       bottom: 34px;
       left: 50%;
       transform: translate3d(-50%, 10px, 0);
-      z-index: 9800;
+      z-index: 80;
       background: rgba(16, 20, 28, 0.96);
       border: 1px solid rgba(255, 255, 255, 0.24);
       color: #fff;
@@ -592,7 +443,7 @@
       pointer-events: none;
     }
 
-    /* Bottom Controls & Borderless YouTube Progress Bar */
+    /* Bottom Controls & GPU-Accelerated YouTube Progress Bar */
     .hud-bottom {
       display: flex;
       flex-direction: column;
@@ -612,7 +463,7 @@
       font-weight: 700;
       color: #f1f5f9;
       font-variant-numeric: tabular-nums;
-      min-width: 44px;
+      min-width: 48px;
     }
     .time-lbl.end { text-align: right; }
 
@@ -633,6 +484,8 @@
       height: 4px;
       border-radius: 99px;
       background: rgba(255, 255, 255, 0.26);
+      overflow: hidden;
+      transition: height 0.12s ease, background 0.12s ease;
     }
 
     .yt-track-wrap:focus .yt-track-bg,
@@ -644,12 +497,12 @@
 
     .yt-track-fill {
       position: absolute;
-      top: 0;
-      left: 0;
-      bottom: 0;
-      width: 0%;
-      border-radius: 99px;
+      inset: 0;
+      width: 100%;
+      transform-origin: left center;
+      transform: scaleX(0);
       background: #ff2a36;
+      will-change: transform;
     }
 
     .yt-track-thumb {
@@ -662,6 +515,7 @@
       border-radius: 50%;
       background: #ff2a36;
       border: 2px solid #fff;
+      will-change: left, transform;
     }
 
     .yt-track-wrap:focus .yt-track-thumb,
@@ -1107,14 +961,14 @@
       <button id="centerPlayBtn" class="center-play-btn hidden" onclick="event.stopPropagation(); toggleVodPlay();"></button>
 
       <div class="hud-bottom" onclick="event.stopPropagation()">
-        <!-- Borderless YouTube Progress Bar (YPlay Only) -->
+        <!-- GPU-Accelerated YouTube Progress Bar (YPlay Only) -->
         <div id="progressRow" class="yt-progress-row hidden">
           <span id="curTxt" class="time-lbl">00:00</span>
           <div id="progressBar" class="yt-track-wrap" tabindex="0" role="slider" aria-label="Seek timeline">
             <div class="yt-track-bg">
               <div id="progressFill" class="yt-track-fill"></div>
-              <div id="progressThumb" class="yt-track-thumb"></div>
             </div>
+            <div id="progressThumb" class="yt-track-thumb"></div>
             <div id="scrubBubble" class="scrub-bubble">00:00</div>
           </div>
           <span id="durTxt" class="time-lbl end">00:00</span>
@@ -1130,21 +984,25 @@
           </div>
 
           <div class="ctrl-grp" id="rightCtrlGrp">
+            <!-- Language (Shown ONLY when >= 2 languages exist) -->
             <div id="langWrap" class="pop-wrap hidden">
               <button id="langBtn" class="ctrl-btn" onclick="triggerBounce(this); togglePop('langMenu');">Tamil</button>
               <div id="langMenu" class="pop-menu"></div>
             </div>
 
+            <!-- Caption (Shown ONLY when subtitles exist in YPlay) -->
             <div id="subWrap" class="pop-wrap hidden">
               <button id="subBtn" class="ctrl-btn" onclick="triggerBounce(this); togglePop('subMenu');">CC</button>
               <div id="subMenu" class="pop-menu"></div>
             </div>
 
+            <!-- Quality (Shown on YPlay; on Live TV shown ONLY if >= 2 qualities exist) -->
             <div id="qualWrap" class="pop-wrap hidden">
               <button id="qualBtn" class="ctrl-btn" onclick="triggerBounce(this); togglePop('qualMenu');">Auto</button>
               <div id="qualMenu" class="pop-menu"></div>
             </div>
 
+            <!-- Speed (YPlay Only) -->
             <div id="speedWrap" class="pop-wrap hidden">
               <button id="speedBtn" class="ctrl-btn" onclick="triggerBounce(this); togglePop('speedMenu');">1x</button>
               <div id="speedMenu" class="pop-menu">
@@ -1156,32 +1014,6 @@
             </div>
           </div>
         </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Device Security & Manual Request Gate Screen -->
-  <div id="gateScreen" class="gate-screen show" role="dialog" aria-modal="true" aria-labelledby="gateTitle">
-    <div class="gate-card">
-      <div id="gateIcon" class="gate-icon">
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-        </svg>
-      </div>
-      <div id="gateBadge" class="gate-badge">Device Security</div>
-      <div id="gateTitle" class="gate-title">Checking Device...</div>
-      <div id="gateDesc" class="gate-desc">Connecting to authorization server.</div>
-      <div class="gate-meta">
-        <div>Device: <code id="gateDevName">Smart Device</code></div>
-        <div>Device ID: <code id="gateDevId">...</code></div>
-      </div>
-      <div id="gateLoader" class="gate-loader">
-        <div class="gate-spinner"></div>
-        <div id="gateWaitTxt" class="gate-wait-txt">Checking authorization...</div>
-      </div>
-      <div id="gateActions" class="gate-actions hidden">
-        <button id="gateSendBtn" class="gate-btn" onclick="sendManualAccessRequest()">Send Request</button>
       </div>
     </div>
   </div>
@@ -1230,74 +1062,6 @@
     const WORKER_URL = "https://ystream.hiddencreator-account.workers.dev";
     let DIRECT_STREAM_URL = WORKER_URL;
 
-    /* =========================================================================
-       PERMANENT DEVICE IDENTITY (Survives restarts, cache clears & Wi-Fi changes)
-    ========================================================================= */
-    function readCookie(name) {
-      const m = document.cookie.match(new RegExp("(?:^|; )" + name + "=([^;]*)"));
-      return m ? decodeURIComponent(m[1]) : "";
-    }
-
-    function writeCookie(name, value) {
-      try {
-        document.cookie = `${name}=${encodeURIComponent(value)}; max-age=315360000; path=/; SameSite=Lax`;
-      } catch (_) {}
-    }
-
-    function getOrCreateDeviceId() {
-      try {
-        if (window.AndroidTV && typeof window.AndroidTV.getDeviceId === "function") {
-          const nativeId = String(window.AndroidTV.getDeviceId() || "").trim();
-          if (nativeId.length >= 6) {
-            try { localStorage.setItem("ystream_device_id", nativeId); } catch (_) {}
-            writeCookie("ystream_did", nativeId);
-            return nativeId;
-          }
-        }
-      } catch (_) {}
-
-      let stored = "";
-      try { stored = localStorage.getItem("ystream_device_id") || ""; } catch (_) {}
-      if (!stored) stored = readCookie("ystream_did");
-      if (!stored || stored.length < 6) {
-        const rand = Math.random().toString(36).slice(2, 8).toUpperCase();
-        const ts = Date.now().toString(36).toUpperCase();
-        stored = `YS-${rand}-${ts}`;
-      }
-      try { localStorage.setItem("ystream_device_id", stored); } catch (_) {}
-      writeCookie("ystream_did", stored);
-      return stored;
-    }
-
-    function detectDeviceMeta() {
-      try {
-        if (window.AndroidTV && typeof window.AndroidTV.getDeviceName === "function") {
-          const n = String(window.AndroidTV.getDeviceName() || "").trim();
-          if (n) return { name: n, platform: "Android TV" };
-        }
-      } catch (_) {}
-
-      const ua = navigator.userAgent || "";
-      if (/AFT|BRAVIA|MiTV|Android TV|SmartTV|GoogleTV|SHIELD/i.test(ua)) {
-        return { name: "Android TV", platform: "Android TV" };
-      }
-      if (/Tizen/i.test(ua)) return { name: "Samsung Smart TV", platform: "Tizen TV" };
-      if (/Web0S|webOS/i.test(ua)) return { name: "LG WebOS TV", platform: "WebOS TV" };
-      if (/Android/i.test(ua)) return { name: "Android Mobile", platform: "Android" };
-      if (/iPhone|iPad/i.test(ua)) return { name: "iOS Device", platform: "iOS" };
-      if (/Windows/i.test(ua)) return { name: "Windows Browser", platform: "Windows" };
-      if (/Mac/i.test(ua)) return { name: "Mac Browser", platform: "macOS" };
-      return { name: "Web Player", platform: "Web" };
-    }
-
-    const DEVICE_ID = getOrCreateDeviceId();
-    const DEVICE_META = detectDeviceMeta();
-
-    function withDevice(url) {
-      const sep = url.includes("?") ? "&" : "?";
-      return `${url}${sep}device_id=${encodeURIComponent(DEVICE_ID)}`;
-    }
-
     const ICONS = {
       play: `<svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`,
       pause: `<svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`,
@@ -1333,17 +1097,6 @@
 
     const stage = document.getElementById("stage");
     const video = document.getElementById("video");
-    const gateScreen = document.getElementById("gateScreen");
-    const gateIcon = document.getElementById("gateIcon");
-    const gateBadge = document.getElementById("gateBadge");
-    const gateTitle = document.getElementById("gateTitle");
-    const gateDesc = document.getElementById("gateDesc");
-    const gateDevName = document.getElementById("gateDevName");
-    const gateDevId = document.getElementById("gateDevId");
-    const gateLoader = document.getElementById("gateLoader");
-    const gateWaitTxt = document.getElementById("gateWaitTxt");
-    const gateActions = document.getElementById("gateActions");
-    const gateSendBtn = document.getElementById("gateSendBtn");
     const shutdownScreen = document.getElementById("shutdownScreen");
     const centerLoader = document.getElementById("centerLoader");
     const exitToast = document.getElementById("exitToast");
@@ -1391,9 +1144,6 @@
     const liveListPane = document.getElementById("liveListPane");
     const yplayListPane = document.getElementById("yplayListPane");
 
-    gateDevName.textContent = DEVICE_META.name;
-    gateDevId.textContent = DEVICE_ID;
-
     let hls = null;
     let shakaPlayer = null;
     let playSessionId = 0;
@@ -1401,7 +1151,6 @@
     let yplayItems = [];
     let yplaySig = "";
     let activeYPlayIdx = -1;
-    let activeYPlayId = "";
     let drawerTab = "live";
     let isLive = true;
     let hudTimer = null;
@@ -1414,151 +1163,10 @@
     let userMuted = false;
     let autoMutedForBoot = false;
 
-    /* Device Approval & System Shutdown State
-       deviceStatus: checking | unregistered | pending | approved | rejected */
-    let deviceStatus = "checking";
+    /* System Shutdown / Resume State */
     let isSystemStopped = false;
     let shutdownSnapshot = null;
     let eventSource = null;
-
-    function isAccessBlocked() {
-      return deviceStatus !== "approved" || isSystemStopped;
-    }
-
-    async function applyDeviceStatus(nextStatus, customName = "") {
-      const valid = ["checking", "unregistered", "pending", "approved", "rejected"];
-      const normalized = valid.includes(nextStatus) ? nextStatus : "unregistered";
-      if (customName) gateDevName.textContent = customName;
-
-      if (normalized === "approved") {
-        const wasUnapproved = deviceStatus !== "approved";
-        deviceStatus = "approved";
-        gateScreen.classList.remove("show");
-        if (wasUnapproved && !isSystemStopped) {
-          await fetchYPlay(false);
-          if (activeYPlayIdx >= 0 && activeYPlayIdx < yplayItems.length && !isLive) {
-            loadYPlay(activeYPlayIdx, true);
-          } else {
-            const ch = CHANNELS.find((c) => c.id === activeChannelId) || CHANNELS[0];
-            playChannel(ch, true, true);
-          }
-        }
-        return;
-      }
-
-      /* Stop playback immediately if device was previously approved and got rejected/removed */
-      const prevStatus = deviceStatus;
-      deviceStatus = normalized;
-      if (prevStatus === "approved") {
-        playSessionId++;
-        isZapping = false;
-        closeDrawer(false);
-        hideHud();
-        hideError();
-        hideLoading();
-        await cleanupPlayers();
-      }
-
-      if (normalized === "checking") {
-        gateIcon.classList.remove("rejected");
-        gateBadge.classList.remove("rejected");
-        gateBadge.textContent = "Device Security";
-        gateTitle.textContent = "Checking Device...";
-        gateDesc.textContent = "Verifying authorization status with server.";
-        gateLoader.classList.remove("hidden");
-        gateWaitTxt.textContent = "Checking authorization...";
-        gateActions.classList.add("hidden");
-      } else if (normalized === "unregistered") {
-        gateIcon.classList.remove("rejected");
-        gateBadge.classList.remove("rejected");
-        gateBadge.textContent = "Device Security";
-        gateTitle.textContent = "Device Access Required";
-        gateDesc.textContent = "This device is not authorized yet. Click Send Request below to ask the owner for approval.";
-        gateLoader.classList.add("hidden");
-        gateActions.classList.remove("hidden");
-        gateSendBtn.disabled = false;
-        gateSendBtn.textContent = "Send Request";
-      } else if (normalized === "pending") {
-        gateIcon.classList.remove("rejected");
-        gateBadge.classList.remove("rejected");
-        gateBadge.textContent = "Request Sent";
-        gateTitle.textContent = "Waiting for Approval...";
-        gateDesc.textContent = "Your request has been sent to the owner. Access will start automatically once approved.";
-        gateLoader.classList.remove("hidden");
-        gateWaitTxt.textContent = "Waiting for approval...";
-        gateActions.classList.add("hidden");
-      } else if (normalized === "rejected") {
-        /* Strictly hide Send Request button so rejected user cannot flood bot */
-        gateIcon.classList.add("rejected");
-        gateBadge.classList.add("rejected");
-        gateBadge.textContent = "Access Denied";
-        gateTitle.textContent = "You are rejected";
-        gateDesc.textContent = "Your request was rejected by the owner. Please close the app/website and request again after some time.";
-        gateLoader.classList.add("hidden");
-        gateActions.classList.add("hidden");
-      }
-
-      gateScreen.classList.add("show");
-      if (normalized === "unregistered") {
-        requestAnimationFrame(() => gateSendBtn.focus({ preventScroll: true }));
-      }
-    }
-
-    async function sendManualAccessRequest() {
-      if (deviceStatus !== "unregistered") return;
-      triggerBounce(gateSendBtn);
-      await applyDeviceStatus("pending");
-
-      try {
-        const params = new URLSearchParams({
-          device_id: DEVICE_ID,
-          name: DEVICE_META.name,
-          platform: DEVICE_META.platform,
-          t: String(Date.now())
-        });
-        const ctrl = new AbortController();
-        const tid = setTimeout(() => ctrl.abort(), 7000);
-        const res = await fetch(`${WORKER_URL}/api/device/request?${params.toString()}`, {
-          method: "GET",
-          cache: "no-store",
-          signal: ctrl.signal
-        });
-        clearTimeout(tid);
-        const data = await res.json();
-        if (data && typeof data.stopped === "boolean") {
-          await applySystemStopped(data.stopped);
-        }
-        if (data && data.status) {
-          await applyDeviceStatus(data.status, data.name || "");
-        }
-      } catch (_) {
-        gateWaitTxt.textContent = "Waiting for approval...";
-      }
-    }
-
-    async function checkInitialDeviceStatus() {
-      await applyDeviceStatus("checking");
-      try {
-        const ctrl = new AbortController();
-        const tid = setTimeout(() => ctrl.abort(), 5000);
-        const res = await fetch(withDevice(`${WORKER_URL}/health?t=${Date.now()}`), {
-          cache: "no-store",
-          signal: ctrl.signal
-        });
-        clearTimeout(tid);
-        const data = await res.json();
-        if (data && typeof data.stopped === "boolean") {
-          await applySystemStopped(data.stopped);
-        }
-        if (data && typeof data.tunnel_url === "string" && data.tunnel_url.startsWith("https://")) {
-          DIRECT_STREAM_URL = data.tunnel_url;
-        }
-        const st = data && data.device_status ? data.device_status : "unregistered";
-        await applyDeviceStatus(st, data?.device_name || "");
-      } catch (_) {
-        await applyDeviceStatus("unregistered");
-      }
-    }
 
     async function applySystemStopped(stopped) {
       const next = Boolean(stopped);
@@ -1571,11 +1179,8 @@
         } else {
           const curPos = Math.floor(getEffectiveTime());
           const item = yplayItems[activeYPlayIdx];
-          if (item && curPos > 2) {
-            safeSetStorage(`yp_pos_${DEVICE_ID}_${item.id}`, String(curPos));
-            syncServerProgress(item.id, curPos);
-          }
-          shutdownSnapshot = { mode: "yplay", itemId: item?.id || activeYPlayId, yplayPos: curPos };
+          if (item && curPos > 2) safeSetStorage(`yp_pos_${item.id}`, String(curPos));
+          shutdownSnapshot = { mode: "yplay", yplayIdx: activeYPlayIdx, yplayPos: curPos };
         }
 
         playSessionId++;
@@ -1595,13 +1200,11 @@
         const snap = shutdownSnapshot;
         shutdownSnapshot = null;
 
-        if (deviceStatus !== "approved") return;
         await resolveDirectTunnel();
-        if (snap && snap.mode === "yplay" && snap.itemId) {
+        if (snap && snap.mode === "yplay" && snap.yplayIdx >= 0) {
           await fetchYPlay(false);
-          const foundIdx = yplayItems.findIndex((m) => m.id === snap.itemId);
-          if (foundIdx >= 0) {
-            loadYPlay(foundIdx, true, snap.yplayPos || null);
+          if (snap.yplayIdx < yplayItems.length) {
+            loadYPlay(snap.yplayIdx, true, snap.yplayPos || null);
             return;
           }
         }
@@ -1617,21 +1220,15 @@
       }
       if (!window.EventSource) return;
       try {
-        eventSource = new EventSource(withDevice(`${DIRECT_STREAM_URL}/api/events`));
-        eventSource.onmessage = async (ev) => {
+        eventSource = new EventSource(`${DIRECT_STREAM_URL}/api/events`);
+        eventSource.onmessage = (ev) => {
           try {
             const msg = JSON.parse(ev.data);
-            if (!msg) return;
-            if (typeof msg.stopped === "boolean") {
-              await applySystemStopped(msg.stopped);
+            if (msg && typeof msg.stopped === "boolean") {
+              applySystemStopped(msg.stopped);
             }
-            if (msg.type === "init" || msg.type === "device_status") {
-              if (msg.status) {
-                await applyDeviceStatus(msg.status, msg.device_name || "");
-              }
-            }
-            if (msg.type === "library_updated" && deviceStatus === "approved") {
-              await fetchYPlay(true);
+            if (msg && msg.type === "library") {
+              fetchYPlay(true);
             }
           } catch (_) {}
         };
@@ -1642,12 +1239,12 @@
             if (document.visibilityState === "visible") {
               resolveDirectTunnel().then(connectSystemEvents);
             }
-          }, 4000);
+          }, 3500);
         };
       } catch (_) {}
     }
 
-    /* Safe Storage & Server Per-Device Progress Sync (Preflight-Free text/plain) */
+    /* Safe Storage Helpers */
     function safeGetStorage(k, fallback = "") {
       try { return localStorage.getItem(k) ?? fallback; } catch (_) { return fallback; }
     }
@@ -1664,23 +1261,6 @@
     }
     function safeRemoveStorage(k) {
       try { localStorage.removeItem(k); } catch (_) {}
-    }
-
-    let lastServerProgSync = 0;
-    function syncServerProgress(itemId, posSec, force = false) {
-      if (!itemId || deviceStatus !== "approved") return;
-      const now = Date.now();
-      if (!force && now - lastServerProgSync < 4500) return;
-      lastServerProgSync = now;
-      fetch(`${WORKER_URL}/api/yplay/progress`, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        body: JSON.stringify({
-          device_id: DEVICE_ID,
-          item_id: itemId,
-          position: Math.max(0, Math.floor(posSec))
-        })
-      }).catch(() => {});
     }
 
     /* Persistent Focus Memory */
@@ -1756,7 +1336,7 @@
       if (now - lastBackTime < 160) return true;
       lastBackTime = now;
 
-      if (isAccessBlocked()) {
+      if (isSystemStopped) {
         if (!exitConfirmReady) {
           showExitToast();
           return true;
@@ -1801,9 +1381,12 @@
       }
     });
 
-    /* YouTube 2-Step Progress Scrub State */
+    /* Fast Accelerated Progress Scrub State */
     let isScrubbing = false;
     let scrubPreviewSec = 0;
+    let scrubHoldCount = 0;
+    let scrubLastDir = "";
+    let scrubLastAt = 0;
 
     /* Strict Double-Tap / Double-Press Seek State */
     let lastTouchTap = 0;
@@ -1846,14 +1429,14 @@
     }
 
     function showLoading(immediate = false) {
-      if (isAccessBlocked()) return;
+      if (isSystemStopped) return;
       clearTimeout(loadDebounce);
       if (immediate) {
         centerLoader.classList.add("show");
         centerPlayBtn.classList.add("loading-hide");
       } else {
         loadDebounce = setTimeout(() => {
-          if (!video.paused && !playerError.classList.contains("show") && !isAccessBlocked()) {
+          if (!video.paused && !playerError.classList.contains("show") && !isSystemStopped) {
             centerLoader.classList.add("show");
             centerPlayBtn.classList.add("loading-hide");
           }
@@ -1873,7 +1456,7 @@
     }
 
     async function safePlayVideo() {
-      if (isAccessBlocked()) return;
+      if (isSystemStopped) return;
       try {
         await video.play();
       } catch (err) {
@@ -1887,7 +1470,7 @@
     }
 
     function showError(title, msg) {
-      if (isAccessBlocked()) return;
+      if (isSystemStopped) return;
       hideLoading();
       errTitle.textContent = title;
       errMsg.textContent = msg;
@@ -1898,7 +1481,7 @@
     function hideError() { playerError.classList.remove("show"); }
 
     function retryCurrentMedia() {
-      if (isAccessBlocked()) return;
+      if (isSystemStopped) return;
       hideError();
       if (isLive) {
         liveFailCount = 0;
@@ -1914,7 +1497,7 @@
     function isHudVisible() { return hud.classList.contains("visible"); }
 
     function showHud(preferredFocus = null, autoHideMs = 4200) {
-      if (drawerOpen || isAccessBlocked()) return;
+      if (drawerOpen || isSystemStopped) return;
       hud.classList.add("visible");
       const target = getBestHudFocus(preferredFocus);
       target.focus({ preventScroll: true });
@@ -1998,7 +1581,7 @@
               <div class="yp-badge">${ICONS.cinema}<span class="yp-num">#00</span></div>
               <div class="d-info">
                 <div class="d-title">YPlay Queue Empty</div>
-                <div class="d-meta">Select this device in Telegram & forward a movie</div>
+                <div class="d-meta">Forward a movie to your Telegram bot</div>
               </div>
             </div>
           </div>
@@ -2049,7 +1632,7 @@
     }
 
     function openDrawer() {
-      if (drawerOpen || isAccessBlocked()) return;
+      if (drawerOpen || isSystemStopped) return;
       drawerOpen = true;
       lastHudFocusEl = menuBtn;
       exitScrubMode(false);
@@ -2063,8 +1646,10 @@
         wasPlayingBeforeDrawer = false;
       }
 
+      /* Always refresh YPlay queue immediately when opening menu */
+      fetchYPlay(false);
       syncDrawerActiveStates();
-      selectDrawerTab(isLive ? "live" : "yplay", true);
+      selectDrawerTab(isLive ? "live" : "yplay", false);
       drawerBackdrop.classList.add("open");
       sideDrawer.classList.add("open");
 
@@ -2086,7 +1671,7 @@
       drawerBackdrop.classList.remove("open");
       sideDrawer.classList.remove("open");
 
-      if (resumeIfNeeded && !isLive && wasPlayingBeforeDrawer && !isAccessBlocked()) {
+      if (resumeIfNeeded && !isLive && wasPlayingBeforeDrawer && !isSystemStopped) {
         wasPlayingBeforeDrawer = false;
         safePlayVideo();
       }
@@ -2103,7 +1688,7 @@
     }
 
     function pickChannel(id) {
-      if (isAccessBlocked()) return;
+      if (isSystemStopped) return;
       const ch = CHANNELS.find((c) => c.id === id);
       if (!ch) return;
       wasPlayingBeforeDrawer = false;
@@ -2112,7 +1697,7 @@
     }
 
     function pickMovie(idx) {
-      if (isAccessBlocked()) return;
+      if (isSystemStopped) return;
       wasPlayingBeforeDrawer = false;
       closeDrawer(false);
       loadYPlay(idx, true);
@@ -2347,10 +1932,11 @@
       resetHudTimer();
     }
 
-    /* YouTube 2-Step Progress Bar */
+    /* GPU-Accelerated Progressive Progress Bar */
     function renderProgressVisual(curSec, durSec) {
-      const pct = durSec > 0 ? Math.max(0, Math.min(100, (curSec / durSec) * 100)) : 0;
-      progressFill.style.width = `${pct}%`;
+      const ratio = durSec > 0 ? Math.max(0, Math.min(1, curSec / durSec)) : 0;
+      const pct = ratio * 100;
+      progressFill.style.transform = `scaleX(${ratio})`;
       progressThumb.style.left = `${pct}%`;
       scrubBubble.style.left = `${pct}%`;
       scrubBubble.textContent = fmt(curSec);
@@ -2362,6 +1948,8 @@
       const dur = getEffectiveDuration();
       if (isLive || dur <= 0) return;
       isScrubbing = true;
+      scrubHoldCount = 0;
+      scrubLastDir = "";
       lastHudFocusEl = progressBar;
       scrubPreviewSec = getEffectiveTime();
       progressBar.classList.add("scrubbing");
@@ -2374,6 +1962,8 @@
       if (!isScrubbing) return;
       const target = scrubPreviewSec;
       isScrubbing = false;
+      scrubHoldCount = 0;
+      scrubLastDir = "";
       progressBar.classList.remove("scrubbing");
       if (commitSeek) {
         seekYPlayTo(target);
@@ -2383,10 +1973,27 @@
       resetHudTimer();
     }
 
-    function stepScrubPreview(deltaSec) {
+    function stepScrubAccelerated(dir, isRepeat) {
       const dur = getEffectiveDuration();
       if (dur <= 0) return;
-      scrubPreviewSec = Math.max(0, Math.min(dur - 1, scrubPreviewSec + deltaSec));
+      const now = Date.now();
+      if (isRepeat && scrubLastDir === dir && now - scrubLastAt < 350) {
+        scrubHoldCount += 1;
+      } else {
+        scrubHoldCount = 0;
+      }
+      scrubLastDir = dir;
+      scrubLastAt = now;
+
+      // Smooth velocity curve: 10s precision tap -> 20s -> 45s -> 90s -> 120s max stride
+      let step = 10;
+      if (scrubHoldCount > 24) step = 120;
+      else if (scrubHoldCount > 14) step = 90;
+      else if (scrubHoldCount > 7) step = 45;
+      else if (scrubHoldCount > 2) step = 20;
+
+      const delta = dir === "RIGHT" ? step : -step;
+      scrubPreviewSec = Math.max(0, Math.min(dur - 1, scrubPreviewSec + delta));
       renderProgressVisual(scrubPreviewSec, dur);
     }
 
@@ -2403,18 +2010,21 @@
       resetHudTimer();
     });
 
-    /* True Container Duration Resolution */
+    /* Seek Helpers (Guards against bogus <30s fragment duration on large movies) */
     function getEffectiveDuration() {
       const item = yplayItems[activeYPlayIdx];
       const itemDur = item && Number(item.duration) > 0 ? Number(item.duration) : 0;
-      const vidDur = isFinite(video.duration) && video.duration > 0
-        ? (transcodeMode ? baseOffset + video.duration : video.duration)
-        : 0;
+      const isLargeFile = item && Number(item.file_size) > 20 * 1024 * 1024;
 
-      if (itemDur > 0 && (vidDur <= 0 || Math.abs(vidDur - itemDur) > 25)) {
+      if (transcodeMode) {
+        if (itemDur > 0) return itemDur;
+        return isFinite(video.duration) && video.duration > 0 ? baseOffset + video.duration : 0;
+      }
+      const vidDur = isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
+      if (isLargeFile && vidDur > 0 && vidDur < 30 && itemDur >= 30) {
         return itemDur;
       }
-      return vidDur || itemDur || 0;
+      return Math.max(vidDur, itemDur);
     }
 
     function getEffectiveTime() {
@@ -2436,7 +2046,7 @@
     }
 
     function queueSeekDelta(sec) {
-      if (isLive || isAccessBlocked()) return;
+      if (isLive || isSystemStopped) return;
       const dur = getEffectiveDuration();
       if (dur <= 0) return;
       pendingSeekDelta += sec;
@@ -2451,7 +2061,7 @@
     }
 
     function seekYPlayTo(targetSec) {
-      if (isLive || isAccessBlocked()) return;
+      if (isLive || isSystemStopped) return;
       const dur = getEffectiveDuration();
       const clamped = Math.max(0, dur > 1 ? Math.min(dur - 1, targetSec) : targetSec);
       renderProgressVisual(clamped, dur);
@@ -2466,7 +2076,7 @@
 
     /* Touch Tap & Double-Tap on Fullscreen Video */
     stage.addEventListener("click", (e) => {
-      if (isAccessBlocked() || drawerOpen || playerError.classList.contains("show")) return;
+      if (isSystemStopped || drawerOpen || playerError.classList.contains("show")) return;
       if (hasOpenPop()) {
         const trigger = activePopupTrigger;
         closeAllPops();
@@ -2527,13 +2137,12 @@
     }
 
     async function loadSubtitleWindow(curSec) {
-      const item = yplayItems[activeYPlayIdx];
-      if (!item || vodSubIdx < 0 || subLoading) return;
+      if (vodSubIdx < 0 || activeYPlayIdx < 0 || subLoading) return;
       subLoading = true;
       const start = Math.max(0, Math.floor(curSec));
       const session = playSessionId;
       try {
-        const res = await fetch(withDevice(`${DIRECT_STREAM_URL}/api/yplay/sub/${encodeURIComponent(item.id)}/${vodSubIdx}.vtt?t=${start}&dur=180`));
+        const res = await fetch(`${DIRECT_STREAM_URL}/api/yplay/sub/${activeYPlayIdx}/${vodSubIdx}.vtt?t=${start}&dur=180`);
         const txt = await res.text();
         if (session === playSessionId) {
           subCues = parseVttCues(txt, start);
@@ -2590,17 +2199,11 @@
       try {
         const ctrl = new AbortController();
         const tid = setTimeout(() => ctrl.abort(), 4500);
-        const res = await fetch(withDevice(`${WORKER_URL}/health?t=${Date.now()}`), { cache: "no-store", signal: ctrl.signal });
+        const res = await fetch(`${WORKER_URL}/health?t=${Date.now()}`, { cache: "no-store", signal: ctrl.signal });
         clearTimeout(tid);
         const data = await res.json();
-        if (data && typeof data.stopped === "boolean") {
-          await applySystemStopped(data.stopped);
-        }
-        if (data && data.device_status && deviceStatus !== "checking") {
-          // Do not overwrite manual "unregistered" prompt unless server has an active status (pending/approved/rejected)
-          if (data.device_status !== "unregistered" || deviceStatus !== "unregistered") {
-            await applyDeviceStatus(data.device_status, data.device_name || "");
-          }
+        if (data && typeof data.stopped === "boolean" && data.stopped) {
+          await applySystemStopped(true);
         }
         if (data && typeof data.tunnel_url === "string" && data.tunnel_url.startsWith("https://")) {
           DIRECT_STREAM_URL = data.tunnel_url;
@@ -2621,7 +2224,7 @@
     }
 
     function startHlsUrl(url, ch, autoPlay, session) {
-      if (session !== playSessionId || isAccessBlocked()) return;
+      if (session !== playSessionId || isSystemStopped) return;
       if (hls) { hls.destroy(); hls = null; }
       if (window.Hls && window.Hls.isSupported()) {
         hls = new Hls({
@@ -2635,7 +2238,7 @@
         hls.loadSource(url);
         hls.attachMedia(video);
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          if (session !== playSessionId || activeChannelId !== ch.id || isAccessBlocked()) return;
+          if (session !== playSessionId || activeChannelId !== ch.id || isSystemStopped) return;
           hideError();
           liveAvailableHeights = Array.from(new Set((hls.levels || []).map((lv) => lv.height || 0).filter((h) => h > 0))).sort((a, b) => b - a);
           updateLiveQualUi();
@@ -2667,7 +2270,7 @@
     }
 
     async function handleLiveFallback(ch, autoPlay, session, reason = "Stream offline") {
-      if (session !== playSessionId || activeChannelId !== ch.id || !isLive || isZapping || isAccessBlocked()) return;
+      if (session !== playSessionId || activeChannelId !== ch.id || !isLive || isZapping || isSystemStopped) return;
 
       if (liveStage === 0 && video.canPlayType("application/vnd.apple.mpegurl")) {
         liveStage = 1;
@@ -2703,9 +2306,9 @@
       showError("Live TV Unavailable", `All channels failed to load (${reason}). Check internet and tap Retry.`);
     }
 
-    /* Fast Dish Channel Zapping (Up / Down) */
+    /* Fast Dish Channel Zapping */
     function zapChannel(step) {
-      if (isAccessBlocked()) return;
+      if (isSystemStopped) return;
       const curIdx = CHANNELS.findIndex((c) => c.id === activeChannelId);
       const baseIdx = curIdx >= 0 ? curIdx : 0;
       const nextIdx = (baseIdx + step + CHANNELS.length) % CHANNELS.length;
@@ -2733,16 +2336,15 @@
     }
 
     async function playChannel(ch, autoPlay = true, resetFail = true) {
-      if (isAccessBlocked()) return;
+      if (isSystemStopped) return;
       const session = ++playSessionId;
       isZapping = false;
       await cleanupPlayers();
-      if (session !== playSessionId || isAccessBlocked()) return;
+      if (session !== playSessionId || isSystemStopped) return;
 
       if (resetFail) liveFailCount = 0;
       activeChannelId = ch.id;
       activeYPlayIdx = -1;
-      activeYPlayId = "";
       dishNum.textContent = ch.num;
       dishName.textContent = ch.name;
       pendingResumeTime = 0;
@@ -2764,7 +2366,7 @@
       if (isDash && window.shaka && shaka.Player.isBrowserSupported()) {
         shakaPlayer = new shaka.Player();
         await shakaPlayer.attach(video);
-        if (session !== playSessionId || isAccessBlocked()) return;
+        if (session !== playSessionId || isSystemStopped) return;
 
         const cfg = {
           abr: { enabled: true },
@@ -2781,7 +2383,7 @@
         });
         try {
           await shakaPlayer.load(ch.url);
-          if (session !== playSessionId || activeChannelId !== ch.id || isAccessBlocked()) return;
+          if (session !== playSessionId || activeChannelId !== ch.id || isSystemStopped) return;
           hideError();
           liveAvailableHeights = Array.from(new Set(shakaPlayer.getVariantTracks().map((t) => t.height || 0).filter((h) => h > 0))).sort((a, b) => b - a);
           updateLiveQualUi();
@@ -2812,7 +2414,7 @@
     }
 
     function restartYPlayAt(targetSec) {
-      if (isAccessBlocked()) return;
+      if (isSystemStopped) return;
       const item = yplayItems[activeYPlayIdx];
       if (!item) return;
       playSessionId++;
@@ -2826,11 +2428,11 @@
       if (transcodeMode) {
         baseOffset = clamped;
         pendingResumeTime = 0;
-        video.src = withDevice(`${DIRECT_STREAM_URL}/api/yplay/play/${encodeURIComponent(item.id)}?t=${baseOffset}&q=${vodQuality}&a=${vodAudioIdx}`);
+        video.src = `${DIRECT_STREAM_URL}/api/yplay/play/${activeYPlayIdx}?t=${baseOffset}&q=${vodQuality}&a=${vodAudioIdx}`;
       } else {
         baseOffset = 0;
         pendingResumeTime = clamped > 2 ? clamped : 0;
-        video.src = withDevice(`${DIRECT_STREAM_URL}/api/yplay/stream/${encodeURIComponent(item.id)}`);
+        video.src = `${DIRECT_STREAM_URL}/api/yplay/stream/${activeYPlayIdx}`;
       }
       video.load();
       video.playbackRate = currentSpeed;
@@ -2839,16 +2441,14 @@
     }
 
     async function loadYPlay(idx, autoPlay = true, forceOffset = null) {
-      if (isAccessBlocked() || idx < 0 || idx >= yplayItems.length) return;
+      if (isSystemStopped || idx < 0 || idx >= yplayItems.length) return;
       const session = ++playSessionId;
       isZapping = false;
       await cleanupPlayers();
-      if (session !== playSessionId || isAccessBlocked()) return;
+      if (session !== playSessionId || isSystemStopped) return;
 
-      const item = yplayItems[idx];
       activeChannelId = "";
       activeYPlayIdx = idx;
-      activeYPlayId = item.id;
       errorRetries = 0;
       audioAutoChecked = false;
       vodQuality = "orig";
@@ -2858,6 +2458,7 @@
       exitScrubMode(false);
       lastHudFocusEl = centerPlayBtn;
 
+      const item = yplayItems[idx];
       populateYPlayTracks(item);
       configureHudMode(true);
 
@@ -2870,18 +2471,18 @@
       showHud(centerPlayBtn, 4200);
       showLoading(true);
 
-      const localSaved = Number(safeGetStorage(`yp_pos_${DEVICE_ID}_${item.id}`, "0"));
-      const serverSaved = Number(item.saved_pos || 0);
-      const saved = forceOffset !== null ? forceOffset : Math.max(localSaved, serverSaved);
+      const saved = forceOffset !== null
+        ? forceOffset
+        : Number(safeGetStorage(`yp_pos_${item.id}`, "0"));
 
       if (transcodeMode) {
         baseOffset = saved > 5 ? Math.floor(saved) : 0;
         pendingResumeTime = 0;
-        video.src = withDevice(`${DIRECT_STREAM_URL}/api/yplay/play/${encodeURIComponent(item.id)}?t=${baseOffset}&q=${vodQuality}&a=${vodAudioIdx}`);
+        video.src = `${DIRECT_STREAM_URL}/api/yplay/play/${idx}?t=${baseOffset}&q=${vodQuality}&a=${vodAudioIdx}`;
       } else {
         baseOffset = 0;
         pendingResumeTime = saved > 5 ? saved : 0;
-        video.src = withDevice(`${DIRECT_STREAM_URL}/api/yplay/stream/${encodeURIComponent(item.id)}`);
+        video.src = `${DIRECT_STREAM_URL}/api/yplay/stream/${idx}`;
       }
 
       const initDur = Number(item.duration || 0);
@@ -2893,12 +2494,12 @@
     }
 
     function playNextYPlay() {
-      if (!yplayItems.length || isAccessBlocked()) return;
+      if (!yplayItems.length || isSystemStopped) return;
       loadYPlay(activeYPlayIdx + 1 < yplayItems.length ? activeYPlayIdx + 1 : 0, true);
     }
 
     function toggleVodPlay() {
-      if (isLive || isAccessBlocked()) return;
+      if (isLive || isSystemStopped) return;
       lastHudFocusEl = centerPlayBtn;
       if (video.paused) {
         safePlayVideo();
@@ -2923,6 +2524,8 @@
       hideError();
       if (!isLive) {
         video.playbackRate = currentSpeed;
+        const dur = getEffectiveDuration();
+        renderProgressVisual(getEffectiveTime(), dur);
         if (!transcodeMode && pendingResumeTime > 0 && isFinite(video.duration) && pendingResumeTime < video.duration - 2) {
           video.currentTime = pendingResumeTime;
           pendingResumeTime = 0;
@@ -2937,7 +2540,7 @@
     });
 
     video.addEventListener("playing", () => {
-      if (isAccessBlocked()) {
+      if (isSystemStopped) {
         video.pause();
         return;
       }
@@ -2947,7 +2550,7 @@
 
       clearTimeout(unmuteTimer);
       unmuteTimer = setTimeout(() => {
-        if (!isAccessBlocked() && !userMuted && !autoMutedForBoot) {
+        if (!isSystemStopped && !userMuted && !autoMutedForBoot) {
           video.muted = false;
         }
         syncIcons();
@@ -2959,7 +2562,7 @@
     });
 
     video.addEventListener("waiting", () => {
-      if (!video.paused && !isZapping && !isAccessBlocked()) {
+      if (!video.paused && !isZapping && !isSystemStopped) {
         showLoading(false);
       }
     });
@@ -2967,17 +2570,14 @@
     video.addEventListener("pause", () => {
       hideLoading();
       syncIcons();
-      if (!isLive && !drawerOpen && !shuttingDown && !isAccessBlocked() && video.getAttribute("src")) {
-        const item = yplayItems[activeYPlayIdx];
-        const cur = Math.floor(getEffectiveTime());
-        if (item && cur > 2) syncServerProgress(item.id, cur, true);
+      if (!isLive && !drawerOpen && !shuttingDown && !isSystemStopped && video.getAttribute("src")) {
         showHud(lastHudFocusEl, 6000);
         clearTimeout(hudTimer);
       }
     });
 
     video.addEventListener("error", async () => {
-      if (shuttingDown || isZapping || isAccessBlocked() || !video.getAttribute("src")) return;
+      if (shuttingDown || isZapping || isSystemStopped || !video.getAttribute("src")) return;
       if (isLive) {
         const ch = CHANNELS.find((c) => c.id === activeChannelId);
         if (ch) handleLiveFallback(ch, true, playSessionId, "Stream failed");
@@ -2993,7 +2593,7 @@
     });
 
     video.addEventListener("timeupdate", () => {
-      if (isLive || isAccessBlocked()) return;
+      if (isLive || isSystemStopped) return;
       const cur = getEffectiveTime();
       const dur = getEffectiveDuration();
 
@@ -3014,20 +2614,15 @@
       const item = yplayItems[activeYPlayIdx];
       if (item && cur > 2 && now - lastSavedPosTime > 2500) {
         lastSavedPosTime = now;
-        const floored = Math.floor(cur);
-        safeSetStorage(`yp_pos_${DEVICE_ID}_${item.id}`, String(floored));
-        syncServerProgress(item.id, floored, false);
+        safeSetStorage(`yp_pos_${item.id}`, String(Math.floor(cur)));
       }
     });
 
     video.addEventListener("ended", () => {
       hideLoading();
       const item = yplayItems[activeYPlayIdx];
-      if (item) {
-        safeRemoveStorage(`yp_pos_${DEVICE_ID}_${item.id}`);
-        syncServerProgress(item.id, 0, true);
-      }
-      if (!isLive && !isAccessBlocked() && activeYPlayIdx + 1 < yplayItems.length) {
+      if (item) safeRemoveStorage(`yp_pos_${item.id}`);
+      if (!isLive && !isSystemStopped && activeYPlayIdx + 1 < yplayItems.length) {
         loadYPlay(activeYPlayIdx + 1, true);
       }
     });
@@ -3089,26 +2684,12 @@
         return;
       }
 
-      /* 2. Device Security Gate Remote Focus */
-      if (deviceStatus !== "approved") {
-        if (deviceStatus === "unregistered" && !gateActions.classList.contains("hidden") && (dir || ok)) {
-          e.preventDefault();
-          if (active !== gateSendBtn) {
-            gateSendBtn.focus({ preventScroll: true });
-          } else if (ok) {
-            gateSendBtn.click();
-          }
-        }
-        return;
-      }
-
-      /* Block all actions during System Shutdown */
       if (isSystemStopped) {
         e.preventDefault();
         return;
       }
 
-      /* 3. Hardware Channel / Media Keys */
+      /* 2. Hardware Channel / Media Keys */
       if ((k === "ChannelUp" || k === "PageUp") && isLive && !drawerOpen) {
         e.preventDefault();
         zapChannel(1);
@@ -3128,7 +2709,7 @@
       if (k === "MediaFastForward" && !isLive) { e.preventDefault(); queueSeekDelta(10); return; }
       if (k === "MediaRewind" && !isLive) { e.preventDefault(); queueSeekDelta(-10); return; }
 
-      /* 4. Error Overlay */
+      /* 3. Error Overlay */
       if (playerError.classList.contains("show")) {
         const retryBtn = document.getElementById("errRetryBtn");
         const eMenuBtn = document.getElementById("errMenuBtn");
@@ -3143,7 +2724,7 @@
         return;
       }
 
-      /* 5. Side Drawer Navigation */
+      /* 4. Side Drawer Navigation */
       if (drawerOpen) {
         const pane = drawerTab === "live" ? liveListPane : yplayListPane;
         const items = Array.from(pane.querySelectorAll(".d-item"));
@@ -3209,7 +2790,7 @@
         return;
       }
 
-      /* 6. Open Popup Submenu */
+      /* 5. Open Popup Submenu */
       if (hasOpenPop()) {
         const openMenu = document.querySelector(".pop-menu.open");
         const opts = Array.from(openMenu.querySelectorAll(".pop-opt"));
@@ -3227,7 +2808,7 @@
         return;
       }
 
-      /* 7. LIVE TV REMOTE RULES */
+      /* 6. LIVE TV REMOTE RULES */
       if (isLive) {
         if (dir === "UP") {
           e.preventDefault();
@@ -3268,7 +2849,7 @@
         return;
       }
 
-      /* 8. YPLAY PURE FULLSCREEN (Strict Double-Press Required) */
+      /* 7. YPLAY PURE FULLSCREEN (Strict Double-Press Required) */
       if (!isHudVisible()) {
         if (dir === "LEFT" || dir === "RIGHT") {
           e.preventDefault();
@@ -3291,7 +2872,7 @@
         return;
       }
 
-      /* 9. YPLAY HUD VISIBLE */
+      /* 8. YPLAY HUD VISIBLE */
       resetHudTimer(4200);
       const bottomBtns = getVisibleRowButtons();
       const bIdx = bottomBtns.indexOf(active);
@@ -3308,8 +2889,7 @@
           e.preventDefault();
           e.stopPropagation();
           if (!isScrubbing) enterScrubMode();
-          const step = e.repeat ? 30 : 10;
-          stepScrubPreview(dir === "RIGHT" ? step : -step);
+          stepScrubAccelerated(dir, e.repeat);
           return;
         }
         if (dir === "UP") {
@@ -3381,7 +2961,7 @@
       }
     }, true);
 
-    /* Formatting & Per-Device Library Sync */
+    /* Formatting & Live Library Sync */
     function fmt(t) {
       if (!isFinite(t) || t < 0) return "00:00";
       const total = Math.floor(t);
@@ -3399,57 +2979,49 @@
     }
 
     function fmtDurShort(sec) {
-      if (!sec || sec <= 0) return "";
+      if (!sec || sec < 30) return "";
       const h = Math.floor(sec / 3600);
       const m = Math.floor((sec % 3600) / 60);
       return h > 0 ? `${h}h ${m}m` : `${Math.max(1, m)}m`;
     }
 
-    async function fetchYPlay(refreshUi = true) {
-      if (document.visibilityState === "hidden" || deviceStatus !== "approved") return;
+    async function fetchYPlay(preserveDrawerFocus = true) {
+      if (document.visibilityState === "hidden") return;
       try {
         const ctrl = new AbortController();
         const tid = setTimeout(() => ctrl.abort(), 8000);
-        const res = await fetch(withDevice(`${WORKER_URL}/api/yplay/library?t=${Date.now()}`), { cache: "no-store", signal: ctrl.signal });
+        const res = await fetch(`${WORKER_URL}/api/yplay/library?t=${Date.now()}`, { cache: "no-store", signal: ctrl.signal });
         clearTimeout(tid);
-        if (res.status === 403) {
-          await applyDeviceStatus("rejected");
-          return;
-        }
         const data = await res.json();
         if (data && typeof data.stopped === "boolean") {
           await applySystemStopped(data.stopped);
         }
         const nextItems = Array.isArray(data.items) ? data.items : [];
         const sig = JSON.stringify(nextItems.map((x) => [x.id, x.quality, x.compat_audio, x.duration, (x.audio_tracks || []).length, (x.subtitles || []).length]));
-
         if (sig !== yplaySig) {
+          const prevFocusedYpIdx = (drawerOpen && drawerTab === "yplay" && document.activeElement?.dataset?.yp !== undefined)
+            ? Number(document.activeElement.dataset.yp)
+            : -1;
+
           yplaySig = sig;
           yplayItems = nextItems;
-
-          if (!isLive && activeYPlayId) {
-            const newIdx = yplayItems.findIndex((m) => m.id === activeYPlayId);
-            if (newIdx >= 0) {
-              activeYPlayIdx = newIdx;
-            } else {
-              activeYPlayIdx = -1;
-              activeYPlayId = "";
-              if (!isSystemStopped) {
-                const ch = CHANNELS.find((c) => c.id === activeChannelId) || CHANNELS[0];
-                playChannel(ch, true, true);
-              }
-            }
+          if (!yplayItems.length && !isLive) {
+            activeYPlayIdx = -1;
           }
-
           renderYPlayListPane();
+
+          /* Restore focus seamlessly if drawer was open on YPlay when new movie arrived */
+          if (preserveDrawerFocus && prevFocusedYpIdx >= 0 && yplayItems.length > 0) {
+            const targetEl = yplayListPane.querySelector(`.d-item[data-yp="${Math.min(prevFocusedYpIdx, yplayItems.length - 1)}"]`);
+            if (targetEl) targetEl.focus({ preventScroll: true });
+          }
 
           if (!isLive) {
             nextBtn.classList.toggle("hidden", yplayItems.length <= 1);
-            if (activeYPlayIdx >= 0 && yplayItems[activeYPlayIdx]) {
-              const curItem = yplayItems[activeYPlayIdx];
-              populateYPlayTracks(curItem);
-              renderProgressVisual(getEffectiveTime(), getEffectiveDuration());
-            }
+          }
+          if (!isLive && activeYPlayIdx >= 0 && yplayItems[activeYPlayIdx]) {
+            populateYPlayTracks(yplayItems[activeYPlayIdx]);
+            renderProgressVisual(getEffectiveTime(), getEffectiveDuration());
           }
         }
       } catch (_) {}
@@ -3460,16 +3032,11 @@
       try {
         const ctrl = new AbortController();
         const tid = setTimeout(() => ctrl.abort(), 3500);
-        const res = await fetch(withDevice(`${WORKER_URL}/health?t=${Date.now()}`), { cache: "no-store", signal: ctrl.signal });
+        const res = await fetch(`${WORKER_URL}/health?t=${Date.now()}`, { cache: "no-store", signal: ctrl.signal });
         clearTimeout(tid);
         const data = await res.json();
         if (data && typeof data.stopped === "boolean") {
           await applySystemStopped(data.stopped);
-        }
-        if (data && data.device_status) {
-          if (data.device_status !== "unregistered" || deviceStatus !== "unregistered") {
-            await applyDeviceStatus(data.device_status, data.device_name || "");
-          }
         }
         if (data && typeof data.tunnel_url === "string" && data.tunnel_url.startsWith("https://")) {
           DIRECT_STREAM_URL = data.tunnel_url;
@@ -3484,12 +3051,8 @@
     window.addEventListener("pagehide", () => {
       shuttingDown = true;
       if (!isLive && yplayItems[activeYPlayIdx]) {
-        const item = yplayItems[activeYPlayIdx];
-        const cur = Math.floor(getEffectiveTime());
-        if (cur > 2) {
-          safeSetStorage(`yp_pos_${DEVICE_ID}_${item.id}`, String(cur));
-          syncServerProgress(item.id, cur, true);
-        }
+        const cur = getEffectiveTime();
+        if (cur > 2) safeSetStorage(`yp_pos_${yplayItems[activeYPlayIdx].id}`, String(Math.floor(cur)));
       }
       video.pause();
       video.removeAttribute("src");
@@ -3499,10 +3062,9 @@
     document.addEventListener("visibilitychange", async () => {
       if (document.visibilityState === "visible") {
         shuttingDown = false;
-        await checkInitialDeviceStatus();
         await resolveDirectTunnel();
         connectSystemEvents();
-        if (isAccessBlocked()) return;
+        if (isSystemStopped) return;
         if (!isLive && activeYPlayIdx >= 0 && !video.getAttribute("src")) {
           loadYPlay(activeYPlayIdx, false);
         } else if (isLive && video.paused && !drawerOpen) {
@@ -3511,16 +3073,22 @@
       }
     });
 
-    /* Init Device Authorization & Fullscreen TV Experience */
+    /* Init Fullscreen TV Experience */
     syncIcons();
     buildLiveListOnce();
     renderYPlayListPane();
-    checkInitialDeviceStatus().then(async () => {
-      await resolveDirectTunnel();
+    resolveDirectTunnel().then(() => {
       connectSystemEvents();
+      if (!isSystemStopped) {
+        playChannel(CHANNELS[0], true, true);
+        fetchYPlay(false);
+      }
     });
-    setInterval(pollSystemStatus, 2500);
-    setInterval(() => fetchYPlay(true), 12000);
+    setInterval(pollSystemStatus, 3500);
+    setInterval(() => {
+      if (drawerOpen && drawerTab === "yplay") fetchYPlay(true);
+    }, 4500);
+    setInterval(() => fetchYPlay(true), 15000);
   </script>
 </body>
 </html>
