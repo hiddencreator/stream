@@ -110,8 +110,8 @@ jobs:
                   applicationId "com.ystream.app"
                   minSdk 23
                   targetSdk 34
-                  versionCode 7
-                  versionName "7.0-TV"
+                  versionCode 8
+                  versionName "8.0-TV"
               }
               signingConfigs {
                   ystreamSign {
