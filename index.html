@@ -74,7 +74,7 @@
       opacity: 1;
     }
 
-    /* Full-Black Device Security & Approval Gate */
+    /* Full-Black Device Security & Manual Request Gate */
     .gate-screen {
       position: fixed;
       inset: 0;
@@ -95,7 +95,7 @@
     }
 
     .gate-card {
-      max-width: 440px;
+      max-width: 430px;
       width: 100%;
       background: linear-gradient(180deg, #151924 0%, #0b0e15 100%);
       border: 1px solid rgba(255, 255, 255, 0.15);
@@ -118,7 +118,7 @@
       justify-content: center;
     }
 
-    .gate-icon.revoked {
+    .gate-icon.rejected {
       background: rgba(229, 9, 20, 0.14);
       border-color: rgba(229, 9, 20, 0.48);
       color: #ff3b46;
@@ -138,7 +138,7 @@
       margin-bottom: 10px;
     }
 
-    .gate-badge.revoked {
+    .gate-badge.rejected {
       color: #fca5a5;
       background: rgba(229, 9, 20, 0.16);
       border-color: rgba(229, 9, 20, 0.34);
@@ -178,20 +178,43 @@
       font-size: 0.8rem;
     }
 
-    .gate-actions {
+    .gate-loader {
       margin-top: 20px;
       display: flex;
+      flex-direction: column;
+      align-items: center;
       justify-content: center;
       gap: 10px;
     }
 
+    .gate-spinner {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      border: 2.5px solid rgba(255, 255, 255, 0.18);
+      border-top-color: #60a5fa;
+      animation: spinRing 0.75s linear infinite;
+    }
+
+    .gate-wait-txt {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #93c5fd;
+    }
+
+    .gate-actions {
+      margin-top: 20px;
+      display: flex;
+      justify-content: center;
+    }
+
     .gate-btn {
-      background: rgba(255, 255, 255, 0.14);
+      background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
       color: #ffffff;
-      border: 1.5px solid rgba(255, 255, 255, 0.22);
-      padding: 10px 22px;
+      border: 1.5px solid rgba(255, 255, 255, 0.28);
+      padding: 11px 26px;
       border-radius: 12px;
-      font-size: 0.88rem;
+      font-size: 0.9rem;
       font-weight: 800;
       cursor: pointer;
     }
@@ -199,7 +222,7 @@
     .gate-btn:focus,
     .gate-btn:focus-visible,
     .gate-btn:hover {
-      background: rgba(255, 255, 255, 0.26) !important;
+      background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%) !important;
       border-color: #ffffff !important;
       transform: scale(1.04);
     }
@@ -1137,7 +1160,7 @@
     </div>
   </div>
 
-  <!-- Device Security & Approval Gate Screen -->
+  <!-- Device Security & Manual Request Gate Screen -->
   <div id="gateScreen" class="gate-screen show" role="dialog" aria-modal="true" aria-labelledby="gateTitle">
     <div class="gate-card">
       <div id="gateIcon" class="gate-icon">
@@ -1147,14 +1170,18 @@
         </svg>
       </div>
       <div id="gateBadge" class="gate-badge">Device Security</div>
-      <div id="gateTitle" class="gate-title">Verifying Device...</div>
-      <div id="gateDesc" class="gate-desc">Checking device authorization with server.</div>
+      <div id="gateTitle" class="gate-title">Checking Device...</div>
+      <div id="gateDesc" class="gate-desc">Connecting to authorization server.</div>
       <div class="gate-meta">
-        <div>Device: <code id="gateDevName">Smart TV</code></div>
+        <div>Device: <code id="gateDevName">Smart Device</code></div>
         <div>Device ID: <code id="gateDevId">...</code></div>
       </div>
+      <div id="gateLoader" class="gate-loader">
+        <div class="gate-spinner"></div>
+        <div id="gateWaitTxt" class="gate-wait-txt">Checking authorization...</div>
+      </div>
       <div id="gateActions" class="gate-actions hidden">
-        <button id="gateActionBtn" class="gate-btn" onclick="onGateAction()">Resend Request</button>
+        <button id="gateSendBtn" class="gate-btn" onclick="sendManualAccessRequest()">Send Request</button>
       </div>
     </div>
   </div>
@@ -1313,8 +1340,10 @@
     const gateDesc = document.getElementById("gateDesc");
     const gateDevName = document.getElementById("gateDevName");
     const gateDevId = document.getElementById("gateDevId");
+    const gateLoader = document.getElementById("gateLoader");
+    const gateWaitTxt = document.getElementById("gateWaitTxt");
     const gateActions = document.getElementById("gateActions");
-    const gateActionBtn = document.getElementById("gateActionBtn");
+    const gateSendBtn = document.getElementById("gateSendBtn");
     const shutdownScreen = document.getElementById("shutdownScreen");
     const centerLoader = document.getElementById("centerLoader");
     const exitToast = document.getElementById("exitToast");
@@ -1385,9 +1414,9 @@
     let userMuted = false;
     let autoMutedForBoot = false;
 
-    /* Device Approval & System Shutdown State */
-    let deviceStatus = "checking"; // checking | pending | approved | revoked
-    let initialBootStarted = false;
+    /* Device Approval & System Shutdown State
+       deviceStatus: checking | unregistered | pending | approved | rejected */
+    let deviceStatus = "checking";
     let isSystemStopped = false;
     let shutdownSnapshot = null;
     let eventSource = null;
@@ -1397,7 +1426,8 @@
     }
 
     async function applyDeviceStatus(nextStatus, customName = "") {
-      const normalized = ["approved", "pending", "revoked"].includes(nextStatus) ? nextStatus : "pending";
+      const valid = ["checking", "unregistered", "pending", "approved", "rejected"];
+      const normalized = valid.includes(nextStatus) ? nextStatus : "unregistered";
       if (customName) gateDevName.textContent = customName;
 
       if (normalized === "approved") {
@@ -1405,7 +1435,6 @@
         deviceStatus = "approved";
         gateScreen.classList.remove("show");
         if (wasUnapproved && !isSystemStopped) {
-          initialBootStarted = true;
           await fetchYPlay(false);
           if (activeYPlayIdx >= 0 && activeYPlayIdx < yplayItems.length && !isLive) {
             loadYPlay(activeYPlayIdx, true);
@@ -1417,7 +1446,7 @@
         return;
       }
 
-      /* Block all access immediately on pending or revoked */
+      /* Stop playback immediately if device was previously approved and got rejected/removed */
       const prevStatus = deviceStatus;
       deviceStatus = normalized;
       if (prevStatus === "approved") {
@@ -1430,41 +1459,68 @@
         await cleanupPlayers();
       }
 
-      if (normalized === "revoked") {
-        gateIcon.classList.add("revoked");
-        gateBadge.classList.add("revoked");
-        gateBadge.textContent = "Access Revoked";
-        gateTitle.textContent = "Device Access Removed";
-        gateDesc.textContent = "This device was removed by the owner. Select Request Re-Access below to ask for approval again.";
-        gateActions.classList.remove("hidden");
-        gateActionBtn.textContent = "Request Re-Access";
-      } else {
-        gateIcon.classList.remove("revoked");
-        gateBadge.classList.remove("revoked");
+      if (normalized === "checking") {
+        gateIcon.classList.remove("rejected");
+        gateBadge.classList.remove("rejected");
         gateBadge.textContent = "Device Security";
-        gateTitle.textContent = "Device Approval Required";
-        gateDesc.textContent = "An approval request with Approve / Cancel options has been sent to Telegram. Waiting for owner authorization...";
+        gateTitle.textContent = "Checking Device...";
+        gateDesc.textContent = "Verifying authorization status with server.";
+        gateLoader.classList.remove("hidden");
+        gateWaitTxt.textContent = "Checking authorization...";
+        gateActions.classList.add("hidden");
+      } else if (normalized === "unregistered") {
+        gateIcon.classList.remove("rejected");
+        gateBadge.classList.remove("rejected");
+        gateBadge.textContent = "Device Security";
+        gateTitle.textContent = "Device Access Required";
+        gateDesc.textContent = "This device is not authorized yet. Click Send Request below to ask the owner for approval.";
+        gateLoader.classList.add("hidden");
         gateActions.classList.remove("hidden");
-        gateActionBtn.textContent = "Resend Approval Request";
+        gateSendBtn.disabled = false;
+        gateSendBtn.textContent = "Send Request";
+      } else if (normalized === "pending") {
+        gateIcon.classList.remove("rejected");
+        gateBadge.classList.remove("rejected");
+        gateBadge.textContent = "Request Sent";
+        gateTitle.textContent = "Waiting for Approval...";
+        gateDesc.textContent = "Your request has been sent to the owner. Access will start automatically once approved.";
+        gateLoader.classList.remove("hidden");
+        gateWaitTxt.textContent = "Waiting for approval...";
+        gateActions.classList.add("hidden");
+      } else if (normalized === "rejected") {
+        /* Strictly hide Send Request button so rejected user cannot flood bot */
+        gateIcon.classList.add("rejected");
+        gateBadge.classList.add("rejected");
+        gateBadge.textContent = "Access Denied";
+        gateTitle.textContent = "You are rejected";
+        gateDesc.textContent = "Your request was rejected by the owner. Please close the app/website and request again after some time.";
+        gateLoader.classList.add("hidden");
+        gateActions.classList.add("hidden");
       }
 
       gateScreen.classList.add("show");
-      requestAnimationFrame(() => gateActionBtn.focus({ preventScroll: true }));
+      if (normalized === "unregistered") {
+        requestAnimationFrame(() => gateSendBtn.focus({ preventScroll: true }));
+      }
     }
 
-    async function registerDeviceWithServer(explicitNotify = false) {
+    async function sendManualAccessRequest() {
+      if (deviceStatus !== "unregistered") return;
+      triggerBounce(gateSendBtn);
+      await applyDeviceStatus("pending");
+
       try {
+        const params = new URLSearchParams({
+          device_id: DEVICE_ID,
+          name: DEVICE_META.name,
+          platform: DEVICE_META.platform,
+          t: String(Date.now())
+        });
         const ctrl = new AbortController();
-        const tid = setTimeout(() => ctrl.abort(), 5000);
-        const res = await fetch(`${WORKER_URL}/api/device/register`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            device_id: DEVICE_ID,
-            name: DEVICE_META.name,
-            platform: DEVICE_META.platform,
-            notify: explicitNotify
-          }),
+        const tid = setTimeout(() => ctrl.abort(), 7000);
+        const res = await fetch(`${WORKER_URL}/api/device/request?${params.toString()}`, {
+          method: "GET",
+          cache: "no-store",
           signal: ctrl.signal
         });
         clearTimeout(tid);
@@ -1476,36 +1532,31 @@
           await applyDeviceStatus(data.status, data.name || "");
         }
       } catch (_) {
-        if (deviceStatus === "checking") {
-          await applyDeviceStatus("pending");
-        }
+        gateWaitTxt.textContent = "Waiting for approval...";
       }
     }
 
-    async function onGateAction() {
-      triggerBounce(gateActionBtn);
-      gateActionBtn.disabled = true;
-      const endpoint = deviceStatus === "revoked" ? "/api/device/reaccess" : "/api/device/register";
+    async function checkInitialDeviceStatus() {
+      await applyDeviceStatus("checking");
       try {
-        const res = await fetch(`${WORKER_URL}${endpoint}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            device_id: DEVICE_ID,
-            name: DEVICE_META.name,
-            platform: DEVICE_META.platform,
-            notify: true
-          })
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 5000);
+        const res = await fetch(withDevice(`${WORKER_URL}/health?t=${Date.now()}`), {
+          cache: "no-store",
+          signal: ctrl.signal
         });
+        clearTimeout(tid);
         const data = await res.json();
-        if (data && data.status) {
-          await applyDeviceStatus(data.status, data.name || "");
+        if (data && typeof data.stopped === "boolean") {
+          await applySystemStopped(data.stopped);
         }
-        gateDesc.textContent = "Request sent to Telegram! Waiting for owner approval...";
+        if (data && typeof data.tunnel_url === "string" && data.tunnel_url.startsWith("https://")) {
+          DIRECT_STREAM_URL = data.tunnel_url;
+        }
+        const st = data && data.device_status ? data.device_status : "unregistered";
+        await applyDeviceStatus(st, data?.device_name || "");
       } catch (_) {
-        gateDesc.textContent = "Network unreachable. Check internet and try again.";
-      } finally {
-        setTimeout(() => { gateActionBtn.disabled = false; }, 1200);
+        await applyDeviceStatus("unregistered");
       }
     }
 
@@ -1575,7 +1626,7 @@
               await applySystemStopped(msg.stopped);
             }
             if (msg.type === "init" || msg.type === "device_status") {
-              if (msg.status && msg.status !== "unregistered") {
+              if (msg.status) {
                 await applyDeviceStatus(msg.status, msg.device_name || "");
               }
             }
@@ -1591,12 +1642,12 @@
             if (document.visibilityState === "visible") {
               resolveDirectTunnel().then(connectSystemEvents);
             }
-          }, 4500);
+          }, 4000);
         };
       } catch (_) {}
     }
 
-    /* Safe Storage & Server Per-Device Progress Sync */
+    /* Safe Storage & Server Per-Device Progress Sync (Preflight-Free text/plain) */
     function safeGetStorage(k, fallback = "") {
       try { return localStorage.getItem(k) ?? fallback; } catch (_) { return fallback; }
     }
@@ -1623,7 +1674,7 @@
       lastServerProgSync = now;
       fetch(`${WORKER_URL}/api/yplay/progress`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "text/plain;charset=UTF-8" },
         body: JSON.stringify({
           device_id: DEVICE_ID,
           item_id: itemId,
@@ -2352,7 +2403,7 @@
       resetHudTimer();
     });
 
-    /* True Container Duration Resolution (Fixes 9-second truncated probe bug) */
+    /* True Container Duration Resolution */
     function getEffectiveDuration() {
       const item = yplayItems[activeYPlayIdx];
       const itemDur = item && Number(item.duration) > 0 ? Number(item.duration) : 0;
@@ -2545,8 +2596,11 @@
         if (data && typeof data.stopped === "boolean") {
           await applySystemStopped(data.stopped);
         }
-        if (data && data.device_status && data.device_status !== "unregistered") {
-          await applyDeviceStatus(data.device_status, data.device_name || "");
+        if (data && data.device_status && deviceStatus !== "checking") {
+          // Do not overwrite manual "unregistered" prompt unless server has an active status (pending/approved/rejected)
+          if (data.device_status !== "unregistered" || deviceStatus !== "unregistered") {
+            await applyDeviceStatus(data.device_status, data.device_name || "");
+          }
         }
         if (data && typeof data.tunnel_url === "string" && data.tunnel_url.startsWith("https://")) {
           DIRECT_STREAM_URL = data.tunnel_url;
@@ -3035,14 +3089,14 @@
         return;
       }
 
-      /* 2. Device Approval / Revocation Gate Remote Focus */
+      /* 2. Device Security Gate Remote Focus */
       if (deviceStatus !== "approved") {
-        if (!gateActions.classList.contains("hidden") && (dir || ok)) {
+        if (deviceStatus === "unregistered" && !gateActions.classList.contains("hidden") && (dir || ok)) {
           e.preventDefault();
-          if (active !== gateActionBtn) {
-            gateActionBtn.focus({ preventScroll: true });
+          if (active !== gateSendBtn) {
+            gateSendBtn.focus({ preventScroll: true });
           } else if (ok) {
-            gateActionBtn.click();
+            gateSendBtn.click();
           }
         }
         return;
@@ -3359,7 +3413,7 @@
         const res = await fetch(withDevice(`${WORKER_URL}/api/yplay/library?t=${Date.now()}`), { cache: "no-store", signal: ctrl.signal });
         clearTimeout(tid);
         if (res.status === 403) {
-          await applyDeviceStatus("revoked");
+          await applyDeviceStatus("rejected");
           return;
         }
         const data = await res.json();
@@ -3373,13 +3427,11 @@
           yplaySig = sig;
           yplayItems = nextItems;
 
-          /* Re-anchor activeYPlayIdx by item ID if list updated */
           if (!isLive && activeYPlayId) {
             const newIdx = yplayItems.findIndex((m) => m.id === activeYPlayId);
             if (newIdx >= 0) {
               activeYPlayIdx = newIdx;
             } else {
-              /* Active movie was removed from this device's queue */
               activeYPlayIdx = -1;
               activeYPlayId = "";
               if (!isSystemStopped) {
@@ -3414,8 +3466,10 @@
         if (data && typeof data.stopped === "boolean") {
           await applySystemStopped(data.stopped);
         }
-        if (data && data.device_status && data.device_status !== "unregistered") {
-          await applyDeviceStatus(data.device_status, data.device_name || "");
+        if (data && data.device_status) {
+          if (data.device_status !== "unregistered" || deviceStatus !== "unregistered") {
+            await applyDeviceStatus(data.device_status, data.device_name || "");
+          }
         }
         if (data && typeof data.tunnel_url === "string" && data.tunnel_url.startsWith("https://")) {
           DIRECT_STREAM_URL = data.tunnel_url;
@@ -3445,7 +3499,7 @@
     document.addEventListener("visibilitychange", async () => {
       if (document.visibilityState === "visible") {
         shuttingDown = false;
-        await registerDeviceWithServer(false);
+        await checkInitialDeviceStatus();
         await resolveDirectTunnel();
         connectSystemEvents();
         if (isAccessBlocked()) return;
@@ -3461,11 +3515,11 @@
     syncIcons();
     buildLiveListOnce();
     renderYPlayListPane();
-    registerDeviceWithServer(true).then(async () => {
+    checkInitialDeviceStatus().then(async () => {
       await resolveDirectTunnel();
       connectSystemEvents();
     });
-    setInterval(pollSystemStatus, 3500);
+    setInterval(pollSystemStatus, 2500);
     setInterval(() => fetchYPlay(true), 12000);
   </script>
 </body>
