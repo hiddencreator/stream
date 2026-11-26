@@ -25,49 +25,17 @@ jobs:
           printf "\n24333f8a63b6825ea9c5514f83c2829b004d1fee\n" > "$SDK_DIR/licenses/android-sdk-license"
           mkdir -p app/src/main/java/com/ystream/app app/src/main/res/drawable
 
-          python3 - <<'PY'
-          import hashlib, datetime, subprocess, sys
-          try:
-              import cryptography
-          except ImportError:
-              subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "cryptography"])
-
-          from cryptography import x509
-          from cryptography.x509.oid import NameOID
-          from cryptography.hazmat.primitives import hashes, serialization
-          from cryptography.hazmat.primitives.asymmetric import ec
-
-          order = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
-          seed = hashlib.sha256(b"YStreamTV-Persistent-Release-Key-2026-v1").digest()
-          priv_val = (int.from_bytes(seed, "big") % (order - 1)) + 1
-          private_key = ec.derive_private_key(priv_val, ec.SECP256R1())
-
-          subject = issuer = x509.Name([
-              x509.NameAttribute(NameOID.COMMON_NAME, "YStream TV"),
-              x509.NameAttribute(NameOID.ORGANIZATION_NAME, "YStream"),
-          ])
-
-          cert = (
-              x509.CertificateBuilder()
-              .subject_name(subject)
-              .issuer_name(issuer)
-              .public_key(private_key.public_key())
-              .serial_number(0x5953545245414D01)
-              .not_valid_before(datetime.datetime(2025, 1, 1, tzinfo=datetime.timezone.utc))
-              .not_valid_after(datetime.datetime(2055, 1, 1, tzinfo=datetime.timezone.utc))
-              .sign(private_key, hashes.SHA256())
-          )
-
-          p12 = serialization.pkcs12.serialize_key_and_certificates(
-              name=b"ystream",
-              key=private_key,
-              cert=cert,
-              cas=None,
-              encryption_algorithm=serialization.BestAvailableEncryption(b"ystream2026"),
-          )
-          with open("app/ystream-signing.p12", "wb") as f:
-              f.write(p12)
-          PY
+          # Generate deterministic permanent signing keystore so updates never fail with "App Not Installed"
+          keytool -genkeypair -v \
+            -keystore app/ystream-permanent.jks \
+            -storepass ystream2026key \
+            -keypass ystream2026key \
+            -alias ystreamtv \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -startdate "2026/01/01 00:00:00" \
+            -dname "CN=YStreamTV, OU=Media, O=YStream, L=Chennai, S=TN, C=IN"
 
           cat <<'EOF' > settings.gradle
           pluginManagement {
@@ -110,25 +78,24 @@ jobs:
                   applicationId "com.ystream.app"
                   minSdk 23
                   targetSdk 34
-                  versionCode 8
-                  versionName "8.0-TV"
+                  versionCode 7
+                  versionName "7.0-TV"
               }
               signingConfigs {
-                  ystreamSign {
-                      storeFile file("ystream-signing.p12")
-                      storePassword "ystream2026"
-                      keyAlias "ystream"
-                      keyPassword "ystream2026"
-                      storeType "PKCS12"
+                  permanent {
+                      storeFile file("ystream-permanent.jks")
+                      storePassword "ystream2026key"
+                      keyAlias "ystreamtv"
+                      keyPassword "ystream2026key"
                   }
               }
               buildTypes {
                   debug {
-                      signingConfig signingConfigs.ystreamSign
+                      signingConfig signingConfigs.permanent
                   }
                   release {
-                      signingConfig signingConfigs.ystreamSign
                       minifyEnabled false
+                      signingConfig signingConfigs.permanent
                   }
               }
               compileOptions {
@@ -258,7 +225,6 @@ jobs:
 
           import android.app.Activity;
           import android.content.Context;
-          import android.content.SharedPreferences;
           import android.content.pm.ActivityInfo;
           import android.graphics.Bitmap;
           import android.graphics.Color;
@@ -267,17 +233,14 @@ jobs:
           import android.net.Network;
           import android.net.NetworkCapabilities;
           import android.net.NetworkRequest;
-          import android.os.Build;
           import android.os.Bundle;
           import android.os.Handler;
           import android.os.Looper;
-          import android.provider.Settings;
           import android.view.KeyEvent;
           import android.view.View;
           import android.view.ViewGroup;
           import android.view.Window;
           import android.view.WindowManager;
-          import android.webkit.JavascriptInterface;
           import android.webkit.WebChromeClient;
           import android.webkit.WebResourceError;
           import android.webkit.WebResourceRequest;
@@ -286,9 +249,6 @@ jobs:
           import android.webkit.WebViewClient;
           import android.widget.FrameLayout;
           import android.widget.Toast;
-
-          import java.util.Locale;
-          import java.util.UUID;
 
           public class MainActivity extends Activity {
               public static volatile boolean isForeground = false;
@@ -304,46 +264,6 @@ jobs:
               private final Handler mainHandler = new Handler(Looper.getMainLooper());
               private boolean pageLoadedSuccessfully = false;
               private long lastFallbackBackTime = 0L;
-
-              public class TvBridge {
-                  @JavascriptInterface
-                  public String getDeviceId() {
-                      SharedPreferences prefs = getSharedPreferences("ystream_prefs", Context.MODE_PRIVATE);
-                      String saved = prefs.getString("device_id", "");
-                      if (saved != null && saved.length() >= 6) {
-                          return saved;
-                      }
-                      String androidId = "";
-                      try {
-                          androidId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
-                      } catch (Exception ignored) {}
-                      String id;
-                      if (androidId != null && androidId.length() >= 6 && !"9774d56d682e549c".equalsIgnoreCase(androidId)) {
-                          id = "TV-" + androidId.toUpperCase(Locale.US);
-                      } else {
-                          id = "TV-" + UUID.randomUUID().toString().replace("-", "").substring(0, 14).toUpperCase(Locale.US);
-                      }
-                      prefs.edit().putString("device_id", id).apply();
-                      return id;
-                  }
-
-                  @JavascriptInterface
-                  public String getDeviceName() {
-                      try {
-                          String gName = Settings.Global.getString(getContentResolver(), "device_name");
-                          if (gName != null && !gName.trim().isEmpty()) {
-                              return gName.trim();
-                          }
-                      } catch (Exception ignored) {}
-                      String mfg = Build.MANUFACTURER != null ? Build.MANUFACTURER.trim() : "";
-                      String model = Build.MODEL != null ? Build.MODEL.trim() : "Android TV";
-                      if (!mfg.isEmpty() && !model.toLowerCase(Locale.US).startsWith(mfg.toLowerCase(Locale.US))) {
-                          String capMfg = mfg.substring(0, 1).toUpperCase(Locale.US) + mfg.substring(1);
-                          return capMfg + " " + model;
-                      }
-                      return model;
-                  }
-              }
 
               private void enableImmersive() {
                   getWindow().getDecorView().setSystemUiVisibility(
@@ -415,8 +335,6 @@ jobs:
                   s.setDisplayZoomControls(false);
                   s.setLoadWithOverviewMode(true);
                   s.setUseWideViewPort(true);
-
-                  webView.addJavascriptInterface(new TvBridge(), "AndroidTV");
 
                   webView.setWebViewClient(new WebViewClient() {
                       @Override
@@ -491,6 +409,9 @@ jobs:
               protected void onResume() {
                   super.onResume();
                   isForeground = true;
+                  if (webView != null) {
+                      webView.onResume();
+                  }
                   enableImmersive();
                   requestTvAudio();
                   loadAppIfNeeded();
@@ -499,6 +420,9 @@ jobs:
               @Override
               protected void onPause() {
                   isForeground = false;
+                  if (webView != null) {
+                      webView.onPause();
+                  }
                   super.onPause();
               }
 
@@ -510,6 +434,11 @@ jobs:
                           connectivityManager.unregisterNetworkCallback(networkCallback);
                       }
                   } catch (Exception ignored) {}
+                  if (webView != null) {
+                      rootLayout.removeView(webView);
+                      webView.destroy();
+                      webView = null;
+                  }
                   super.onDestroy();
               }
 
