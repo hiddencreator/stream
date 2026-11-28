@@ -6,11 +6,12 @@ import re
 import shutil
 import subprocess
 import time
+import urllib.error
 import urllib.request
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -47,8 +48,10 @@ SESSION_FILE = DATA_DIR / "ystream_bot"
 
 CHUNK_SIZE = 1024 * 1024  # 1 MiB
 MAX_CACHE_BYTES = int(1.5 * 1024 * 1024 * 1024)  # 1.5 GB cap
-DEVICE_ONLINE_TTL = 25  # seconds before device considered offline
+DEVICE_ONLINE_TTL = 25  # seconds before device is marked offline
+CLIENT_FAIL_COOLDOWN = 600  # 10 min cooldown before re-probing a client-failed channel
 START_TIME = time.time()
+
 NATIVE_AUDIO_CODECS = {"aac", "mp3", "opus", "vorbis", "flac"}
 TEXT_SUB_CODECS = {"subrip", "srt", "ass", "ssa", "mov_text", "webvtt", "text"}
 
@@ -66,19 +69,19 @@ LANG_NAMES = {
 }
 
 DEFAULT_CHANNELS = [
-    {"num": 1, "id": "suntv", "short": "SUN", "bg": "#d92323", "name": "Sun TV", "type": "hls", "url": "https://offline.ystream.local/suntv/index.m3u8", "logo": "suntv.webp", "status": "offline"},
-    {"num": 2, "id": "vijaytv", "short": "VIJAY", "bg": "#c2410c", "name": "Vijay TV", "type": "hls", "url": "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:starvijayuk.smil/playlist.m3u8", "logo": "vijaytv.webp", "status": "online"},
-    {"num": 3, "id": "zeetamil", "short": "ZEE", "bg": "#6d28d9", "name": "Zee Tamil HD", "type": "hls", "url": "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:zeetamil1.smil/playlist.m3u8", "logo": "zeetamil.webp", "status": "online"},
-    {"num": 4, "id": "colorstamil", "short": "COLORS", "bg": "#be185d", "name": "Colors Tamil HD", "type": "hls", "url": "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:colorstamilhd11.smil/playlist.m3u8", "logo": "colorstamil.webp", "status": "online"},
-    {"num": 5, "id": "vijaytakkar", "short": "TAKKAR", "bg": "#b91c1c", "name": "Vijay Takkar", "type": "dash", "url": "https://tglmp01.akamaized.net/out/v1/c1071012b73f4f189b202e1529e8f802/manifest.mpd", "logo": "vijaytakkar.webp", "status": "online"},
-    {"num": 6, "id": "vendhartv", "short": "VENDHAR", "bg": "#0f766e", "name": "Vendhar TV", "type": "hls", "url": "https://mumt04.tangotv.in/m18aqlK4VENDHARTV/index.m3u8", "logo": "vendhartv.webp", "status": "online"},
-    {"num": 7, "id": "rajtv", "short": "RAJ", "bg": "#1d4ed8", "name": "Raj TV", "type": "hls", "url": "https://livestream.rajtv.tv/hlslive/Admin/px08241087/live/RAJTV/master_1.m3u8", "logo": "rajtv.webp", "status": "online"},
-    {"num": 8, "id": "makkaltv", "short": "MAKKAL", "bg": "#047857", "name": "Makkal TV", "type": "hls", "url": "https://5k8q87azdy4v-hls-live.wmncdn.net/MAKKAL/271ddf829afeece44d8732757fba1a66.sdp/playlist.m3u8", "logo": "makkaltv.webp", "status": "online"},
-    {"num": 9, "id": "7smusic", "short": "7S", "bg": "#7e22ce", "name": "7S Music", "type": "hls", "url": "https://cdn.pishow.tv/ott/live/1257/master.m3u8", "logo": "7smusic.webp", "status": "online"},
-    {"num": 10, "id": "isaiaruvi", "short": "ISAI", "bg": "#a21caf", "name": "Isaiaruvi", "type": "hls", "url": "https://segment.yuppcdn.net/140622/isaiaruvi/playlist.m3u8", "logo": "isaiaruvi.webp", "status": "online"},
-    {"num": 11, "id": "newstamil24", "short": "NEWS24", "bg": "#dc2626", "name": "News Tamil 24x7", "type": "hls", "url": "https://streams.tangotv.in/NEWSTAMIL24X7/ORIGIN/index.m3u8", "logo": "newstamil24.webp", "status": "online"},
-    {"num": 12, "id": "puthiyathalaimurai", "short": "PT", "bg": "#b91c1c", "name": "Puthiya Thalaimurai", "type": "hls", "url": "https://mumt07.tangotv.in/zHjX9OFlPUTHIYAEXPRESS/index.m3u8", "logo": "puthiyathalaimurai.webp", "status": "online"},
-    {"num": 13, "id": "discoverytamil", "short": "DISC", "bg": "#0369a1", "name": "Discovery Tamil", "type": "dash-clearkey", "url": "https://login.bheem.tv/bpk-tv/22652/output/index.mpd", "kid": "c6cb0bcbeac25fb286fed851e41de38c", "key": "955c54f2cac8783fafccae5e5f9cdf8d", "logo": "discoverytamil.webp", "status": "online"},
+    {"num": 1, "id": "suntv", "short": "SUN", "bg": "#d92323", "name": "Sun TV", "type": "hls", "url": "https://offline.ystream.local/suntv/index.m3u8", "logo": "suntv.webp", "status": "offline", "client_failed": False, "failed_at": 0},
+    {"num": 2, "id": "vijaytv", "short": "VIJAY", "bg": "#c2410c", "name": "Vijay TV", "type": "hls", "url": "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:starvijayuk.smil/playlist.m3u8", "logo": "vijaytv.webp", "status": "online", "client_failed": False, "failed_at": 0},
+    {"num": 3, "id": "zeetamil", "short": "ZEE", "bg": "#6d28d9", "name": "Zee Tamil HD", "type": "hls", "url": "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:zeetamil1.smil/playlist.m3u8", "logo": "zeetamil.webp", "status": "online", "client_failed": False, "failed_at": 0},
+    {"num": 4, "id": "colorstamil", "short": "COLORS", "bg": "#be185d", "name": "Colors Tamil HD", "type": "hls", "url": "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:colorstamilhd11.smil/playlist.m3u8", "logo": "colorstamil.webp", "status": "online", "client_failed": False, "failed_at": 0},
+    {"num": 5, "id": "vijaytakkar", "short": "TAKKAR", "bg": "#b91c1c", "name": "Vijay Takkar", "type": "dash", "url": "https://tglmp01.akamaized.net/out/v1/c1071012b73f4f189b202e1529e8f802/manifest.mpd", "logo": "vijaytakkar.webp", "status": "online", "client_failed": False, "failed_at": 0},
+    {"num": 6, "id": "vendhartv", "short": "VENDHAR", "bg": "#0f766e", "name": "Vendhar TV", "type": "hls", "url": "https://mumt04.tangotv.in/m18aqlK4VENDHARTV/index.m3u8", "logo": "vendhartv.webp", "status": "online", "client_failed": False, "failed_at": 0},
+    {"num": 7, "id": "rajtv", "short": "RAJ", "bg": "#1d4ed8", "name": "Raj TV", "type": "hls", "url": "https://livestream.rajtv.tv/hlslive/Admin/px08241087/live/RAJTV/master_1.m3u8", "logo": "rajtv.webp", "status": "online", "client_failed": False, "failed_at": 0},
+    {"num": 8, "id": "makkaltv", "short": "MAKKAL", "bg": "#047857", "name": "Makkal TV", "type": "hls", "url": "https://5k8q87azdy4v-hls-live.wmncdn.net/MAKKAL/271ddf829afeece44d8732757fba1a66.sdp/playlist.m3u8", "logo": "makkaltv.webp", "status": "online", "client_failed": False, "failed_at": 0},
+    {"num": 9, "id": "7smusic", "short": "7S", "bg": "#7e22ce", "name": "7S Music", "type": "hls", "url": "https://cdn.pishow.tv/ott/live/1257/master.m3u8", "logo": "7smusic.webp", "status": "online", "client_failed": False, "failed_at": 0},
+    {"num": 10, "id": "isaiaruvi", "short": "ISAI", "bg": "#a21caf", "name": "Isaiaruvi", "type": "hls", "url": "https://segment.yuppcdn.net/140622/isaiaruvi/playlist.m3u8", "logo": "isaiaruvi.webp", "status": "online", "client_failed": False, "failed_at": 0},
+    {"num": 11, "id": "newstamil24", "short": "NEWS24", "bg": "#dc2626", "name": "News Tamil 24x7", "type": "hls", "url": "https://streams.tangotv.in/NEWSTAMIL24X7/ORIGIN/index.m3u8", "logo": "newstamil24.webp", "status": "online", "client_failed": False, "failed_at": 0},
+    {"num": 12, "id": "puthiyathalaimurai", "short": "PT", "bg": "#b91c1c", "name": "Puthiya Thalaimurai", "type": "hls", "url": "https://mumt07.tangotv.in/zHjX9OFlPUTHIYAEXPRESS/index.m3u8", "logo": "puthiyathalaimurai.webp", "status": "online", "client_failed": False, "failed_at": 0},
+    {"num": 13, "id": "discoverytamil", "short": "DISC", "bg": "#0369a1", "name": "Discovery Tamil", "type": "dash-clearkey", "url": "https://login.bheem.tv/bpk-tv/22652/output/index.mpd", "kid": "c6cb0bcbeac25fb286fed851e41de38c", "key": "955c54f2cac8783fafccae5e5f9cdf8d", "logo": "discoverytamil.webp", "status": "online", "client_failed": False, "failed_at": 0},
 ]
 
 for d in (DATA_DIR, CACHE_DIR):
@@ -103,6 +106,7 @@ tg_client = Client(
 
 active_play_proc: Optional[asyncio.subprocess.Process] = None
 play_proc_lock = asyncio.Lock()
+prewarm_sem = asyncio.Semaphore(1)
 msg_cache: dict[str, Message] = {}
 prewarm_tasks: dict[str, asyncio.Task] = {}
 state_subscribers: set[asyncio.Queue] = set()
@@ -381,7 +385,7 @@ def build_device_dashboard_text() -> tuple[str, InlineKeyboardMarkup]:
     lines = [
         "<b>📱 Device Management</b>",
         f"Total Devices: <code>{total}</code>  |  Live Now: <code>{active_cnt}</code>",
-        f"Checked: <code>{fmt_clock_now()}</code>\n",
+        f"Updated: <code>{fmt_clock_now()}</code>\n",
     ]
 
     if not devices:
@@ -426,7 +430,7 @@ def build_device_dashboard_text() -> tuple[str, InlineKeyboardMarkup]:
 
 
 # =============================================================================
-# /YStream — LIVE TV CHANNEL MANAGEMENT & LIVE CHECK / RECOVERY
+# /YStream — LIVE TV CHANNEL MANAGEMENT & STABLE RECOVERY MONITOR
 # =============================================================================
 def get_channels_sorted() -> list[dict]:
     chans = read_json(CHANNELS_FILE, DEFAULT_CHANNELS)
@@ -436,29 +440,46 @@ def get_channels_sorted() -> list[dict]:
     return chans
 
 
+def fetch_url_text_sync(url: str, timeout: int = 5) -> tuple[int, str]:
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
+            "Accept": "*/*",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        code = getattr(resp, "status", 200)
+        body = resp.read(4096).decode("utf-8", errors="ignore")
+        return code, body
+
+
 def probe_stream_url_sync(url: str) -> str:
-    """Returns 'online', 'offline', or 'geo_blocked' (403 on datacenter IP)."""
+    """Deep stream probe: checks master playlist AND child variant playlist for HLS."""
     if not url or "offline.ystream.local" in url:
         return "offline"
     try:
-        req = urllib.request.Request(
-            url,
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
-                "Accept": "*/*",
-            },
-        )
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            code = getattr(resp, "status", 200)
-            if code < 200 or code >= 400:
+        code, sample = fetch_url_text_sync(url, timeout=5)
+        if code < 200 or code >= 400:
+            return "offline"
+        low_u = url.lower()
+        if ".m3u8" in low_u:
+            if "#EXTM3U" not in sample:
                 return "offline"
-            sample = resp.read(2048).decode("utf-8", errors="ignore")
-            low_u = url.lower()
-            if ".m3u8" in low_u:
-                return "online" if "#EXTM3U" in sample else "offline"
-            if ".mpd" in low_u:
-                return "online" if ("<MPD" in sample or "urn:mpeg:dash" in sample) else "offline"
-            return "online" if len(sample) > 0 else "offline"
+            # If master playlist points to a child variant .m3u8, verify the child playlist too
+            for line in sample.splitlines():
+                ln = line.strip()
+                if ln and not ln.startswith("#"):
+                    child_url = urljoin(url, ln)
+                    if ".m3u8" in child_url.lower():
+                        c_code, c_body = fetch_url_text_sync(child_url, timeout=5)
+                        if c_code < 200 or c_code >= 400 or "#EXTM3U" not in c_body:
+                            return "offline"
+                    break
+            return "online"
+        if ".mpd" in low_u:
+            return "online" if ("<MPD" in sample or "urn:mpeg:dash" in sample) else "offline"
+        return "online" if len(sample) > 0 else "offline"
     except urllib.error.HTTPError as e:
         if e.code == 403:
             return "geo_blocked"
@@ -467,13 +488,27 @@ def probe_stream_url_sync(url: str) -> str:
         return "offline"
 
 
-async def live_check_channels(force_all: bool = False):
-    """Checks offline channels (or all channels on admin command/refresh) concurrently."""
+async def live_check_channels(manual_refresh: bool = False):
+    """
+    Checks offline channels safely without flip-flopping client-failed streams:
+    - Background mode: only probes offline channels whose client failure cooldown has expired.
+    - Manual refresh mode (/YStream -> Refresh): probes offline channels with deep child-playlist check.
+    """
     chans = get_channels_sorted()
     if not chans:
         return
 
-    targets = chans if force_all else [c for c in chans if c.get("status") != "online"]
+    now = time.time()
+    targets = []
+    for c in chans:
+        if c.get("status") == "online":
+            continue
+        if not manual_refresh and c.get("client_failed"):
+            failed_at = float(c.get("failed_at") or 0)
+            if (now - failed_at) < CLIENT_FAIL_COOLDOWN:
+                continue
+        targets.append(c)
+
     if not targets:
         return
 
@@ -487,17 +522,12 @@ async def live_check_channels(force_all: bool = False):
     for ch, res in zip(targets, results):
         if isinstance(res, Exception):
             res = "offline"
-        old_st = ch.get("status", "online")
         if res == "online":
-            if old_st != "online":
-                ch["status"] = "online"
-                changed = True
-                recovered_list.append(ch)
-        elif res == "offline":
-            if old_st != "offline":
-                ch["status"] = "offline"
-                changed = True
-        # If 'geo_blocked' (403 on Azure IP), keep existing status unless TV client reported error
+            ch["status"] = "online"
+            ch["client_failed"] = False
+            ch["failed_at"] = 0
+            changed = True
+            recovered_list.append(ch)
 
     if changed:
         write_json(CHANNELS_FILE, chans)
@@ -525,7 +555,7 @@ def build_ystream_dashboard() -> tuple[str, InlineKeyboardMarkup]:
 
     txt = (
         f"<b>📺 YStream — Live TV Channels</b>\n"
-        f"Checked: <code>{fmt_clock_now()}</code>\n"
+        f"Updated: <code>{fmt_clock_now()}</code>\n"
         f"<pre>{html.escape(chr(10).join(rows))}</pre>"
     )
     kb = InlineKeyboardMarkup([
@@ -577,43 +607,57 @@ def make_channel_obj(num: int, name: str, url: str, logo: str) -> dict:
         "url": url,
         "logo": logo,
         "status": "online",
+        "client_failed": False,
+        "failed_at": 0,
     }
 
 
-async def mark_channel_status(num: int, new_status: str, notify: bool = True):
+async def mark_channel_status(num: int, new_status: str, notify: bool = True, from_client: bool = False):
     chans = get_channels_sorted()
     target = next((c for c in chans if int(c.get("num") or 0) == int(num)), None)
     if not target:
         return
     old_status = target.get("status", "online")
-    if old_status == new_status:
-        return
 
-    target["status"] = new_status
-    write_json(CHANNELS_FILE, chans)
-    broadcast_event("channels")
-
-    if notify:
-        icon = "🟢" if new_status == "online" else "🔴"
-        header = "✅ <b>Channel Recovered & Restored</b>" if new_status == "online" else "⚠️ <b>Channel Stream Offline</b>"
-        table = (
-            "No.  Channel Name             Status\n"
-            "--------------------------------------\n"
-            f"{str(target['num']).ljust(4)} {truncate_text(target['name'], 23).ljust(24)} {icon}"
-        )
-        await notify_owner(f"{header}\n<pre>{html.escape(table)}</pre>")
+    if new_status == "offline":
+        target["status"] = "offline"
+        if from_client:
+            target["client_failed"] = True
+            target["failed_at"] = int(time.time())
+        write_json(CHANNELS_FILE, chans)
+        broadcast_event("channels")
+        if notify and old_status != "offline":
+            table = (
+                "No.  Channel Name             Status\n"
+                "--------------------------------------\n"
+                f"{str(target['num']).ljust(4)} {truncate_text(target['name'], 23).ljust(24)} 🔴"
+            )
+            await notify_owner(f"⚠️ <b>Channel Stream Offline</b>\n<pre>{html.escape(table)}</pre>")
+    else:
+        target["status"] = "online"
+        target["client_failed"] = False
+        target["failed_at"] = 0
+        write_json(CHANNELS_FILE, chans)
+        broadcast_event("channels")
+        if notify and old_status != "online":
+            table = (
+                "No.  Channel Name             Status\n"
+                "--------------------------------------\n"
+                f"{str(target['num']).ljust(4)} {truncate_text(target['name'], 23).ljust(24)} 🟢"
+            )
+            await notify_owner(f"✅ <b>Channel Recovered & Restored</b>\n<pre>{html.escape(table)}</pre>")
 
 
 async def zero_idle_channel_recovery_loop():
     """Runs zero checks when 0 devices are online OR 0 channels are offline."""
     while True:
-        await asyncio.sleep(25)
+        await asyncio.sleep(30)
         try:
             if SYSTEM_STOPPED:
                 continue
             if count_online_devices() == 0:
                 continue
-            await live_check_channels(force_all=False)
+            await live_check_channels(manual_refresh=False)
         except Exception as exc:
             print(f"[Recovery monitor error] {exc}")
 
@@ -753,7 +797,7 @@ def build_yplay_dashboard() -> tuple[str, InlineKeyboardMarkup]:
     table = format_yplay_table_rows(items, start_num=1)
     txt = (
         f"<b>🎬 YPlay — Movie & File Library</b>\n"
-        f"Checked: <code>{fmt_clock_now()}</code>\n"
+        f"Updated: <code>{fmt_clock_now()}</code>\n"
         f"<pre>{html.escape(table)}</pre>"
     )
     kb = InlineKeyboardMarkup([
@@ -1029,28 +1073,29 @@ async def cache_span(item: dict, start_block: int, count: int):
 async def prewarm_head_tail(item: dict):
     item_id = item["id"]
     try:
-        msg = await get_tg_message(item)
-        media = msg.video or msg.document or msg.animation
-        total_size = int(getattr(media, "file_size", 0) or item.get("file_size") or 0)
-        if total_size <= 0:
-            return
-        total_blocks = (total_size + CHUNK_SIZE - 1) // CHUNK_SIZE
+        async with prewarm_sem:
+            msg = await get_tg_message(item)
+            media = msg.video or msg.document or msg.animation
+            total_size = int(getattr(media, "file_size", 0) or item.get("file_size") or 0)
+            if total_size <= 0:
+                return
+            total_blocks = (total_size + CHUNK_SIZE - 1) // CHUNK_SIZE
 
-        head_count = min(2, total_blocks)
-        if not all(block_path(item_id, b).exists() for b in range(head_count)):
-            await cache_span(item, 0, head_count)
+            head_count = min(2, total_blocks)
+            if not all(block_path(item_id, b).exists() for b in range(head_count)):
+                await cache_span(item, 0, head_count)
 
-        if total_blocks > 3:
-            tail_start = max(head_count, total_blocks - 2)
-            tail_count = total_blocks - tail_start
-            if not all(block_path(item_id, b).exists() for b in range(tail_start, total_blocks)):
-                await cache_span(item, tail_start, tail_count)
+            if total_blocks > 3:
+                tail_start = max(head_count, total_blocks - 2)
+                tail_count = total_blocks - tail_start
+                if not all(block_path(item_id, b).exists() for b in range(tail_start, total_blocks)):
+                    await cache_span(item, tail_start, tail_count)
 
-        probe_res = await asyncio.to_thread(probe_media_sync, item_id, total_size)
-        if probe_res:
-            update_library_probe(item_id, probe_res)
+            probe_res = await asyncio.to_thread(probe_media_sync, item_id, total_size)
+            if probe_res:
+                update_library_probe(item_id, probe_res)
 
-        await asyncio.to_thread(prune_cache_sync)
+            await asyncio.to_thread(prune_cache_sync)
     except asyncio.CancelledError:
         pass
     except Exception as exc:
@@ -1083,7 +1128,7 @@ def save_media_to_queue(item: dict) -> tuple[bool, int, dict]:
 
 
 # =============================================================================
-# /status — COMPLETE REAL-TIME SYSTEM STATUS
+# /status — INSTANT REAL-TIME SYSTEM STATUS (NO BLOCKING PROBES)
 # =============================================================================
 async def build_status_html() -> str:
     devices = get_devices_ordered()
@@ -1115,8 +1160,8 @@ async def build_status_html() -> str:
     )
 
     sections = [
-        f"<b>📊 YStream Complete System Status</b>",
-        f"Checked: <code>{fmt_clock_now()}</code>\n",
+        "<b>📊 YStream Complete System Status</b>",
+        f"Updated: <code>{fmt_clock_now()}</code>\n",
         "<b>A. Device Statistics</b>",
         "<pre>" + html.escape("\n".join([
             f"Total Devices         : {dev_total}",
@@ -1187,7 +1232,6 @@ async def cmd_ystream(_, msg: Message):
         if not authorize_user(msg.from_user, allow_claim=True):
             return
         bot_dialog_state.pop(int(msg.from_user.id), None)
-        await live_check_channels(force_all=True)
         txt, kb = build_ystream_dashboard()
         await msg.reply_text(txt, parse_mode=enums.ParseMode.HTML, reply_markup=kb)
     except Exception as exc:
@@ -1224,7 +1268,6 @@ async def cmd_status(_, msg: Message):
         if not authorize_user(msg.from_user, allow_claim=True):
             return
         bot_dialog_state.pop(int(msg.from_user.id), None)
-        await live_check_channels(force_all=True)
         txt = await build_status_html()
         await msg.reply_text(
             txt,
@@ -1471,6 +1514,8 @@ async def on_interactive_input(_, msg: Message):
             ch["logo"] = logo
             ch["type"] = "dash" if ".mpd" in url.lower() else "hls"
             ch["short"] = re.sub(r"[^A-Za-z0-9]", "", name).upper()[:6] or f"CH{target_num}"
+            ch["client_failed"] = False
+            ch["failed_at"] = 0
             probe_res = await asyncio.to_thread(probe_stream_url_sync, url)
             ch["status"] = "offline" if probe_res == "offline" else "online"
 
@@ -1602,9 +1647,9 @@ async def on_callback(_, cq: CallbackQuery):
 
         # --- /YStream Callbacks ---
         if data == "ys:refresh":
-            await cq.answer("Checking streams live...")
+            await cq.answer("Checking offline streams...")
             bot_dialog_state.pop(uid, None)
-            await live_check_channels(force_all=True)
+            await live_check_channels(manual_refresh=True)
             txt, kb = build_ystream_dashboard()
             await safe_edit_message(cq.message, txt, kb)
             return
@@ -1695,10 +1740,9 @@ async def on_callback(_, cq: CallbackQuery):
             await safe_edit_message(cq.message, f"🗑 <b>Removed {html.escape(str(dname))}</b>\n\n{txt}", kb)
             return
 
-        # --- /status Refresh Callback ---
+        # --- /status Refresh Callback (Instant, no channel flip-flop) ---
         if data == "st:refresh":
-            await cq.answer("Running live system check...")
-            await live_check_channels(force_all=True)
+            await cq.answer("Refreshing status...")
             txt = await build_status_html()
             await safe_edit_message(
                 cq.message,
@@ -1788,15 +1832,16 @@ async def api_events(request: Request):
     )
 
 
-# --- Device Activity Heartbeat ---
+# --- Device Activity Heartbeat (Accepts JSON or text/plain to avoid CORS preflight) ---
 @app.post("/api/device/heartbeat")
 async def device_heartbeat(request: Request):
     try:
-        body = await request.json()
+        raw_body = await request.body()
+        body = json.loads(raw_body.decode("utf-8")) if raw_body else {}
     except Exception:
         body = {}
 
-    raw_id = str(body.get("device_id") or request.headers.get("x-device-id") or "")
+    raw_id = str(body.get("device_id") or request.query_params.get("device_id") or "")
     device_id = re.sub(r"[^a-zA-Z0-9_-]", "", raw_id)[:64]
     if len(device_id) < 6:
         return {"ok": False, "stopped": SYSTEM_STOPPED}
@@ -1857,15 +1902,14 @@ async def api_channels():
 
 @app.post("/api/channels/{num}/report_error")
 async def api_channel_report_error(num: int):
-    await mark_channel_status(num, "offline", notify=True)
+    await mark_channel_status(num, "offline", notify=True, from_client=True)
     return {"ok": True, "num": num, "status": "offline"}
 
 
 # --- YPlay Library (With Isolated Per-Device Progress) ---
 @app.get("/api/yplay/library")
-async def yplay_library(request: Request, device_id: str = ""):
-    raw_id = device_id or request.headers.get("x-device-id", "")
-    clean_did = re.sub(r"[^a-zA-Z0-9_-]", "", str(raw_id))[:64]
+async def yplay_library(device_id: str = ""):
+    clean_did = re.sub(r"[^a-zA-Z0-9_-]", "", str(device_id or ""))[:64]
 
     prog_all = read_json(PROGRESS_FILE, {})
     dev_prog = prog_all.get(clean_did, {}) if (clean_did and isinstance(prog_all, dict)) else {}
@@ -1887,7 +1931,6 @@ async def yplay_library(request: Request, device_id: str = ""):
             int(row.get("width") or 0),
             int(row.get("height") or 0),
         )
-        # Return strictly THIS device's own progress (0 if this device hasn't played it)
         item_prog = dev_prog.get(str(row.get("id")), {})
         row["progress_sec"] = int(item_prog.get("position") or 0) if isinstance(item_prog, dict) else 0
         enriched.append(row)
@@ -1897,11 +1940,12 @@ async def yplay_library(request: Request, device_id: str = ""):
 @app.post("/api/yplay/progress")
 async def yplay_save_progress(request: Request):
     try:
-        body = await request.json()
+        raw_body = await request.body()
+        body = json.loads(raw_body.decode("utf-8")) if raw_body else {}
     except Exception:
         body = {}
 
-    raw_id = str(body.get("device_id") or request.headers.get("x-device-id") or "")
+    raw_id = str(body.get("device_id") or request.query_params.get("device_id") or "")
     clean_did = re.sub(r"[^a-zA-Z0-9_-]", "", raw_id)[:64]
     item_id = str(body.get("id") or "")
     if len(clean_did) < 6 or not item_id:
@@ -2077,7 +2121,6 @@ async def yplay_stream(item_ref: str, request: Request):
 
 
 @app.api_route("/api/yplay/play/{item_ref}", methods=["GET", "HEAD"])
-@app.api_route("/api/yplay/compat/{item_ref}", methods=["GET", "HEAD"])
 async def yplay_play_stream(
     item_ref: str,
     request: Request,
