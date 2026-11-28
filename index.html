@@ -78,7 +78,7 @@
       opacity: 1;
     }
 
-    /* Blocking Full-Screen System & Device Overlays */
+    /* Full-Black System Shutdown Alert Screen */
     .gate-screen {
       position: fixed;
       inset: 0;
@@ -122,12 +122,6 @@
       justify-content: center;
     }
 
-    .gate-icon.amber {
-      background: rgba(245, 158, 11, 0.14);
-      border-color: rgba(245, 158, 11, 0.48);
-      color: #fbbf24;
-    }
-
     .gate-badge {
       display: inline-block;
       font-size: 0.68rem;
@@ -142,12 +136,6 @@
       margin-bottom: 10px;
     }
 
-    .gate-badge.amber {
-      color: #fde68a;
-      background: rgba(245, 158, 11, 0.16);
-      border-color: rgba(245, 158, 11, 0.34);
-    }
-
     .gate-title {
       font-size: 1.38rem;
       font-weight: 800;
@@ -160,25 +148,6 @@
       color: #94a3b8;
       margin-top: 8px;
       line-height: 1.48;
-    }
-
-    .gate-meta {
-      margin-top: 16px;
-      padding: 10px 14px;
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      font-size: 0.78rem;
-      color: #cbd5e1;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .gate-meta code {
-      color: #fff;
-      font-weight: 700;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     }
 
     /* Center Loader Ring */
@@ -1058,25 +1027,6 @@
     </div>
   </div>
 
-  <!-- Device Approval Required Blocking Popup -->
-  <div id="approvalScreen" class="gate-screen" role="alertdialog" aria-modal="true" aria-labelledby="approvalTitle">
-    <div class="gate-card">
-      <div class="gate-icon amber">
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-        </svg>
-      </div>
-      <div class="gate-badge amber">Security Gate</div>
-      <div id="approvalTitle" class="gate-title">Device Approval Required</div>
-      <div class="gate-desc">This device is not authorized yet. An approval request has been sent to the owner on Telegram. Playback will start automatically once approved.</div>
-      <div class="gate-meta">
-        <div>Device: <code id="gateDevName">Detecting...</code></div>
-        <div>Device ID: <code id="gateDevId">---</code></div>
-      </div>
-    </div>
-  </div>
-
   <!-- Full-Black System Shutdown Alert Screen -->
   <div id="shutdownScreen" class="gate-screen" role="alertdialog" aria-modal="true" aria-labelledby="shutdownTitle">
     <div class="gate-card">
@@ -1138,7 +1088,7 @@
       eng: "English", en: "English", english: "English"
     };
 
-    /* Persistent Hardware / Browser Device ID (Survives restarts, shutdowns & Wi-Fi changes) */
+    /* Persistent Hardware / Browser Device ID (For /device Live & Past Visitor List) */
     function readCookie(name) {
       const m = document.cookie.match(new RegExp("(?:^|; )" + name + "=([^;]*)"));
       return m ? decodeURIComponent(m[1]) : "";
@@ -1196,9 +1146,6 @@
     /* DOM References */
     const stage = document.getElementById("stage");
     const video = document.getElementById("video");
-    const approvalScreen = document.getElementById("approvalScreen");
-    const gateDevName = document.getElementById("gateDevName");
-    const gateDevId = document.getElementById("gateDevId");
     const shutdownScreen = document.getElementById("shutdownScreen");
     const centerLoader = document.getElementById("centerLoader");
     const exitToast = document.getElementById("exitToast");
@@ -1252,13 +1199,13 @@
     let hls = null;
     let shakaPlayer = null;
     let playSessionId = 0;
-    let allChannels = []; // Full channel table from /api/channels
+    let allChannels = [];
     let channelsSig = "";
     let activeChannelNum = 0;
     let channelErrorReported = false;
     let countdownTimer = null;
     let channelWatchdogTimer = null;
-    let errorMode = "none"; // "live_switch" | "vod_retry" | "none"
+    let errorMode = "none";
 
     let yplayItems = [];
     let yplaySig = "";
@@ -1276,13 +1223,10 @@
     let userMuted = false;
     let autoMutedForBoot = false;
 
-    /* Device Approval & Shutdown State */
-    let isDeviceApprovedState = false;
+    /* System Shutdown / Resume State */
     let isSystemStopped = false;
     let shutdownSnapshot = null;
     let eventSource = null;
-
-    gateDevId.textContent = DEVICE_ID;
 
     function getOnlineChannels() {
       return allChannels.filter((c) => c.status === "online");
@@ -1300,13 +1244,13 @@
     }
 
     /* =========================================================================
-       DEVICE HEARTBEAT & APPROVAL / REVOCATION HANDLER
+       DEVICE LIVE & PAST ACTIVITY TELEMETRY
     ========================================================================= */
     async function sendDeviceHeartbeat() {
       try {
         let activity = "idle";
         let playing = "";
-        if (isDeviceApprovedState && !isSystemStopped) {
+        if (!isSystemStopped) {
           if (isLive) {
             const ch = allChannels.find((c) => Number(c.num) === Number(activeChannelNum));
             if (ch && ch.status === "online") {
@@ -1338,42 +1282,10 @@
         });
         clearTimeout(tid);
         const data = await res.json();
-        if (data) {
-          if (data.name) gateDevName.textContent = data.name;
-          if (typeof data.stopped === "boolean") {
-            await applySystemStopped(data.stopped);
-          }
-          if (typeof data.approved === "boolean") {
-            await applyDeviceApprovalState(data.approved);
-          }
+        if (data && typeof data.stopped === "boolean") {
+          await applySystemStopped(data.stopped);
         }
       } catch (_) {}
-    }
-
-    async function applyDeviceApprovalState(approved) {
-      const next = Boolean(approved);
-      if (next === isDeviceApprovedState) return;
-      isDeviceApprovedState = next;
-
-      if (!isDeviceApprovedState) {
-        playSessionId++;
-        clearCountdown();
-        closeDrawer(false);
-        hideHud();
-        hideError();
-        hideLoading();
-        await cleanupPlayers();
-        if (document.activeElement && document.activeElement !== document.body) {
-          document.activeElement.blur();
-        }
-        approvalScreen.classList.add("show");
-      } else {
-        approvalScreen.classList.remove("show");
-        if (!isSystemStopped) {
-          await fetchChannels(true);
-          await fetchYPlay(false);
-        }
-      }
     }
 
     /* =========================================================================
@@ -1411,7 +1323,6 @@
         shutdownScreen.classList.add("show");
       } else {
         shutdownScreen.classList.remove("show");
-        if (!isDeviceApprovedState) return;
         const snap = shutdownSnapshot;
         shutdownSnapshot = null;
 
@@ -1446,16 +1357,10 @@
             if (typeof msg.stopped === "boolean") {
               applySystemStopped(msg.stopped);
             }
-            if (msg.type === "device_approved" && msg.device_id === DEVICE_ID) {
-              applyDeviceApprovalState(true);
-            }
-            if (msg.type === "device_revoked" && msg.device_id === DEVICE_ID) {
-              applyDeviceApprovalState(false);
-            }
-            if (msg.type === "channels" && isDeviceApprovedState) {
+            if (msg.type === "channels") {
               fetchChannels(true);
             }
-            if (msg.type === "library" && isDeviceApprovedState) {
+            if (msg.type === "library") {
               fetchYPlay(true);
             }
           } catch (_) {}
@@ -1564,7 +1469,7 @@
       if (now - lastBackTime < 160) return true;
       lastBackTime = now;
 
-      if (isSystemStopped || !isDeviceApprovedState) {
+      if (isSystemStopped) {
         if (!exitConfirmReady) {
           showExitToast();
           return true;
@@ -1659,14 +1564,14 @@
     }
 
     function showLoading(immediate = false) {
-      if (isSystemStopped || !isDeviceApprovedState) return;
+      if (isSystemStopped) return;
       clearTimeout(loadDebounce);
       if (immediate) {
         centerLoader.classList.add("show");
         centerPlayBtn.classList.add("loading-hide");
       } else {
         loadDebounce = setTimeout(() => {
-          if (!video.paused && !playerError.classList.contains("show") && !isSystemStopped && isDeviceApprovedState) {
+          if (!video.paused && !playerError.classList.contains("show") && !isSystemStopped) {
             centerLoader.classList.add("show");
             centerPlayBtn.classList.add("loading-hide");
           }
@@ -1686,7 +1591,7 @@
     }
 
     async function safePlayVideo() {
-      if (isSystemStopped || !isDeviceApprovedState) return;
+      if (isSystemStopped) return;
       try {
         await video.play();
       } catch (err) {
@@ -1709,7 +1614,7 @@
     }
 
     function showLiveCountdownError(ch) {
-      if (isSystemStopped || !isDeviceApprovedState) return;
+      if (isSystemStopped) return;
       hideLoading();
       clearCountdown();
       errorMode = "live_switch";
@@ -1737,7 +1642,7 @@
     }
 
     function showSimpleError(title, msg, primaryLabel = "Retry", mode = "vod_retry") {
-      if (isSystemStopped || !isDeviceApprovedState) return;
+      if (isSystemStopped) return;
       hideLoading();
       clearCountdown();
       errorMode = mode;
@@ -1770,17 +1675,14 @@
     }
 
     async function reportAndHandleChannelFailure(ch) {
-      if (!ch || channelErrorReported || isZapping || isSystemStopped || !isDeviceApprovedState) return;
+      if (!ch || channelErrorReported || isZapping || isSystemStopped) return;
       channelErrorReported = true;
 
-      // Immediately mark offline locally so it disappears from active Live TV list without renumbering
       ch.status = "offline";
       renderLiveListPane();
 
-      // Notify server so Telegram sends immediate 🔴 alert and background monitor watches for recovery
-      fetch(`${WORKER_URL}/api/channels/${ch.num}/report_error?device_id=${encodeURIComponent(DEVICE_ID)}`, {
+      fetch(`${WORKER_URL}/api/channels/${ch.num}/report_error`, {
         method: "POST",
-        headers: { "X-Device-Id": DEVICE_ID },
       }).catch(() => {});
 
       await cleanupPlayers();
@@ -1810,7 +1712,6 @@
         );
         return;
       }
-      // Find next online channel with higher fixed number, or wrap to first online channel
       const nextCh = online.find((c) => Number(c.num) > Number(fromNum)) || online[0];
       playChannel(nextCh, true, true);
     }
@@ -1819,7 +1720,7 @@
     function isHudVisible() { return hud.classList.contains("visible"); }
 
     function showHud(preferredFocus = null, autoHideMs = 4200) {
-      if (drawerOpen || isSystemStopped || !isDeviceApprovedState) return;
+      if (drawerOpen || isSystemStopped) return;
       hud.classList.add("visible");
       const target = getBestHudFocus(preferredFocus);
       target.focus({ preventScroll: true });
@@ -1963,7 +1864,7 @@
     }
 
     function openDrawer() {
-      if (drawerOpen || isSystemStopped || !isDeviceApprovedState) return;
+      if (drawerOpen || isSystemStopped) return;
       drawerOpen = true;
       lastHudFocusEl = menuBtn;
       exitScrubMode(false);
@@ -2003,7 +1904,7 @@
       drawerBackdrop.classList.remove("open");
       sideDrawer.classList.remove("open");
 
-      if (resumeIfNeeded && !isLive && wasPlayingBeforeDrawer && !isSystemStopped && isDeviceApprovedState) {
+      if (resumeIfNeeded && !isLive && wasPlayingBeforeDrawer && !isSystemStopped) {
         wasPlayingBeforeDrawer = false;
         safePlayVideo();
       }
@@ -2023,7 +1924,7 @@
     }
 
     function pickChannel(num) {
-      if (isSystemStopped || !isDeviceApprovedState) return;
+      if (isSystemStopped) return;
       const ch = getOnlineChannels().find((c) => Number(c.num) === Number(num));
       if (!ch) return;
       wasPlayingBeforeDrawer = false;
@@ -2032,7 +1933,7 @@
     }
 
     function pickMovie(idx) {
-      if (isSystemStopped || !isDeviceApprovedState) return;
+      if (isSystemStopped) return;
       wasPlayingBeforeDrawer = false;
       closeDrawer(false);
       loadYPlay(idx, true);
@@ -2367,10 +2268,10 @@
     }
 
     function syncProgressToServer(itemId, posSec, explicitSeek = false, completed = false) {
-      if (!itemId || !isDeviceApprovedState) return;
+      if (!itemId) return;
       fetch(`${WORKER_URL}/api/yplay/progress`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Device-Id": DEVICE_ID },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           device_id: DEVICE_ID,
           id: itemId,
@@ -2395,7 +2296,7 @@
     }
 
     function queueSeekDelta(sec) {
-      if (isLive || isSystemStopped || !isDeviceApprovedState) return;
+      if (isLive || isSystemStopped) return;
       const dur = getEffectiveDuration();
       if (dur <= 0) return;
       pendingSeekDelta += sec;
@@ -2411,12 +2312,11 @@
     }
 
     function seekYPlayTo(targetSec) {
-      if (isLive || isSystemStopped || !isDeviceApprovedState) return;
+      if (isLive || isSystemStopped) return;
       const dur = getEffectiveDuration();
       const clamped = Math.max(0, dur > 1 ? Math.min(dur - 1, targetSec) : targetSec);
       const floored = Math.floor(clamped);
 
-      // Explicit user seek updates the authoritative progress baseline
       maxConfirmedPos = floored;
       explicitSeekTarget = floored;
       if (activeYPlayId) {
@@ -2436,7 +2336,7 @@
 
     /* Touch Tap & Double-Tap on Fullscreen Video */
     stage.addEventListener("click", (e) => {
-      if (isSystemStopped || !isDeviceApprovedState || drawerOpen || playerError.classList.contains("show")) return;
+      if (isSystemStopped || drawerOpen || playerError.classList.contains("show")) return;
       if (hasOpenPop()) {
         const trigger = activePopupTrigger;
         closeAllPops();
@@ -2503,7 +2403,7 @@
       const session = playSessionId;
       const itemId = activeYPlayId;
       try {
-        const res = await fetch(`${DIRECT_STREAM_URL}/api/yplay/sub/${encodeURIComponent(itemId)}/${vodSubIdx}.vtt?t=${start}&dur=180&device_id=${encodeURIComponent(DEVICE_ID)}`);
+        const res = await fetch(`${DIRECT_STREAM_URL}/api/yplay/sub/${encodeURIComponent(itemId)}/${vodSubIdx}.vtt?t=${start}&dur=180`);
         const txt = await res.text();
         if (session === playSessionId && itemId === activeYPlayId) {
           subCues = parseVttCues(txt, start);
@@ -2586,7 +2486,7 @@
     }
 
     function startHlsUrl(url, ch, autoPlay, session) {
-      if (session !== playSessionId || isSystemStopped || !isDeviceApprovedState) return;
+      if (session !== playSessionId || isSystemStopped) return;
       if (hls) { hls.destroy(); hls = null; }
       if (window.Hls && window.Hls.isSupported()) {
         hls = new Hls({
@@ -2653,9 +2553,9 @@
       await reportAndHandleChannelFailure(ch);
     }
 
-    /* Fast Dish Channel Zapping (Skips offline channels, preserves fixed channel numbers) */
+    /* Fast Dish Channel Zapping */
     function zapChannel(step) {
-      if (isSystemStopped || !isDeviceApprovedState) return;
+      if (isSystemStopped) return;
       const online = getOnlineChannels();
       if (!online.length) return;
 
@@ -2689,11 +2589,11 @@
     }
 
     async function playChannel(ch, autoPlay = true, resetErrorFlag = true) {
-      if (isSystemStopped || !isDeviceApprovedState || !ch) return;
+      if (isSystemStopped || !ch) return;
       const session = ++playSessionId;
       isZapping = false;
       await cleanupPlayers();
-      if (session !== playSessionId || isSystemStopped || !isDeviceApprovedState) return;
+      if (session !== playSessionId || isSystemStopped) return;
 
       if (resetErrorFlag) channelErrorReported = false;
       activeChannelNum = Number(ch.num);
@@ -2720,7 +2620,6 @@
       showLoading(true);
       sendDeviceHeartbeat();
 
-      // Watchdog: if stream fails to deliver first video frame within 12s, treat as offline & auto-switch
       clearTimeout(channelWatchdogTimer);
       channelWatchdogTimer = setTimeout(() => {
         if (session === playSessionId && isLive && Number(activeChannelNum) === Number(ch.num) && !video.classList.contains("has-frame")) {
@@ -2781,7 +2680,7 @@
     }
 
     function restartYPlayAt(targetSec, isExplicit = false) {
-      if (isSystemStopped || !isDeviceApprovedState) return;
+      if (isSystemStopped) return;
       const item = yplayItems.find((x) => String(x.id) === String(activeYPlayId));
       if (!item) return;
       playSessionId++;
@@ -2798,15 +2697,14 @@
 
       showLoading(true);
       const encId = encodeURIComponent(item.id);
-      const encDid = encodeURIComponent(DEVICE_ID);
       if (transcodeMode) {
         baseOffset = clamped;
         pendingResumeTime = 0;
-        video.src = `${DIRECT_STREAM_URL}/api/yplay/play/${encId}?t=${baseOffset}&q=${vodQuality}&a=${vodAudioIdx}&device_id=${encDid}`;
+        video.src = `${DIRECT_STREAM_URL}/api/yplay/play/${encId}?t=${baseOffset}&q=${vodQuality}&a=${vodAudioIdx}`;
       } else {
         baseOffset = 0;
         pendingResumeTime = clamped > 2 ? clamped : 0;
-        video.src = `${DIRECT_STREAM_URL}/api/yplay/stream/${encId}?device_id=${encDid}`;
+        video.src = `${DIRECT_STREAM_URL}/api/yplay/stream/${encId}`;
       }
       video.load();
       video.playbackRate = currentSpeed;
@@ -2815,7 +2713,7 @@
     }
 
     async function loadYPlay(idx, autoPlay = true, forceOffset = null) {
-      if (isSystemStopped || !isDeviceApprovedState || idx < 0 || idx >= yplayItems.length) return;
+      if (isSystemStopped || idx < 0 || idx >= yplayItems.length) return;
       const item = yplayItems[idx];
       if (!item) return;
 
@@ -2827,7 +2725,7 @@
       const session = ++playSessionId;
       isZapping = false;
       await cleanupPlayers();
-      if (session !== playSessionId || isSystemStopped || !isDeviceApprovedState) return;
+      if (session !== playSessionId || isSystemStopped) return;
 
       activeChannelNum = 0;
       activeYPlayId = String(item.id);
@@ -2855,7 +2753,6 @@
       showLoading(true);
       sendDeviceHeartbeat();
 
-      // Use highest valid saved position across localStorage and server progress_sec
       const localSaved = Number(safeGetStorage(`yp_pos_${item.id}`, "0"));
       const serverSaved = Number(item.progress_sec || 0);
       const bestSaved = Math.max(localSaved, serverSaved);
@@ -2865,15 +2762,14 @@
       explicitSeekTarget = resumeSec > 0 ? resumeSec : -1;
 
       const encId = encodeURIComponent(item.id);
-      const encDid = encodeURIComponent(DEVICE_ID);
       if (transcodeMode) {
         baseOffset = resumeSec;
         pendingResumeTime = 0;
-        video.src = `${DIRECT_STREAM_URL}/api/yplay/play/${encId}?t=${baseOffset}&q=${vodQuality}&a=${vodAudioIdx}&device_id=${encDid}`;
+        video.src = `${DIRECT_STREAM_URL}/api/yplay/play/${encId}?t=${baseOffset}&q=${vodQuality}&a=${vodAudioIdx}`;
       } else {
         baseOffset = 0;
         pendingResumeTime = resumeSec;
-        video.src = `${DIRECT_STREAM_URL}/api/yplay/stream/${encId}?device_id=${encDid}`;
+        video.src = `${DIRECT_STREAM_URL}/api/yplay/stream/${encId}`;
       }
 
       const initDur = Number(item.duration || 0);
@@ -2885,14 +2781,14 @@
     }
 
     function playNextYPlay() {
-      if (!yplayItems.length || isSystemStopped || !isDeviceApprovedState) return;
+      if (!yplayItems.length || isSystemStopped) return;
       const curIdx = yplayItems.findIndex((x) => String(x.id) === String(activeYPlayId));
       const nextIdx = curIdx >= 0 && curIdx + 1 < yplayItems.length ? curIdx + 1 : 0;
       loadYPlay(nextIdx, true);
     }
 
     function toggleVodPlay() {
-      if (isLive || isSystemStopped || !isDeviceApprovedState) return;
+      if (isLive || isSystemStopped) return;
       lastHudFocusEl = centerPlayBtn;
       if (video.paused) {
         safePlayVideo();
@@ -2934,7 +2830,7 @@
     });
 
     video.addEventListener("playing", () => {
-      if (isSystemStopped || !isDeviceApprovedState) {
+      if (isSystemStopped) {
         video.pause();
         return;
       }
@@ -2945,7 +2841,7 @@
 
       clearTimeout(unmuteTimer);
       unmuteTimer = setTimeout(() => {
-        if (!isSystemStopped && isDeviceApprovedState && !userMuted && !autoMutedForBoot) {
+        if (!isSystemStopped && !userMuted && !autoMutedForBoot) {
           video.muted = false;
         }
         syncIcons();
@@ -2956,7 +2852,7 @@
     });
 
     video.addEventListener("waiting", () => {
-      if (!video.paused && !isZapping && !isSystemStopped && isDeviceApprovedState) {
+      if (!video.paused && !isZapping && !isSystemStopped) {
         showLoading(false);
       }
     });
@@ -2968,20 +2864,19 @@
         safeSetStorage(`yp_pos_${activeYPlayId}`, String(Math.floor(maxConfirmedPos)));
         syncProgressToServer(activeYPlayId, maxConfirmedPos, false, false);
       }
-      if (!isLive && !drawerOpen && !shuttingDown && !isSystemStopped && isDeviceApprovedState && video.getAttribute("src")) {
+      if (!isLive && !drawerOpen && !shuttingDown && !isSystemStopped && video.getAttribute("src")) {
         showHud(lastHudFocusEl, 6000);
         clearTimeout(hudTimer);
       }
     });
 
     video.addEventListener("error", async () => {
-      if (shuttingDown || isZapping || isSystemStopped || !isDeviceApprovedState || !video.getAttribute("src")) return;
+      if (shuttingDown || isZapping || isSystemStopped || !video.getAttribute("src")) return;
       if (isLive) {
         const ch = allChannels.find((c) => Number(c.num) === Number(activeChannelNum));
         if (ch) handleLiveFallback(ch, true, playSessionId);
         return;
       }
-      // Recover seamlessly from the last confirmed playback position instead of jumping back to 20%
       if (!isLive && activeYPlayId && errorRetries < 3) {
         errorRetries += 1;
         await resolveDirectTunnel();
@@ -2992,7 +2887,7 @@
     });
 
     video.addEventListener("timeupdate", () => {
-      if (isLive || isSystemStopped || !isDeviceApprovedState) return;
+      if (isLive || isSystemStopped) return;
       const rawCur = getEffectiveTime();
       const dur = getEffectiveDuration();
 
@@ -3004,17 +2899,14 @@
         }
       }
 
-      // Guard against sudden 70% -> 20% backward jump caused by stream buffer reset
       if (explicitSeekTarget >= 0) {
         if (Math.abs(rawCur - explicitSeekTarget) <= 18) {
           explicitSeekTarget = -1;
           maxConfirmedPos = rawCur;
         } else {
-          // Wait until seek settles before recording progress
           return;
         }
       } else if (maxConfirmedPos > 30 && rawCur < maxConfirmedPos - 25) {
-        // Ignore backward regression glitch; auto-recover forward if stream stalled behind
         return;
       } else if (rawCur > maxConfirmedPos) {
         maxConfirmedPos = rawCur;
@@ -3043,7 +2935,6 @@
       const dur = getEffectiveDuration();
       const finalPos = maxConfirmedPos || getEffectiveTime();
 
-      // Only treat as genuine movie completion if near the actual end (prevents premature EOF from wiping 70% progress!)
       if (dur >= 30 && finalPos >= dur - 20) {
         if (activeYPlayId) {
           safeRemoveStorage(`yp_pos_${activeYPlayId}`);
@@ -3051,11 +2942,10 @@
         }
         maxConfirmedPos = 0;
         const curIdx = yplayItems.findIndex((x) => String(x.id) === String(activeYPlayId));
-        if (!isSystemStopped && isDeviceApprovedState && curIdx >= 0 && curIdx + 1 < yplayItems.length) {
+        if (!isSystemStopped && curIdx >= 0 && curIdx + 1 < yplayItems.length) {
           loadYPlay(curIdx + 1, true);
         }
       } else if (activeYPlayId && finalPos > 5 && errorRetries < 3) {
-        // Premature stream cut at 70%: resume seamlessly from finalPos instead of resetting!
         errorRetries += 1;
         restartYPlayAt(finalPos, false);
       }
@@ -3118,7 +3008,7 @@
         return;
       }
 
-      if (isSystemStopped || !isDeviceApprovedState) {
+      if (isSystemStopped) {
         e.preventDefault();
         return;
       }
@@ -3429,20 +3319,15 @@
     }
 
     async function fetchChannels(preserveFocus = true) {
-      if (document.visibilityState === "hidden" || !isDeviceApprovedState) return;
+      if (document.visibilityState === "hidden") return;
       try {
         const ctrl = new AbortController();
         const tid = setTimeout(() => ctrl.abort(), 6000);
-        const res = await fetch(`${WORKER_URL}/api/channels?device_id=${encodeURIComponent(DEVICE_ID)}&t=${Date.now()}`, {
+        const res = await fetch(`${WORKER_URL}/api/channels?t=${Date.now()}`, {
           cache: "no-store",
-          headers: { "X-Device-Id": DEVICE_ID },
           signal: ctrl.signal,
         });
         clearTimeout(tid);
-        if (res.status === 403) {
-          await applyDeviceApprovalState(false);
-          return;
-        }
         const data = await res.json();
         if (data && typeof data.stopped === "boolean") {
           await applySystemStopped(data.stopped);
@@ -3488,20 +3373,15 @@
     }
 
     async function fetchYPlay(preserveDrawerFocus = true) {
-      if (document.visibilityState === "hidden" || !isDeviceApprovedState) return;
+      if (document.visibilityState === "hidden") return;
       try {
         const ctrl = new AbortController();
         const tid = setTimeout(() => ctrl.abort(), 8000);
-        const res = await fetch(`${WORKER_URL}/api/yplay/library?device_id=${encodeURIComponent(DEVICE_ID)}&t=${Date.now()}`, {
+        const res = await fetch(`${WORKER_URL}/api/yplay/library?t=${Date.now()}`, {
           cache: "no-store",
-          headers: { "X-Device-Id": DEVICE_ID },
           signal: ctrl.signal,
         });
         clearTimeout(tid);
-        if (res.status === 403) {
-          await applyDeviceApprovalState(false);
-          return;
-        }
         const data = await res.json();
         if (data && typeof data.stopped === "boolean") {
           await applySystemStopped(data.stopped);
@@ -3528,10 +3408,8 @@
               populateYPlayTracks(item);
               renderProgressVisual(maxConfirmedPos || getEffectiveTime(), getEffectiveDuration());
             } else if (yplayItems.length > 0) {
-              // Currently playing movie was removed by owner -> switch cleanly to #1
               loadYPlay(0, true);
             } else {
-              // Queue emptied -> return cleanly to Live TV
               const online = getOnlineChannels();
               if (online.length) playChannel(online[0], true, true);
             }
@@ -3570,9 +3448,9 @@
       if (document.visibilityState === "visible") {
         shuttingDown = false;
         await resolveDirectTunnel();
-        await sendDeviceHeartbeat();
+        sendDeviceHeartbeat();
         connectSystemEvents();
-        if (isSystemStopped || !isDeviceApprovedState) return;
+        if (isSystemStopped) return;
         if (!isLive && activeYPlayId && !video.getAttribute("src")) {
           const idx = yplayItems.findIndex((x) => String(x.id) === String(activeYPlayId));
           if (idx >= 0) loadYPlay(idx, false, maxConfirmedPos || null);
@@ -3582,16 +3460,16 @@
       }
     });
 
-    /* Init Fullscreen TV Experience */
+    /* Init Fullscreen TV Experience (Immediate Open — No Approval Gate) */
     syncIcons();
     renderLiveListPane();
     renderYPlayListPane();
 
     (async () => {
       await resolveDirectTunnel();
-      await sendDeviceHeartbeat();
+      sendDeviceHeartbeat();
       connectSystemEvents();
-      if (isDeviceApprovedState && !isSystemStopped) {
+      if (!isSystemStopped) {
         await fetchChannels(false);
         await fetchYPlay(false);
       }
@@ -3599,19 +3477,13 @@
 
     setInterval(sendDeviceHeartbeat, 10000);
     setInterval(() => {
-      if (isDeviceApprovedState && !isSystemStopped) {
-        fetchChannels(true);
-      }
+      if (!isSystemStopped) fetchChannels(true);
     }, 12000);
     setInterval(() => {
-      if (isDeviceApprovedState && !isSystemStopped && drawerOpen && drawerTab === "yplay") {
-        fetchYPlay(true);
-      }
+      if (!isSystemStopped && drawerOpen && drawerTab === "yplay") fetchYPlay(true);
     }, 4500);
     setInterval(() => {
-      if (isDeviceApprovedState && !isSystemStopped) {
-        fetchYPlay(true);
-      }
+      if (!isSystemStopped) fetchYPlay(true);
     }, 15000);
   </script>
 </body>
