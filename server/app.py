@@ -49,7 +49,7 @@ SESSION_FILE = DATA_DIR / "ystream_bot"
 IST_TZ = timezone(timedelta(hours=5, minutes=30))
 CHUNK_SIZE = 1024 * 1024  # 1 MiB
 MAX_CACHE_BYTES = int(1.5 * 1024 * 1024 * 1024)  # 1.5 GB cap
-DEVICE_ONLINE_TTL = 25  # seconds before device is marked offline
+DEVICE_ONLINE_TTL = 35  # seconds before device is marked offline
 CLIENT_FAIL_COOLDOWN = 600  # 10 min cooldown before re-probing a client-failed channel
 START_TIME = time.time()
 
@@ -134,6 +134,18 @@ def write_json(path: Path, data):
     LAST_SYSTEM_UPDATE = time.time()
 
 
+def is_valid_device_record(did: str, rec) -> bool:
+    if not isinstance(rec, dict):
+        return False
+    clean_id = re.sub(r"[^a-zA-Z0-9_-]", "", str(rec.get("device_id") or did or ""))
+    if len(clean_id) < 6:
+        return False
+    last_seen = float(rec.get("last_seen") or 0)
+    if last_seen <= 0:
+        return False
+    return True
+
+
 def init_stores():
     existing = read_json(CHANNELS_FILE, None)
     if not existing or not isinstance(existing, list) or any(not isinstance(c, dict) or "num" not in c for c in existing):
@@ -143,7 +155,7 @@ def init_stores():
     if not isinstance(devs, dict):
         write_json(DEVICES_FILE, {})
     else:
-        clean_devs = {k: v for k, v in devs.items() if isinstance(v, dict)}
+        clean_devs = {k: v for k, v in devs.items() if is_valid_device_record(k, v)}
         if len(clean_devs) != len(devs):
             write_json(DEVICES_FILE, clean_devs)
 
@@ -320,6 +332,12 @@ def fmt_ago(ts: float) -> str:
     return datetime.fromtimestamp(ts, tz=IST_TZ).strftime("%d %b %I:%M %p")
 
 
+def fmt_ist_full(ts: float) -> str:
+    if not ts or ts <= 0:
+        return "Unknown"
+    return datetime.fromtimestamp(ts, tz=IST_TZ).strftime("%d %b %Y, %I:%M:%S %p IST")
+
+
 def fmt_clock_now() -> str:
     return datetime.now(IST_TZ).strftime("%I:%M:%S %p IST")
 
@@ -334,27 +352,66 @@ def truncate_text(text: str, max_len: int) -> str:
 # =============================================================================
 # DEVICE DETECTION & LIVE ACTIVITY TRACKING
 # =============================================================================
-def detect_device_name(user_agent: str, native_model: str = "", platform: str = "") -> str:
-    nm = re.sub(r"\s+", " ", str(native_model or "")).strip()
-    if nm and nm.lower() not in ("unknown", "android", "generic", "sdk"):
-        return truncate_text(nm, 28)
+def classify_device_type(device_id: str, user_agent: str, native_model: str = "") -> str:
+    did = str(device_id or "").lower()
+    ua = str(user_agent or "").lower()
+    if did.startswith("tv_") or native_model or any(x in ua for x in ("smart-tv", "smarttv", "googletv", "android tv", "tizen", "webos", "bravia", "mitv", "aft")):
+        return "Android TV / Smart TV"
+    if did.startswith("mob_") or any(x in ua for x in ("mobile", "iphone", "ipad", "android")):
+        return "Mobile Phone / Tablet"
+    return "Desktop / Web Browser"
+
+
+def detect_device_name(
+    user_agent: str,
+    client_model: str = "",
+    platform: str = "",
+    device_id: str = "",
+) -> str:
+    cm = re.sub(r"\s+", " ", str(client_model or "")).strip()
+    if cm and cm.upper() != "K" and cm.lower() not in ("unknown", "android", "generic", "sdk", "device"):
+        low_cm = cm.lower()
+        if "mitv" in low_cm or "mibox" in low_cm:
+            return truncate_text(f"Xiaomi TV ({cm})", 28)
+        if re.match(r"^(21|22|23|24|25)\d{4,}", cm) or "redmi" in low_cm or "poco" in low_cm:
+            return truncate_text(f"Xiaomi/Redmi ({cm})", 28)
+        if cm.upper().startswith("SM-"):
+            return truncate_text(f"Samsung ({cm})", 28)
+        if cm.upper().startswith(("RMX", "CPH", "V2", "LE2", "NE2")):
+            return truncate_text(f"Android ({cm})", 28)
+        return truncate_text(cm, 28)
 
     ua = str(user_agent or "")
     m = re.search(r";\s*([^;()]+?)\s+Build/", ua)
     if m:
         raw_model = m.group(1).strip()
-        low_m = raw_model.lower()
-        if "mitv" in low_m or "mibox" in low_m or "xiaomi" in low_m:
-            return truncate_text(f"Xiaomi TV ({raw_model})", 28)
-        if "bravia" in low_m:
-            return truncate_text(f"Sony TV ({raw_model})", 28)
-        if "aft" in low_m:
-            return truncate_text(f"Fire TV ({raw_model})", 28)
-        if "shield" in low_m:
-            return "NVIDIA Shield TV"
-        return truncate_text(raw_model, 28)
+        if raw_model.upper() != "K" and raw_model.lower() not in ("android", "unknown"):
+            low_m = raw_model.lower()
+            if "mitv" in low_m or "mibox" in low_m or "xiaomi" in low_m:
+                return truncate_text(f"Xiaomi TV ({raw_model})", 28)
+            if "bravia" in low_m:
+                return truncate_text(f"Sony TV ({raw_model})", 28)
+            if "aft" in low_m:
+                return truncate_text(f"Fire TV ({raw_model})", 28)
+            if "shield" in low_m:
+                return "NVIDIA Shield TV"
+            return truncate_text(raw_model, 28)
 
     low_ua = ua.lower()
+    browser = ""
+    if "edg/" in low_ua:
+        browser = "Edge"
+    elif "opr/" in low_ua or "opera" in low_ua:
+        browser = "Opera"
+    elif "firefox/" in low_ua:
+        browser = "Firefox"
+    elif "chrome/" in low_ua or "crios/" in low_ua:
+        browser = "Chrome"
+    elif "safari/" in low_ua:
+        browser = "Safari"
+
+    if str(device_id).startswith("tv_"):
+        return "Android TV App"
     if "tizen" in low_ua or "samsung" in low_ua:
         return "Samsung Smart TV"
     if "webos" in low_ua or "lg netcast" in low_ua:
@@ -362,19 +419,89 @@ def detect_device_name(user_agent: str, native_model: str = "", platform: str = 
     if "android tv" in low_ua or "googletv" in low_ua or "aft" in low_ua:
         return "Android TV"
     if "iphone" in low_ua:
-        return "Apple iPhone"
+        return f"Apple iPhone ({browser})" if browser else "Apple iPhone"
     if "ipad" in low_ua:
-        return "Apple iPad"
+        return f"Apple iPad ({browser})" if browser else "Apple iPad"
     if "android" in low_ua:
-        return "Android Phone / Browser"
+        return f"Android Phone ({browser})" if browser else "Android Phone"
     if "windows" in low_ua:
-        return "Windows PC"
+        return f"Windows PC ({browser})" if browser else "Windows PC"
     if "macintosh" in low_ua or "mac os" in low_ua:
-        return "MacBook / Mac"
+        return f"MacBook / Mac ({browser})" if browser else "MacBook / Mac"
     if "linux" in low_ua:
-        return "Linux Browser"
+        return f"Linux PC ({browser})" if browser else "Linux Browser"
     plat = str(platform or "").strip()
-    return truncate_text(plat if plat else "Smart TV / Web", 28)
+    if plat:
+        return truncate_text(f"{plat} ({browser})" if browser else plat, 28)
+    return "Smart TV / Web"
+
+
+def record_device_activity(
+    device_id: str,
+    user_agent: str = "",
+    client_model: str = "",
+    platform: str = "",
+    activity: Optional[str] = None,
+    playing: Optional[str] = None,
+) -> Optional[dict]:
+    clean_id = re.sub(r"[^a-zA-Z0-9_-]", "", str(device_id or ""))[:64]
+    if len(clean_id) < 6:
+        return None
+
+    raw_devs = read_json(DEVICES_FILE, {})
+    if not isinstance(raw_devs, dict):
+        raw_devs = {}
+    raw_devs = {k: v for k, v in raw_devs.items() if is_valid_device_record(k, v)}
+
+    now = time.time()
+    rec = raw_devs.get(clean_id)
+    ua_clean = str(user_agent or "").strip()
+    model_clean = str(client_model or "").strip()
+    plat_clean = str(platform or "").strip()
+
+    if not isinstance(rec, dict):
+        detected_name = detect_device_name(ua_clean, model_clean, plat_clean, clean_id)
+        rec = {
+            "device_id": clean_id,
+            "name": detected_name,
+            "device_type": classify_device_type(clean_id, ua_clean, model_clean),
+            "user_agent": ua_clean[:240],
+            "client_model": model_clean[:60],
+            "created_at": int(now),
+            "last_seen": now,
+            "activity": activity if activity in ("live", "yplay", "idle") else "idle",
+            "playing": truncate_text(playing, 64) if playing else "",
+        }
+    else:
+        if ua_clean:
+            rec["user_agent"] = ua_clean[:240]
+        if model_clean and model_clean.upper() != "K":
+            rec["client_model"] = model_clean[:60]
+
+        cur_name = str(rec.get("name") or "")
+        generic_names = ("Device", "K", "Smart TV / Web", "Android Phone", "Android Phone (Chrome)", "Android TV", "Windows PC", "Windows PC (Chrome)")
+        if (model_clean and model_clean.upper() != "K") or cur_name in generic_names or not cur_name:
+            better = detect_device_name(
+                rec.get("user_agent", ua_clean),
+                rec.get("client_model", model_clean),
+                plat_clean,
+                clean_id,
+            )
+            if better:
+                rec["name"] = better
+
+        if not rec.get("device_type"):
+            rec["device_type"] = classify_device_type(clean_id, rec.get("user_agent", ua_clean), rec.get("client_model", model_clean))
+
+        rec["last_seen"] = now
+        if activity in ("live", "yplay", "idle"):
+            rec["activity"] = activity
+        if playing is not None and str(playing).strip():
+            rec["playing"] = truncate_text(str(playing), 64)
+
+    raw_devs[clean_id] = rec
+    write_json(DEVICES_FILE, raw_devs)
+    return rec
 
 
 def get_devices_ordered() -> list[dict]:
@@ -383,7 +510,7 @@ def get_devices_ordered() -> list[dict]:
         write_json(DEVICES_FILE, {})
         return []
 
-    clean_map = {k: v for k, v in raw.items() if isinstance(v, dict)}
+    clean_map = {k: v for k, v in raw.items() if is_valid_device_record(k, v)}
     if len(clean_map) != len(raw):
         write_json(DEVICES_FILE, clean_map)
 
@@ -392,6 +519,13 @@ def get_devices_ordered() -> list[dict]:
     now = time.time()
     for idx, d in enumerate(items, start=1):
         d["num"] = idx
+        if not d.get("name") or str(d.get("name")).strip() in ("Device", "K"):
+            d["name"] = detect_device_name(
+                d.get("user_agent", ""),
+                d.get("client_model", ""),
+                "",
+                d.get("device_id", ""),
+            )
         last_seen = float(d.get("last_seen") or 0)
         d["is_online"] = (now - last_seen) <= DEVICE_ONLINE_TTL
     return items
@@ -421,8 +555,8 @@ def build_device_dashboard_text() -> tuple[str, InlineKeyboardMarkup]:
     table_rows = ["No.  Device Name            Activity", "------------------------------------------"]
     for d in devices:
         num_str = str(d.get("num", 0)).ljust(4)
-        name_str = truncate_text(d.get("name") or "Device", 21).ljust(22)
-        playing = truncate_text(d.get("playing") or "", 28)
+        name_str = truncate_text(d.get("name") or "Smart TV / Web", 21).ljust(22)
+        playing = truncate_text(d.get("playing") or "", 30)
         if not d.get("is_online"):
             last_str = fmt_ago(float(d.get("last_seen") or 0))
             act_line = f"Offline ({last_str})"
@@ -1618,18 +1752,21 @@ async def on_interactive_input(_, msg: Message):
             bot_dialog_state.pop(uid, None)
             act = dev.get("activity") or "idle"
             act_label = "Live TV" if act == "live" else ("YPlay" if act == "yplay" else "Idle")
+            is_live_now = bool(dev.get("is_online"))
+            play_label = "Currently Playing" if is_live_now else "Last Watched"
             info_lines = [
-                f"Device Number : #{dev.get('num')}",
-                f"Device Name   : {dev.get('name')}",
-                f"Device ID     : {dev.get('device_id')}",
-                f"Status        : {'Live 🟢' if dev.get('is_online') else 'Offline'}",
-                f"Activity      : {act_label}",
-                f"Playing/Last  : {dev.get('playing') or 'None'}",
-                f"First Visited : {fmt_ago(float(dev.get('created_at') or 0))}",
-                f"Last Active   : {fmt_ago(float(dev.get('last_seen') or 0))}",
+                f"Device Number  : #{dev.get('num')}",
+                f"Device Name    : {dev.get('name')}",
+                f"Device Type    : {dev.get('device_type') or classify_device_type(dev.get('device_id', ''), dev.get('user_agent', ''))}",
+                f"Device ID      : {dev.get('device_id')}",
+                f"Status         : {'Live Now 🟢' if is_live_now else 'Offline'}",
+                f"Activity       : {act_label}",
+                f"{play_label.ljust(14)} : {dev.get('playing') or 'None'}",
+                f"First Visited  : {fmt_ist_full(float(dev.get('created_at') or 0))}",
+                f"Last Active    : {fmt_ist_full(float(dev.get('last_seen') or 0))} ({fmt_ago(float(dev.get('last_seen') or 0))})",
             ]
             await msg.reply_text(
-                f"<b>Device Details</b>\n<pre>{html.escape(chr(10).join(info_lines))}</pre>",
+                f"<b>📱 Device Details</b>\n<pre>{html.escape(chr(10).join(info_lines))}</pre>",
                 parse_mode=enums.ParseMode.HTML,
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("🗑 Remove from List", callback_data=f"dev:del_id:{dev.get('device_id')}")],
@@ -1873,7 +2010,32 @@ async def api_events(request: Request):
     )
 
 
-# --- Device Activity Heartbeat ---
+# --- Zero-Fail Device Activity Endpoints (Both GET /ping and POST /heartbeat) ---
+@app.get("/api/device/ping")
+async def device_ping(
+    request: Request,
+    device_id: str = "",
+    model: str = "",
+    platform: str = "",
+    activity: str = "idle",
+    playing: str = "",
+):
+    ua = str(request.headers.get("user-agent") or "")
+    rec = record_device_activity(
+        device_id=device_id,
+        user_agent=ua,
+        client_model=model,
+        platform=platform,
+        activity=activity,
+        playing=playing,
+    )
+    return {
+        "ok": bool(rec),
+        "stopped": SYSTEM_STOPPED,
+        "name": rec.get("name") if rec else "",
+    }
+
+
 @app.post("/api/device/heartbeat")
 async def device_heartbeat(request: Request):
     try:
@@ -1885,59 +2047,36 @@ async def device_heartbeat(request: Request):
         body = {}
 
     raw_id = str(body.get("device_id") or request.query_params.get("device_id") or "")
-    device_id = re.sub(r"[^a-zA-Z0-9_-]", "", raw_id)[:64]
-    if len(device_id) < 6:
-        return {"ok": False, "stopped": SYSTEM_STOPPED}
-
     ua = str(request.headers.get("user-agent") or "")
-    native_model = str(body.get("native_model") or "")
-    platform = str(body.get("platform") or "")
-    activity = str(body.get("activity") or "idle").lower()
-    if activity not in ("live", "yplay", "idle"):
-        activity = "idle"
-    playing = truncate_text(str(body.get("playing") or ""), 60)
+    native_model = str(body.get("native_model") or body.get("model") or request.query_params.get("model") or "")
+    platform = str(body.get("platform") or request.query_params.get("platform") or "")
+    activity = str(body.get("activity") or request.query_params.get("activity") or "idle")
+    playing = str(body.get("playing") or request.query_params.get("playing") or "")
 
-    raw_devs = read_json(DEVICES_FILE, {})
-    if not isinstance(raw_devs, dict):
-        raw_devs = {}
-    raw_devs = {k: v for k, v in raw_devs.items() if isinstance(v, dict)}
-
-    now = time.time()
-    rec = raw_devs.get(device_id)
-
-    if not isinstance(rec, dict):
-        detected_name = detect_device_name(ua, native_model, platform)
-        rec = {
-            "device_id": device_id,
-            "name": detected_name,
-            "created_at": int(now),
-            "last_seen": now,
-            "activity": activity,
-            "playing": playing,
-        }
-    else:
-        if native_model and str(rec.get("name", "")).startswith(("Smart TV", "Android Phone", "Android TV")):
-            better = detect_device_name(ua, native_model, platform)
-            if better:
-                rec["name"] = better
-        rec["last_seen"] = now
-        rec["activity"] = activity
-        if playing:
-            rec["playing"] = playing
-
-    raw_devs[device_id] = rec
-    write_json(DEVICES_FILE, raw_devs)
-
+    rec = record_device_activity(
+        device_id=raw_id,
+        user_agent=ua,
+        client_model=native_model,
+        platform=platform,
+        activity=activity,
+        playing=playing,
+    )
     return {
-        "ok": True,
+        "ok": bool(rec),
         "stopped": SYSTEM_STOPPED,
-        "name": rec.get("name"),
+        "name": rec.get("name") if rec else "",
     }
 
 
 # --- Live TV Channels API ---
 @app.get("/api/channels")
-async def api_channels():
+async def api_channels(request: Request, device_id: str = "", model: str = ""):
+    if device_id:
+        record_device_activity(
+            device_id=device_id,
+            user_agent=str(request.headers.get("user-agent") or ""),
+            client_model=model,
+        )
     chans = get_channels_sorted()
     return {
         "stopped": SYSTEM_STOPPED,
@@ -1953,8 +2092,14 @@ async def api_channel_report_error(num: int):
 
 # --- YPlay Library (With Isolated Per-Device Progress) ---
 @app.get("/api/yplay/library")
-async def yplay_library(device_id: str = ""):
+async def yplay_library(request: Request, device_id: str = "", model: str = ""):
     clean_did = re.sub(r"[^a-zA-Z0-9_-]", "", str(device_id or ""))[:64]
+    if clean_did:
+        record_device_activity(
+            device_id=clean_did,
+            user_agent=str(request.headers.get("user-agent") or ""),
+            client_model=model,
+        )
 
     prog_all = read_json(PROGRESS_FILE, {})
     dev_prog = prog_all.get(clean_did, {}) if (clean_did and isinstance(prog_all, dict)) else {}
@@ -2006,6 +2151,15 @@ async def yplay_save_progress(request: Request):
     if not item:
         return {"ok": False}
 
+    # Keep device live telemetry updated while saving playback progress
+    record_device_activity(
+        device_id=clean_did,
+        user_agent=str(request.headers.get("user-agent") or ""),
+        client_model=str(body.get("model") or ""),
+        activity="yplay",
+        playing=str(item.get("title") or ""),
+    )
+
     prog_all = read_json(PROGRESS_FILE, {})
     if not isinstance(prog_all, dict):
         prog_all = {}
@@ -2033,13 +2187,22 @@ async def yplay_save_progress(request: Request):
 
 
 @app.api_route("/api/yplay/stream/{item_ref}", methods=["GET", "HEAD"])
-async def yplay_stream(item_ref: str, request: Request):
+async def yplay_stream(item_ref: str, request: Request, device_id: str = "", model: str = ""):
     if SYSTEM_STOPPED:
         raise HTTPException(status_code=503, detail="System shutdown")
 
     _, item = find_yplay_item(item_ref)
     if not item:
         raise HTTPException(status_code=404, detail="Movie not found in YPlay queue")
+
+    if device_id and request.method == "GET":
+        record_device_activity(
+            device_id=device_id,
+            user_agent=str(request.headers.get("user-agent") or ""),
+            client_model=model,
+            activity="yplay",
+            playing=str(item.get("title") or ""),
+        )
 
     item_id = item["id"]
     msg = await get_tg_message(item)
@@ -2174,6 +2337,8 @@ async def yplay_play_stream(
     t: float = 0.0,
     q: str = "orig",
     a: int = 0,
+    device_id: str = "",
+    model: str = "",
 ):
     global active_play_proc
     if SYSTEM_STOPPED:
@@ -2185,6 +2350,15 @@ async def yplay_play_stream(
 
     if request.method == "HEAD":
         return Response(status_code=200, headers={"Content-Type": "video/mp4", "Cache-Control": "no-store"})
+
+    if device_id:
+        record_device_activity(
+            device_id=device_id,
+            user_agent=str(request.headers.get("user-agent") or ""),
+            client_model=model,
+            activity="yplay",
+            playing=str(item.get("title") or ""),
+        )
 
     item_id = item["id"]
     seek_sec = max(0.0, float(t or 0.0))
