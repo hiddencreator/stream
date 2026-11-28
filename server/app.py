@@ -8,7 +8,7 @@ import subprocess
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urljoin, urlparse
@@ -46,6 +46,7 @@ OWNER_FILE = DATA_DIR / "owner.json"
 STATE_FILE = DATA_DIR / "system_state.json"
 SESSION_FILE = DATA_DIR / "ystream_bot"
 
+IST_TZ = timezone(timedelta(hours=5, minutes=30))
 CHUNK_SIZE = 1024 * 1024  # 1 MiB
 MAX_CACHE_BYTES = int(1.5 * 1024 * 1024 * 1024)  # 1.5 GB cap
 DEVICE_ONLINE_TTL = 25  # seconds before device is marked offline
@@ -133,20 +134,35 @@ def write_json(path: Path, data):
     LAST_SYSTEM_UPDATE = time.time()
 
 
-def init_channels_store():
+def init_stores():
     existing = read_json(CHANNELS_FILE, None)
-    if not existing or not isinstance(existing, list):
-        write_json(CHANNELS_FILE, DEFAULT_CHANNELS)
-        return
-    if any("num" not in c for c in existing):
+    if not existing or not isinstance(existing, list) or any(not isinstance(c, dict) or "num" not in c for c in existing):
         write_json(CHANNELS_FILE, DEFAULT_CHANNELS)
 
+    devs = read_json(DEVICES_FILE, {})
+    if not isinstance(devs, dict):
+        write_json(DEVICES_FILE, {})
+    else:
+        clean_devs = {k: v for k, v in devs.items() if isinstance(v, dict)}
+        if len(clean_devs) != len(devs):
+            write_json(DEVICES_FILE, clean_devs)
 
-init_channels_store()
-read_json(LIBRARY_FILE, [])
-read_json(DEVICES_FILE, {})
-read_json(PROGRESS_FILE, {})
-SYSTEM_STOPPED: bool = bool(read_json(STATE_FILE, {"stopped": False}).get("stopped", False))
+    lib = read_json(LIBRARY_FILE, [])
+    if not isinstance(lib, list):
+        write_json(LIBRARY_FILE, [])
+    else:
+        clean_lib = [x for x in lib if isinstance(x, dict)]
+        if len(clean_lib) != len(lib):
+            write_json(LIBRARY_FILE, clean_lib)
+
+    prog = read_json(PROGRESS_FILE, {})
+    if not isinstance(prog, dict):
+        write_json(PROGRESS_FILE, {})
+
+
+init_stores()
+_raw_state = read_json(STATE_FILE, {"stopped": False})
+SYSTEM_STOPPED: bool = bool(_raw_state.get("stopped", False)) if isinstance(_raw_state, dict) else False
 
 
 def broadcast_event(event_type: str = "state", extra: Optional[dict] = None):
@@ -176,6 +192,8 @@ def get_owner_id() -> int:
     if ENV_OWNER_ID > 0:
         return ENV_OWNER_ID
     data = read_json(OWNER_FILE, {"owner_id": 0})
+    if not isinstance(data, dict):
+        return 0
     try:
         return int(data.get("owner_id") or 0)
     except Exception:
@@ -299,11 +317,11 @@ def fmt_ago(ts: float) -> str:
         return f"{diff // 60}m ago"
     if diff < 86400:
         return f"{diff // 3600}h ago"
-    return datetime.fromtimestamp(ts).strftime("%d %b %H:%M")
+    return datetime.fromtimestamp(ts, tz=IST_TZ).strftime("%d %b %I:%M %p")
 
 
 def fmt_clock_now() -> str:
-    return datetime.now().strftime("%I:%M:%S %p")
+    return datetime.now(IST_TZ).strftime("%I:%M:%S %p IST")
 
 
 def truncate_text(text: str, max_len: int) -> str:
@@ -362,8 +380,14 @@ def detect_device_name(user_agent: str, native_model: str = "", platform: str = 
 def get_devices_ordered() -> list[dict]:
     raw = read_json(DEVICES_FILE, {})
     if not isinstance(raw, dict):
+        write_json(DEVICES_FILE, {})
         return []
-    items = list(raw.values())
+
+    clean_map = {k: v for k, v in raw.items() if isinstance(v, dict)}
+    if len(clean_map) != len(raw):
+        write_json(DEVICES_FILE, clean_map)
+
+    items = [dict(v) for v in clean_map.values()]
     items.sort(key=lambda d: int(d.get("created_at") or 0))
     now = time.time()
     for idx, d in enumerate(items, start=1):
@@ -374,13 +398,13 @@ def get_devices_ordered() -> list[dict]:
 
 
 def count_online_devices() -> int:
-    return sum(1 for d in get_devices_ordered() if d["is_online"])
+    return sum(1 for d in get_devices_ordered() if d.get("is_online"))
 
 
 def build_device_dashboard_text() -> tuple[str, InlineKeyboardMarkup]:
     devices = get_devices_ordered()
     total = len(devices)
-    active_cnt = sum(1 for d in devices if d["is_online"])
+    active_cnt = sum(1 for d in devices if d.get("is_online"))
 
     lines = [
         "<b>📱 Device Management</b>",
@@ -396,10 +420,10 @@ def build_device_dashboard_text() -> tuple[str, InlineKeyboardMarkup]:
 
     table_rows = ["No.  Device Name            Activity", "------------------------------------------"]
     for d in devices:
-        num_str = str(d["num"]).ljust(4)
+        num_str = str(d.get("num", 0)).ljust(4)
         name_str = truncate_text(d.get("name") or "Device", 21).ljust(22)
         playing = truncate_text(d.get("playing") or "", 28)
-        if not d["is_online"]:
+        if not d.get("is_online"):
             last_str = fmt_ago(float(d.get("last_seen") or 0))
             act_line = f"Offline ({last_str})"
             sub_line = f"     Last Watched: {playing}" if playing else ""
@@ -436,8 +460,9 @@ def get_channels_sorted() -> list[dict]:
     chans = read_json(CHANNELS_FILE, DEFAULT_CHANNELS)
     if not isinstance(chans, list):
         return list(DEFAULT_CHANNELS)
-    chans.sort(key=lambda c: int(c.get("num") or 0))
-    return chans
+    valid = [c for c in chans if isinstance(c, dict)]
+    valid.sort(key=lambda c: int(c.get("num") or 0))
+    return valid
 
 
 def fetch_url_text_sync(url: str, timeout: int = 5) -> tuple[int, str]:
@@ -455,7 +480,6 @@ def fetch_url_text_sync(url: str, timeout: int = 5) -> tuple[int, str]:
 
 
 def probe_stream_url_sync(url: str) -> str:
-    """Deep stream probe: checks master playlist AND child variant playlist for HLS."""
     if not url or "offline.ystream.local" in url:
         return "offline"
     try:
@@ -466,7 +490,6 @@ def probe_stream_url_sync(url: str) -> str:
         if ".m3u8" in low_u:
             if "#EXTM3U" not in sample:
                 return "offline"
-            # If master playlist points to a child variant .m3u8, verify the child playlist too
             for line in sample.splitlines():
                 ln = line.strip()
                 if ln and not ln.startswith("#"):
@@ -489,11 +512,6 @@ def probe_stream_url_sync(url: str) -> str:
 
 
 async def live_check_channels(manual_refresh: bool = False):
-    """
-    Checks offline channels safely without flip-flopping client-failed streams:
-    - Background mode: only probes offline channels whose client failure cooldown has expired.
-    - Manual refresh mode (/YStream -> Refresh): probes offline channels with deep child-playlist check.
-    """
     chans = get_channels_sorted()
     if not chans:
         return
@@ -665,6 +683,13 @@ async def zero_idle_channel_recovery_loop():
 # =============================================================================
 # /YPlay — MEDIA QUALITY, PROBING, CACHE & PER-DEVICE PROGRESS
 # =============================================================================
+def get_library_items() -> list[dict]:
+    items = read_json(LIBRARY_FILE, [])
+    if not isinstance(items, list):
+        return []
+    return [x for x in items if isinstance(x, dict)]
+
+
 def detect_quality(title: str, width: int = 0, height: int = 0) -> str:
     if width >= 3800 or height >= 2100:
         return "4K"
@@ -781,7 +806,7 @@ def format_yplay_table_rows(items: list[dict], start_num: int = 1) -> str:
         else:
             q_str = str(m.get("quality") or "HD").upper()
             tracks = m.get("audio_tracks") or []
-            lang_cnt = max(1, len({str(t.get("label") or "").lower() for t in tracks if t.get("label")})) if tracks else 1
+            lang_cnt = max(1, len({str(t.get("label") or "").lower() for t in tracks if isinstance(t, dict) and t.get("label")})) if tracks else 1
             lines.append(f"{num_str} {title_str}")
             lines.append(f"     {q_str} · {lang_cnt}Lang · 🟢")
     if not items:
@@ -790,7 +815,7 @@ def format_yplay_table_rows(items: list[dict], start_num: int = 1) -> str:
 
 
 def build_yplay_dashboard() -> tuple[str, InlineKeyboardMarkup]:
-    items = read_json(LIBRARY_FILE, [])
+    items = get_library_items()
     for row in items:
         if not row.get("probed"):
             trigger_prewarm(row)
@@ -900,18 +925,20 @@ def run_ffprobe_http(item_id: str) -> Optional[dict]:
 
 
 def parse_ffprobe_data(data: dict, file_size: int = 0) -> Optional[dict]:
-    streams = data.get("streams") or []
-    if not streams:
+    if not isinstance(data, dict):
         return None
-    v_stream = next((s for s in streams if s.get("codec_type") == "video"), {})
-    fmt_info = data.get("format") or {}
+    streams = data.get("streams") or []
+    if not streams or not isinstance(streams, list):
+        return None
+    v_stream = next((s for s in streams if isinstance(s, dict) and s.get("codec_type") == "video"), {})
+    fmt_info = data.get("format") if isinstance(data.get("format"), dict) else {}
 
     audio_tracks = []
     a_idx = 0
     for s in streams:
-        if s.get("codec_type") != "audio":
+        if not isinstance(s, dict) or s.get("codec_type") != "audio":
             continue
-        tags = s.get("tags") or {}
+        tags = s.get("tags") if isinstance(s.get("tags"), dict) else {}
         codec = str(s.get("codec_name") or "").lower()
         label, is_tamil = resolve_lang_label(tags.get("language", ""), tags.get("title", ""), f"Audio {a_idx + 1}")
         audio_tracks.append({
@@ -931,11 +958,11 @@ def parse_ffprobe_data(data: dict, file_size: int = 0) -> Optional[dict]:
     subtitles = []
     s_idx = 0
     for s in streams:
-        if s.get("codec_type") != "subtitle":
+        if not isinstance(s, dict) or s.get("codec_type") != "subtitle":
             continue
         codec = str(s.get("codec_name") or "").lower()
         if codec in TEXT_SUB_CODECS:
-            tags = s.get("tags") or {}
+            tags = s.get("tags") if isinstance(s.get("tags"), dict) else {}
             label, _ = resolve_lang_label(tags.get("language", ""), tags.get("title", ""), f"Sub {len(subtitles) + 1}")
             subtitles.append({
                 "index": s_idx,
@@ -981,7 +1008,7 @@ def probe_media_sync(item_id: str, file_size: int = 0) -> Optional[dict]:
 
 
 def update_library_probe(item_id: str, info: dict):
-    items = read_json(LIBRARY_FILE, [])
+    items = get_library_items()
     changed = False
     for row in items:
         if row.get("id") == item_id:
@@ -1012,7 +1039,7 @@ def update_library_probe(item_id: str, info: dict):
 
 
 def find_yplay_item(item_ref: str) -> tuple[Optional[int], Optional[dict]]:
-    items = read_json(LIBRARY_FILE, [])
+    items = get_library_items()
     for i, row in enumerate(items):
         if str(row.get("id")) == str(item_ref):
             return i, row
@@ -1114,7 +1141,7 @@ def trigger_prewarm(item: dict):
 
 
 def save_media_to_queue(item: dict) -> tuple[bool, int, dict]:
-    items = read_json(LIBRARY_FILE, [])
+    items = get_library_items()
     for idx, row in enumerate(items, start=1):
         if row.get("chat_id") == item["chat_id"] and row.get("message_id") == item["message_id"]:
             trigger_prewarm(row)
@@ -1128,15 +1155,15 @@ def save_media_to_queue(item: dict) -> tuple[bool, int, dict]:
 
 
 # =============================================================================
-# /status — INSTANT REAL-TIME SYSTEM STATUS (NO BLOCKING PROBES)
+# /status — INSTANT REAL-TIME SYSTEM STATUS
 # =============================================================================
 async def build_status_html() -> str:
     devices = get_devices_ordered()
     dev_total = len(devices)
-    dev_online = sum(1 for d in devices if d["is_online"])
+    dev_online = sum(1 for d in devices if d.get("is_online"))
     dev_offline = dev_total - dev_online
-    dev_live = sum(1 for d in devices if d["is_online"] and d.get("activity") == "live")
-    dev_yplay = sum(1 for d in devices if d["is_online"] and d.get("activity") == "yplay")
+    dev_live = sum(1 for d in devices if d.get("is_online") and d.get("activity") == "live")
+    dev_yplay = sum(1 for d in devices if d.get("is_online") and d.get("activity") == "yplay")
 
     chans = get_channels_sorted()
     ch_total = len(chans)
@@ -1144,7 +1171,7 @@ async def build_status_html() -> str:
     ch_offline = ch_total - ch_working
     ch_monitored = ch_offline if (dev_online > 0 and not SYSTEM_STOPPED) else 0
 
-    yp_items = read_json(LIBRARY_FILE, [])
+    yp_items = get_library_items()
     yp_total = len(yp_items)
     yp_working = sum(1 for m in yp_items if m.get("status") != "error")
     yp_error = yp_total - yp_working
@@ -1350,7 +1377,7 @@ async def on_interactive_input(_, msg: Message):
             return
         uid = int(msg.from_user.id)
         st = bot_dialog_state.get(uid)
-        mode = st.get("mode") if st else None
+        mode = st.get("mode") if isinstance(st, dict) else None
 
         has_any_media = bool(
             msg.video or msg.document or msg.animation or msg.photo or msg.audio or msg.voice or msg.sticker
@@ -1540,7 +1567,7 @@ async def on_interactive_input(_, msg: Message):
                 )
                 return
             nums = list(dict.fromkeys(int(t) for t in tokens))
-            items = read_json(LIBRARY_FILE, [])
+            items = get_library_items()
             invalid = [n for n in nums if n < 1 or n > len(items)]
             if invalid:
                 await msg.reply_text(
@@ -1584,7 +1611,7 @@ async def on_interactive_input(_, msg: Message):
                 return
             d_num = int(text)
             devices = get_devices_ordered()
-            dev = next((d for d in devices if d["num"] == d_num), None)
+            dev = next((d for d in devices if d.get("num") == d_num), None)
             if not dev:
                 await msg.reply_text(f"❌ Device <code>#{d_num}</code> not found.", parse_mode=enums.ParseMode.HTML)
                 return
@@ -1592,10 +1619,10 @@ async def on_interactive_input(_, msg: Message):
             act = dev.get("activity") or "idle"
             act_label = "Live TV" if act == "live" else ("YPlay" if act == "yplay" else "Idle")
             info_lines = [
-                f"Device Number : #{dev['num']}",
+                f"Device Number : #{dev.get('num')}",
                 f"Device Name   : {dev.get('name')}",
                 f"Device ID     : {dev.get('device_id')}",
-                f"Status        : {'Live 🟢' if dev['is_online'] else 'Offline'}",
+                f"Status        : {'Live 🟢' if dev.get('is_online') else 'Offline'}",
                 f"Activity      : {act_label}",
                 f"Playing/Last  : {dev.get('playing') or 'None'}",
                 f"First Visited : {fmt_ago(float(dev.get('created_at') or 0))}",
@@ -1605,7 +1632,7 @@ async def on_interactive_input(_, msg: Message):
                 f"<b>Device Details</b>\n<pre>{html.escape(chr(10).join(info_lines))}</pre>",
                 parse_mode=enums.ParseMode.HTML,
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🗑 Remove from List", callback_data=f"dev:del_id:{dev['device_id']}")],
+                    [InlineKeyboardButton("🗑 Remove from List", callback_data=f"dev:del_id:{dev.get('device_id')}")],
                     [InlineKeyboardButton("⬅️ Back to Devices", callback_data="dev:refresh")],
                 ]),
             )
@@ -1618,13 +1645,14 @@ async def on_interactive_input(_, msg: Message):
                 return
             d_num = int(text)
             devices = get_devices_ordered()
-            dev = next((d for d in devices if d["num"] == d_num), None)
+            dev = next((d for d in devices if d.get("num") == d_num), None)
             if not dev:
                 await msg.reply_text(f"❌ Device <code>#{d_num}</code> not found.", parse_mode=enums.ParseMode.HTML)
                 return
             raw_devs = read_json(DEVICES_FILE, {})
-            raw_devs.pop(dev["device_id"], None)
-            write_json(DEVICES_FILE, raw_devs)
+            if isinstance(raw_devs, dict):
+                raw_devs.pop(dev.get("device_id"), None)
+                write_json(DEVICES_FILE, raw_devs)
             bot_dialog_state.pop(uid, None)
             dash_txt, dash_kb = build_device_dashboard_text()
             await msg.reply_text(
@@ -1733,14 +1761,15 @@ async def on_callback(_, cq: CallbackQuery):
             await cq.answer("Removed")
             dev_id = data.split(":", 2)[2]
             raw_devs = read_json(DEVICES_FILE, {})
-            rec = raw_devs.pop(dev_id, None)
-            write_json(DEVICES_FILE, raw_devs)
+            rec = raw_devs.pop(dev_id, None) if isinstance(raw_devs, dict) else None
+            if isinstance(raw_devs, dict):
+                write_json(DEVICES_FILE, raw_devs)
             txt, kb = build_device_dashboard_text()
-            dname = rec.get("name") if rec else dev_id
+            dname = rec.get("name") if isinstance(rec, dict) else dev_id
             await safe_edit_message(cq.message, f"🗑 <b>Removed {html.escape(str(dname))}</b>\n\n{txt}", kb)
             return
 
-        # --- /status Refresh Callback (Instant, no channel flip-flop) ---
+        # --- /status Refresh Callback ---
         if data == "st:refresh":
             await cq.answer("Refreshing status...")
             txt = await build_status_html()
@@ -1773,7 +1802,7 @@ async def startup():
     except Exception as exc:
         print(f"[Bot commands error] {exc}")
 
-    items = read_json(LIBRARY_FILE, [])
+    items = get_library_items()
     if items:
         trigger_prewarm(items[0])
     asyncio.create_task(zero_idle_channel_recovery_loop())
@@ -1790,9 +1819,21 @@ async def shutdown():
         pass
 
 
+@app.options("/{full_path:path}")
+async def preflight_handler():
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS, HEAD",
+            "Access-Control-Allow-Headers": "*",
+        },
+    )
+
+
 @app.get("/health")
 async def health():
-    items = read_json(LIBRARY_FILE, [])
+    items = get_library_items()
     chans = get_channels_sorted()
     tunnel = await asyncio.to_thread(get_active_tunnel_url)
     return {
@@ -1832,12 +1873,14 @@ async def api_events(request: Request):
     )
 
 
-# --- Device Activity Heartbeat (Accepts JSON or text/plain to avoid CORS preflight) ---
+# --- Device Activity Heartbeat ---
 @app.post("/api/device/heartbeat")
 async def device_heartbeat(request: Request):
     try:
         raw_body = await request.body()
         body = json.loads(raw_body.decode("utf-8")) if raw_body else {}
+        if not isinstance(body, dict):
+            body = {}
     except Exception:
         body = {}
 
@@ -1857,10 +1900,12 @@ async def device_heartbeat(request: Request):
     raw_devs = read_json(DEVICES_FILE, {})
     if not isinstance(raw_devs, dict):
         raw_devs = {}
+    raw_devs = {k: v for k, v in raw_devs.items() if isinstance(v, dict)}
+
     now = time.time()
     rec = raw_devs.get(device_id)
 
-    if not rec:
+    if not isinstance(rec, dict):
         detected_name = detect_device_name(ua, native_model, platform)
         rec = {
             "device_id": device_id,
@@ -1871,7 +1916,7 @@ async def device_heartbeat(request: Request):
             "playing": playing,
         }
     else:
-        if native_model and rec.get("name", "").startswith(("Smart TV", "Android Phone", "Android TV")):
+        if native_model and str(rec.get("name", "")).startswith(("Smart TV", "Android Phone", "Android TV")):
             better = detect_device_name(ua, native_model, platform)
             if better:
                 rec["name"] = better
@@ -1916,7 +1961,7 @@ async def yplay_library(device_id: str = ""):
     if not isinstance(dev_prog, dict):
         dev_prog = {}
 
-    items = read_json(LIBRARY_FILE, [])
+    items = get_library_items()
     enriched = []
     for idx, x in enumerate(items):
         row = dict(x)
@@ -1942,6 +1987,8 @@ async def yplay_save_progress(request: Request):
     try:
         raw_body = await request.body()
         body = json.loads(raw_body.decode("utf-8")) if raw_body else {}
+        if not isinstance(body, dict):
+            body = {}
     except Exception:
         body = {}
 
