@@ -25,7 +25,7 @@ jobs:
           printf "\n24333f8a63b6825ea9c5514f83c2829b004d1fee\n" > "$SDK_DIR/licenses/android-sdk-license"
           mkdir -p app/src/main/java/com/ystream/app app/src/main/res/drawable
 
-          # Generate deterministic permanent signing keystore so updates never fail with "App Not Installed"
+          # Deterministic permanent signing keystore so future APK updates install cleanly
           keytool -genkeypair -v \
             -keystore app/ystream-permanent.jks \
             -storepass ystream2026key \
@@ -78,8 +78,8 @@ jobs:
                   applicationId "com.ystream.app"
                   minSdk 23
                   targetSdk 34
-                  versionCode 7
-                  versionName "7.0-TV"
+                  versionCode 8
+                  versionName "8.0-TV"
               }
               signingConfigs {
                   permanent {
@@ -225,6 +225,7 @@ jobs:
 
           import android.app.Activity;
           import android.content.Context;
+          import android.content.SharedPreferences;
           import android.content.pm.ActivityInfo;
           import android.graphics.Bitmap;
           import android.graphics.Color;
@@ -233,6 +234,7 @@ jobs:
           import android.net.Network;
           import android.net.NetworkCapabilities;
           import android.net.NetworkRequest;
+          import android.os.Build;
           import android.os.Bundle;
           import android.os.Handler;
           import android.os.Looper;
@@ -241,6 +243,7 @@ jobs:
           import android.view.ViewGroup;
           import android.view.Window;
           import android.view.WindowManager;
+          import android.webkit.JavascriptInterface;
           import android.webkit.WebChromeClient;
           import android.webkit.WebResourceError;
           import android.webkit.WebResourceRequest;
@@ -249,10 +252,13 @@ jobs:
           import android.webkit.WebViewClient;
           import android.widget.FrameLayout;
           import android.widget.Toast;
+          import java.util.UUID;
 
           public class MainActivity extends Activity {
               public static volatile boolean isForeground = false;
-              private static final String APP_URL = "https://ystream.pages.dev";
+              private static final String BASE_URL = "https://ystream.pages.dev";
+              private static final String PREFS_NAME = "ystream_tv_prefs";
+              private static final String KEY_DEVICE_ID = "device_id";
 
               private WebView webView;
               private FrameLayout rootLayout;
@@ -264,6 +270,43 @@ jobs:
               private final Handler mainHandler = new Handler(Looper.getMainLooper());
               private boolean pageLoadedSuccessfully = false;
               private long lastFallbackBackTime = 0L;
+              private String persistentDeviceId = "";
+
+              private String getOrCreateDeviceId() {
+                  SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+                  String id = prefs.getString(KEY_DEVICE_ID, "");
+                  if (id == null || id.trim().length() < 8) {
+                      id = "tv_" + UUID.randomUUID().toString().replace("-", "");
+                      prefs.edit().putString(KEY_DEVICE_ID, id).apply();
+                  }
+                  return id.trim();
+              }
+
+              private String getHardwareDeviceModel() {
+                  String mfg = Build.MANUFACTURER != null ? Build.MANUFACTURER.trim() : "";
+                  String mod = Build.MODEL != null ? Build.MODEL.trim() : "";
+                  if (mod.isEmpty()) return mfg.isEmpty() ? "Android TV" : mfg;
+                  if (mfg.isEmpty() || mod.toLowerCase().startsWith(mfg.toLowerCase())) {
+                      return mod;
+                  }
+                  return mfg + " " + mod;
+              }
+
+              private String buildLaunchUrl() {
+                  return BASE_URL + "/?device_id=" + persistentDeviceId;
+              }
+
+              public class YStreamNativeBridge {
+                  @JavascriptInterface
+                  public String getDeviceId() {
+                      return persistentDeviceId;
+                  }
+
+                  @JavascriptInterface
+                  public String getDeviceModel() {
+                      return getHardwareDeviceModel();
+                  }
+              }
 
               private void enableImmersive() {
                   getWindow().getDecorView().setSystemUiVisibility(
@@ -284,8 +327,8 @@ jobs:
               private void loadAppIfNeeded() {
                   if (webView == null) return;
                   String cur = webView.getUrl();
-                  if (!pageLoadedSuccessfully || cur == null || !cur.startsWith(APP_URL)) {
-                      webView.loadUrl(APP_URL);
+                  if (!pageLoadedSuccessfully || cur == null || !cur.startsWith(BASE_URL)) {
+                      webView.loadUrl(buildLaunchUrl());
                   }
               }
 
@@ -315,6 +358,8 @@ jobs:
                   enableImmersive();
                   requestTvAudio();
 
+                  persistentDeviceId = getOrCreateDeviceId();
+
                   rootLayout = new FrameLayout(this);
                   rootLayout.setBackgroundColor(Color.BLACK);
 
@@ -336,11 +381,13 @@ jobs:
                   s.setLoadWithOverviewMode(true);
                   s.setUseWideViewPort(true);
 
+                  webView.addJavascriptInterface(new YStreamNativeBridge(), "YStreamNative");
+
                   webView.setWebViewClient(new WebViewClient() {
                       @Override
                       public void onPageFinished(WebView view, String url) {
                           super.onPageFinished(view, url);
-                          if (url != null && url.startsWith(APP_URL)) {
+                          if (url != null && url.startsWith(BASE_URL)) {
                               pageLoadedSuccessfully = true;
                           }
                           requestTvAudio();
@@ -401,7 +448,7 @@ jobs:
                           ViewGroup.LayoutParams.MATCH_PARENT));
                   setContentView(rootLayout);
                   registerNetworkWatcher();
-                  webView.loadUrl(APP_URL);
+                  webView.loadUrl(buildLaunchUrl());
                   webView.requestFocus();
               }
 
