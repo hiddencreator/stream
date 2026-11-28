@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 from pyrogram import Client, enums, filters
@@ -132,7 +132,6 @@ def init_channels_store():
     if not existing or not isinstance(existing, list):
         write_json(CHANNELS_FILE, DEFAULT_CHANNELS)
         return
-    # Migrate legacy channels lacking fixed "num" or Sun TV at #1
     if any("num" not in c for c in existing):
         write_json(CHANNELS_FILE, DEFAULT_CHANNELS)
 
@@ -291,7 +290,7 @@ def truncate_text(text: str, max_len: int) -> str:
 
 
 # =============================================================================
-# DEVICE DETECTION, APPROVAL & TELEMETRY
+# DEVICE DETECTION & LIVE ACTIVITY TRACKING (NO BLOCKING APPROVAL)
 # =============================================================================
 def detect_device_name(user_agent: str, native_model: str = "", platform: str = "") -> str:
     nm = re.sub(r"\s+", " ", str(native_model or "")).strip()
@@ -299,7 +298,6 @@ def detect_device_name(user_agent: str, native_model: str = "", platform: str = 
         return truncate_text(nm, 28)
 
     ua = str(user_agent or "")
-    # Extract Android build model from User-Agent: "; ModelName Build/"
     m = re.search(r";\s*([^;()]+?)\s+Build/", ua)
     if m:
         raw_model = m.group(1).strip()
@@ -326,7 +324,7 @@ def detect_device_name(user_agent: str, native_model: str = "", platform: str = 
     if "ipad" in low_ua:
         return "Apple iPad"
     if "android" in low_ua:
-        return "Android Device"
+        return "Android Phone / Browser"
     if "windows" in low_ua:
         return "Windows PC"
     if "macintosh" in low_ua or "mac os" in low_ua:
@@ -345,21 +343,12 @@ def get_devices_ordered() -> list[dict]:
     for idx, d in enumerate(items, start=1):
         d["num"] = idx
         last_seen = float(d.get("last_seen") or 0)
-        d["is_online"] = bool(d.get("approved")) and (now - last_seen) <= DEVICE_ONLINE_TTL
+        d["is_online"] = (now - last_seen) <= DEVICE_ONLINE_TTL
     return items
 
 
 def count_online_devices() -> int:
     return sum(1 for d in get_devices_ordered() if d["is_online"])
-
-
-def is_device_approved(device_id: str) -> bool:
-    clean_id = re.sub(r"[^a-zA-Z0-9_-]", "", str(device_id or ""))
-    if not clean_id:
-        return False
-    raw = read_json(DEVICES_FILE, {})
-    rec = raw.get(clean_id)
-    return bool(rec and rec.get("approved") is True)
 
 
 def build_device_dashboard_text() -> tuple[str, Optional[InlineKeyboardMarkup]]:
@@ -369,11 +358,11 @@ def build_device_dashboard_text() -> tuple[str, Optional[InlineKeyboardMarkup]]:
 
     lines = [
         f"<b>Device Management</b>",
-        f"Total Devices: <code>{total}</code>  |  Active Now: <code>{active_cnt}</code>\n",
+        f"Total Devices: <code>{total}</code>  |  Live Now: <code>{active_cnt}</code>\n",
     ]
 
     if not devices:
-        lines.append("<i>No devices registered yet. Open the TV app or website to register a device.</i>")
+        lines.append("<i>No devices have opened the app or website yet.</i>")
         return "\n".join(lines), InlineKeyboardMarkup([
             [InlineKeyboardButton("🔄 Refresh", callback_data="dev:refresh")]
         ])
@@ -382,15 +371,13 @@ def build_device_dashboard_text() -> tuple[str, Optional[InlineKeyboardMarkup]]:
     for d in devices:
         num_str = str(d["num"]).ljust(4)
         name_str = truncate_text(d.get("name") or "Device", 24).ljust(25)
-        if not d.get("approved"):
-            act_line = "⏳ Pending Approval"
-            sub_line = ""
-        elif not d["is_online"]:
-            act_line = "Offline"
-            sub_line = ""
+        playing = truncate_text(d.get("playing") or "", 30)
+        if not d["is_online"]:
+            last_str = fmt_ago(float(d.get("last_seen") or 0))
+            act_line = f"Offline ({last_str})"
+            sub_line = f"     Last Watched: {playing}" if playing else ""
         else:
             act = d.get("activity") or "idle"
-            playing = truncate_text(d.get("playing") or "", 30)
             if act == "live":
                 act_line = "📺 Live TV"
                 sub_line = f"     Currently Playing: {playing}" if playing else ""
@@ -398,7 +385,7 @@ def build_device_dashboard_text() -> tuple[str, Optional[InlineKeyboardMarkup]]:
                 act_line = "🎬 YPlay"
                 sub_line = f"     Currently Playing: {playing}" if playing else ""
             else:
-                act_line = "🟢 Online (Idle)"
+                act_line = "🟢 Online"
                 sub_line = ""
         table_rows.append(f"{num_str} {name_str} {act_line}")
         if sub_line:
@@ -725,7 +712,7 @@ def delete_item_cache_sync(item_id: str):
 def write_block_sync(path: Path, data: bytes):
     if path.exists():
         return
-    tmp = path.with_suffix(f".{os.getpid()}.{time.monotonic_ns()}.tmp")
+    tmp = path.with_suffix(f".{os.getpid()}.tmp")
     tmp.write_bytes(data)
     os.replace(tmp, path)
 
@@ -768,7 +755,7 @@ def run_ffprobe_http(item_id: str) -> Optional[dict]:
             "-probesize", "10000000",
             "-show_entries", "format=duration:stream=codec_type,codec_name,width,height:stream_tags=language,title",
             "-of", "json",
-            f"http://127.0.0.1:8000/api/yplay/stream/{item_id}?internal=1",
+            f"http://127.0.0.1:8000/api/yplay/stream/{item_id}",
         ]
         res = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL, timeout=14)
         return json.loads(res)
@@ -1011,8 +998,6 @@ async def build_status_html() -> str:
     dev_total = len(devices)
     dev_online = sum(1 for d in devices if d["is_online"])
     dev_offline = dev_total - dev_online
-    dev_approved = sum(1 for d in devices if d.get("approved"))
-    dev_pending = dev_total - dev_approved
     dev_live = sum(1 for d in devices if d["is_online"] and d.get("activity") == "live")
     dev_yplay = sum(1 for d in devices if d["is_online"] and d.get("activity") == "yplay")
 
@@ -1041,13 +1026,11 @@ async def build_status_html() -> str:
         "<b>📊 YStream Complete System Status</b>\n",
         "<b>A. Device Statistics</b>",
         "<pre>" + html.escape("\n".join([
-            f"Total Registered      : {dev_total}",
-            f"Currently Online      : {dev_online}",
+            f"Total Devices         : {dev_total}",
+            f"Currently Live (🟢)   : {dev_online}",
             f"Currently Offline     : {dev_offline}",
-            f"Approved Devices      : {dev_approved}",
-            f"Pending Approval      : {dev_pending}",
-            f"Watching Live TV      : {dev_live}",
-            f"Watching YPlay        : {dev_yplay}",
+            f"Watching Live TV (📺) : {dev_live}",
+            f"Watching YPlay (🎬)   : {dev_yplay}",
         ])) + "</pre>\n",
         "<b>B. Live TV Statistics</b>",
         "<pre>" + html.escape("\n".join([
@@ -1096,7 +1079,7 @@ async def cmd_start(_, msg: Message):
         f"System State: <code>{state_txt}</code>\n\n"
         f"• /YStream — Manage Live TV channels\n"
         f"• /YPlay — Manage YPlay movies & files\n"
-        f"• /device — Manage & approve devices\n"
+        f"• /device — View live & past devices\n"
         f"• /status — Complete system status",
         parse_mode=enums.ParseMode.HTML,
     )
@@ -1213,7 +1196,6 @@ async def on_interactive_input(_, msg: Message):
         msg.video or msg.document or msg.animation or msg.photo or msg.audio or msg.voice or msg.sticker
     )
 
-    # STRICT UPLOAD RESTRICTION: Only accept files when explicitly in /YPlay -> Add mode
     if has_any_media:
         if mode != "yp_add":
             await msg.reply_text(
@@ -1299,7 +1281,6 @@ async def on_interactive_input(_, msg: Message):
                 parse_mode=enums.ParseMode.HTML,
             )
             return
-        # Remove selected channels while keeping remaining fixed channel numbers intact
         updated = [c for c in chans if int(c.get("num") or 0) not in set(nums)]
         write_json(CHANNELS_FILE, updated)
         broadcast_event("channels")
@@ -1387,7 +1368,7 @@ async def on_interactive_input(_, msg: Message):
         )
         return
 
-    # --- /YPlay -> Remove File (Single or Bulk + Dynamic Renumbering) ---
+    # --- /YPlay -> Remove File ---
     if mode == "yp_remove":
         tokens = [t for t in re.split(r"[\s,]+", text) if t]
         if not tokens or any(not t.isdigit() for t in tokens):
@@ -1451,23 +1432,23 @@ async def on_interactive_input(_, msg: Message):
             f"Device Number : #{dev['num']}",
             f"Device Name   : {dev.get('name')}",
             f"Device ID     : {dev.get('device_id')}",
-            f"Approval      : {'Approved ✅' if dev.get('approved') else 'Pending ⏳'}",
-            f"Connection    : {'Online 🟢' if dev['is_online'] else 'Offline'}",
+            f"Status        : {'Live 🟢' if dev['is_online'] else 'Offline'}",
             f"Activity      : {act_label}",
-            f"Playing       : {dev.get('playing') or 'None'}",
+            f"Playing/Last  : {dev.get('playing') or 'None'}",
+            f"First Visited : {fmt_ago(float(dev.get('created_at') or 0))}",
             f"Last Active   : {fmt_ago(float(dev.get('last_seen') or 0))}",
         ]
         await msg.reply_text(
             f"<b>Device Details</b>\n<pre>{html.escape(chr(10).join(info_lines))}</pre>",
             parse_mode=enums.ParseMode.HTML,
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🗑 Remove Device", callback_data=f"dev:del_id:{dev['device_id']}")],
+                [InlineKeyboardButton("🗑 Remove from List", callback_data=f"dev:del_id:{dev['device_id']}")],
                 [InlineKeyboardButton("⬅️ Back to Devices", callback_data="dev:refresh")],
             ]),
         )
         return
 
-    # --- /device -> Remove Device by Number ---
+    # --- /device -> Remove Device Entry from History List ---
     if mode == "dev_remove":
         if not text.isdigit():
             await msg.reply_text("❌ Enter a valid device number (e.g. <code>1</code>).", parse_mode=enums.ParseMode.HTML)
@@ -1479,14 +1460,12 @@ async def on_interactive_input(_, msg: Message):
             await msg.reply_text(f"❌ Device <code>#{d_num}</code> not found.", parse_mode=enums.ParseMode.HTML)
             return
         raw_devs = read_json(DEVICES_FILE, {})
-        removed_dev = raw_devs.pop(dev["device_id"], None)
+        raw_devs.pop(dev["device_id"], None)
         write_json(DEVICES_FILE, raw_devs)
-        broadcast_event("device_revoked", {"device_id": dev["device_id"]})
         bot_dialog_state.pop(uid, None)
         dash_txt, dash_kb = build_device_dashboard_text()
-        was_active = " (Active session immediately blocked)" if (removed_dev and dev["is_online"]) else ""
         await msg.reply_text(
-            f"🚫 <b>Removed & revoked access for {html.escape(dev.get('name') or 'Device')}</b>{was_active}\n\n{dash_txt}",
+            f"🗑 <b>Removed {html.escape(dev.get('name') or 'Device')} from list</b>\n\n{dash_txt}",
             parse_mode=enums.ParseMode.HTML,
             reply_markup=dash_kb,
         )
@@ -1575,37 +1554,7 @@ async def on_callback(_, cq: CallbackQuery):
 
     if data == "dev:remove_prompt":
         bot_dialog_state[uid] = {"mode": "dev_remove"}
-        await cq.message.reply_text("Enter the device number to remove & revoke access:", parse_mode=enums.ParseMode.HTML)
-        return
-
-    if data.startswith("dev:approve:"):
-        dev_id = data.split(":", 2)[2]
-        raw_devs = read_json(DEVICES_FILE, {})
-        rec = raw_devs.get(dev_id)
-        if not rec:
-            await cq.message.edit_text("❌ Device request expired or not found.", parse_mode=enums.ParseMode.HTML)
-            return
-        rec["approved"] = True
-        rec["approved_at"] = int(time.time())
-        write_json(DEVICES_FILE, raw_devs)
-        broadcast_event("device_approved", {"device_id": dev_id})
-        await cq.message.edit_text(
-            f"✅ <b>Device Approved</b>\nName: <b>{html.escape(rec.get('name') or 'Device')}</b>\nID: <code>{html.escape(dev_id)}</code>",
-            parse_mode=enums.ParseMode.HTML,
-        )
-        return
-
-    if data.startswith("dev:cancel:"):
-        dev_id = data.split(":", 2)[2]
-        raw_devs = read_json(DEVICES_FILE, {})
-        rec = raw_devs.pop(dev_id, None)
-        write_json(DEVICES_FILE, raw_devs)
-        broadcast_event("device_revoked", {"device_id": dev_id})
-        dname = rec.get("name") if rec else dev_id
-        await cq.message.edit_text(
-            f"❌ <b>Device Access Cancelled</b>\nDevice <b>{html.escape(str(dname))}</b> was blocked and removed.",
-            parse_mode=enums.ParseMode.HTML,
-        )
+        await cq.message.reply_text("Enter the device number to remove from list:", parse_mode=enums.ParseMode.HTML)
         return
 
     if data.startswith("dev:del_id:"):
@@ -1613,11 +1562,10 @@ async def on_callback(_, cq: CallbackQuery):
         raw_devs = read_json(DEVICES_FILE, {})
         rec = raw_devs.pop(dev_id, None)
         write_json(DEVICES_FILE, raw_devs)
-        broadcast_event("device_revoked", {"device_id": dev_id})
         txt, kb = build_device_dashboard_text()
         dname = rec.get("name") if rec else dev_id
         await cq.message.edit_text(
-            f"🚫 <b>Removed {html.escape(str(dname))}</b>\n\n{txt}",
+            f"🗑 <b>Removed {html.escape(str(dname))}</b>\n\n{txt}",
             parse_mode=enums.ParseMode.HTML,
             reply_markup=kb,
         )
@@ -1633,7 +1581,7 @@ async def on_callback(_, cq: CallbackQuery):
 
 
 # =============================================================================
-# FASTAPI LIFECYCLE & ENDPOINTS
+# FASTAPI LIFECYCLE & ENDPOINTS (OPEN ACCESS — NO APPROVAL GATE)
 # =============================================================================
 @app.on_event("startup")
 async def startup():
@@ -1644,7 +1592,7 @@ async def startup():
             BotCommand("start", "Confirm bot status & menu"),
             BotCommand("ystream", "Manage Live TV channels"),
             BotCommand("yplay", "Manage YPlay movies & files"),
-            BotCommand("device", "Manage & monitor devices"),
+            BotCommand("device", "View live & past devices"),
             BotCommand("status", "Complete system status"),
             BotCommand("shutdown", "Emergency system shutdown"),
             BotCommand("resume", "Resume system playback"),
@@ -1710,7 +1658,7 @@ async def api_events(request: Request):
     )
 
 
-# --- Device Registration, Approval & Live Activity Heartbeat ---
+# --- Device Activity Heartbeat (Logs Live & Past Visitors Only) ---
 @app.post("/api/device/heartbeat")
 async def device_heartbeat(request: Request):
     try:
@@ -1721,7 +1669,7 @@ async def device_heartbeat(request: Request):
     raw_id = str(body.get("device_id") or request.headers.get("x-device-id") or "")
     device_id = re.sub(r"[^a-zA-Z0-9_-]", "", raw_id)[:64]
     if len(device_id) < 6:
-        raise HTTPException(status_code=400, detail="Valid device_id required")
+        return {"ok": False, "stopped": SYSTEM_STOPPED}
 
     ua = str(request.headers.get("user-agent") or "")
     native_model = str(body.get("native_model") or "")
@@ -1740,43 +1688,26 @@ async def device_heartbeat(request: Request):
         rec = {
             "device_id": device_id,
             "name": detected_name,
-            "approved": False,
             "created_at": int(now),
             "last_seen": now,
-            "activity": "idle",
-            "playing": "",
-            "notified": True,
+            "activity": activity,
+            "playing": playing,
         }
-        raw_devs[device_id] = rec
-        write_json(DEVICES_FILE, raw_devs)
-
-        kb = InlineKeyboardMarkup([[
-            InlineKeyboardButton("✅ Approve", callback_data=f"dev:approve:{device_id}"),
-            InlineKeyboardButton("❌ Cancel", callback_data=f"dev:cancel:{device_id}"),
-        ]])
-        await notify_owner(
-            f"🔔 <b>New Device Approval Request</b>\n\n"
-            f"Device Name: <b>{html.escape(detected_name)}</b>\n"
-            f"Device ID: <code>{html.escape(device_id)}</code>\n\n"
-            f"All content is blocked until you approve this device.",
-            reply_markup=kb,
-        )
-        return {"approved": False, "stopped": SYSTEM_STOPPED, "name": detected_name}
-
-    # Update device model if native Android model becomes available later
-    if native_model and rec.get("name", "").startswith(("Smart TV", "Android Device", "Android TV")):
-        better = detect_device_name(ua, native_model, platform)
-        if better:
-            rec["name"] = better
-
-    rec["last_seen"] = now
-    if rec.get("approved"):
+    else:
+        if native_model and rec.get("name", "").startswith(("Smart TV", "Android Phone", "Android TV")):
+            better = detect_device_name(ua, native_model, platform)
+            if better:
+                rec["name"] = better
+        rec["last_seen"] = now
         rec["activity"] = activity
-        rec["playing"] = playing
+        if playing:
+            rec["playing"] = playing
+
+    raw_devs[device_id] = rec
     write_json(DEVICES_FILE, raw_devs)
 
     return {
-        "approved": bool(rec.get("approved")),
+        "ok": True,
         "stopped": SYSTEM_STOPPED,
         "name": rec.get("name"),
     }
@@ -1784,10 +1715,7 @@ async def device_heartbeat(request: Request):
 
 # --- Live TV Channels API ---
 @app.get("/api/channels")
-async def api_channels(request: Request, device_id: str = ""):
-    did = device_id or request.headers.get("x-device-id", "")
-    if not is_device_approved(did):
-        raise HTTPException(status_code=403, detail="Device approval required")
+async def api_channels():
     chans = get_channels_sorted()
     return {
         "stopped": SYSTEM_STOPPED,
@@ -1796,21 +1724,14 @@ async def api_channels(request: Request, device_id: str = ""):
 
 
 @app.post("/api/channels/{num}/report_error")
-async def api_channel_report_error(num: int, request: Request, device_id: str = ""):
-    did = device_id or request.headers.get("x-device-id", "")
-    if not is_device_approved(did):
-        raise HTTPException(status_code=403, detail="Device approval required")
+async def api_channel_report_error(num: int):
     await mark_channel_status(num, "offline", notify=True)
     return {"ok": True, "num": num, "status": "offline"}
 
 
 # --- YPlay Library, Progress & Resilient Streaming API ---
 @app.get("/api/yplay/library")
-async def yplay_library(request: Request, device_id: str = ""):
-    did = device_id or request.headers.get("x-device-id", "")
-    if not is_device_approved(did):
-        raise HTTPException(status_code=403, detail="Device approval required")
-
+async def yplay_library():
     items = read_json(LIBRARY_FILE, [])
     enriched = []
     for idx, x in enumerate(items):
@@ -1837,10 +1758,6 @@ async def yplay_save_progress(request: Request):
     except Exception:
         body = {}
 
-    did = str(body.get("device_id") or request.headers.get("x-device-id") or "")
-    if not is_device_approved(did):
-        raise HTTPException(status_code=403, detail="Device approval required")
-
     item_id = str(body.get("id") or "")
     pos = max(0, int(body.get("position") or 0))
     explicit_seek = bool(body.get("explicit_seek", False))
@@ -1859,7 +1776,6 @@ async def yplay_save_progress(request: Request):
                 row["progress_sec"] = pos
                 updated = True
             else:
-                # Anti-regression guard: prevent sudden 70% -> 20% glitch overwrite
                 if prev > 120 and pos < int(prev * 0.5):
                     return {"ok": True, "progress_sec": prev, "ignored_regression": True}
                 if pos > prev or abs(pos - prev) <= 30:
@@ -1873,16 +1789,9 @@ async def yplay_save_progress(request: Request):
 
 
 @app.api_route("/api/yplay/stream/{item_ref}", methods=["GET", "HEAD"])
-async def yplay_stream(item_ref: str, request: Request, device_id: str = "", internal: int = 0):
+async def yplay_stream(item_ref: str, request: Request):
     if SYSTEM_STOPPED:
         raise HTTPException(status_code=503, detail="System shutdown")
-
-    client_host = request.client.host if request.client else ""
-    is_local_internal = internal == 1 and client_host in ("127.0.0.1", "::1", "localhost")
-    if not is_local_internal:
-        did = device_id or request.headers.get("x-device-id", "")
-        if not is_device_approved(did):
-            raise HTTPException(status_code=403, detail="Device approval required")
 
     _, item = find_yplay_item(item_ref)
     if not item:
@@ -2022,15 +1931,10 @@ async def yplay_play_stream(
     t: float = 0.0,
     q: str = "orig",
     a: int = 0,
-    device_id: str = "",
 ):
     global active_play_proc
     if SYSTEM_STOPPED:
         raise HTTPException(status_code=503, detail="System shutdown")
-
-    did = device_id or request.headers.get("x-device-id", "")
-    if not is_device_approved(did):
-        raise HTTPException(status_code=403, detail="Device approval required")
 
     _, item = find_yplay_item(item_ref)
     if not item:
@@ -2052,7 +1956,7 @@ async def yplay_play_stream(
         cmd.extend(["-ss", f"{seek_sec:.2f}"])
 
     cmd.extend([
-        "-i", f"http://127.0.0.1:8000/api/yplay/stream/{item_id}?internal=1",
+        "-i", f"http://127.0.0.1:8000/api/yplay/stream/{item_id}",
         "-map", "0:v:0", "-map", f"0:a:{audio_idx}?",
     ])
 
@@ -2124,17 +2028,11 @@ async def yplay_play_stream(
 async def yplay_sub_vtt(
     item_ref: str,
     sub_idx: int,
-    request: Request,
     t: float = 0.0,
     dur: float = 180.0,
-    device_id: str = "",
 ):
     if SYSTEM_STOPPED:
         raise HTTPException(status_code=503, detail="System shutdown")
-
-    did = device_id or request.headers.get("x-device-id", "")
-    if not is_device_approved(did):
-        raise HTTPException(status_code=403, detail="Device approval required")
 
     _, item = find_yplay_item(item_ref)
     if not item:
@@ -2146,7 +2044,7 @@ async def yplay_sub_vtt(
     cmd = [
         "ffmpeg", "-nostdin", "-loglevel", "error",
         "-ss", f"{start_sec:.2f}",
-        "-i", f"http://127.0.0.1:8000/api/yplay/stream/{item_id}?internal=1",
+        "-i", f"http://127.0.0.1:8000/api/yplay/stream/{item_id}",
         "-t", f"{win_sec:.2f}",
         "-vn", "-an",
         "-map", f"0:s:{max(0, sub_idx)}",
