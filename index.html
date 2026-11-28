@@ -913,7 +913,7 @@
       animation: clickBounce 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
 
-    /* Mobile Touch Optimization & Landscape Fullscreen Button (Mobile Only — Never shown on TV) */
+    /* Mobile Touch Optimization & Landscape Fullscreen Button (Mobile Only — Never visible on TV) */
     body.mobile-client .hud {
       padding: max(12px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
     }
@@ -929,6 +929,12 @@
     body.mobile-client .dish-name {
       font-size: 0.9rem;
     }
+    body.mobile-client .hud-title {
+      font-size: 0.96rem;
+    }
+    body.mobile-client .hud-sub {
+      font-size: 0.72rem;
+    }
     body.mobile-client .controls-row {
       gap: 6px;
     }
@@ -942,10 +948,18 @@
       border-radius: 9px;
     }
     body.mobile-client .side-drawer {
-      width: min(340px, 84vw);
+      width: min(340px, 85vw);
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
     }
     body.mobile-client .yt-track-wrap {
-      height: 38px;
+      height: 40px;
+    }
+    body.mobile-client .yt-track-thumb {
+      transform: translate(-50%, -50%) scale(1.05);
+    }
+    body.mobile-client .sub-overlay {
+      bottom: 18%;
     }
   </style>
 </head>
@@ -1058,11 +1072,7 @@
             </div>
 
             <!-- Mobile-Only Landscape Fullscreen Button (Never visible on TV/APK) -->
-            <button id="mobFsBtn" class="ctrl-btn hidden" aria-label="Landscape Fullscreen" onclick="triggerBounce(this); toggleMobileLandscapeFullscreen();">
-              <svg id="mobFsIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
-              </svg>
-            </button>
+            <button id="mobFsBtn" class="ctrl-btn hidden" aria-label="Landscape Fullscreen" onclick="triggerBounce(this); toggleMobileLandscapeFullscreen();"></button>
           </div>
         </div>
       </div>
@@ -1090,7 +1100,7 @@
     <div class="drawer-head">
       <div class="drawer-brand-row">
         <div class="drawer-brand">Y<span>Stream</span></div>
-        <div class="drawer-hint">BACK to Fullscreen</div>
+        <div id="drawerHint" class="drawer-hint">BACK to Fullscreen</div>
       </div>
       <div class="drawer-tabs">
         <button id="tabLive" class="d-tab active" onclick="selectDrawerTab('live');">
@@ -1118,7 +1128,9 @@
       pause: `<svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`,
       volOn: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>`,
       volOff: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>`,
-      cinema: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8H4Z"/><path d="m4 11-.88-2.87a2 2 0 0 1 1.33-2.5l11.48-3.5a2 2 0 0 1 2.5 1.32l.87 2.87L4 11.01Z"/></svg>`
+      cinema: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8H4Z"/><path d="m4 11-.88-2.87a2 2 0 0 1 1.33-2.5l11.48-3.5a2 2 0 0 1 2.5 1.32l.87 2.87L4 11.01Z"/></svg>`,
+      fsEnter: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>`,
+      fsExit: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>`
     };
 
     const LANG_MAP = {
@@ -1136,17 +1148,19 @@
       const ua = navigator.userAgent || "";
       const isTvUa = /smart-?tv|googletv|android tv|appletv|hbbtv|netcast|viera|bravia|tizen|webos|roku|aft/i.test(ua);
       if (isTvUa) return false;
-      const isMobileUa = /android.*mobile|iphone|ipod|windows phone|blackberry|opera mini/i.test(ua);
-      const isSmallTouch = ("ontouchstart" in window || navigator.maxTouchPoints > 0) && Math.min(window.screen.width, window.screen.height) <= 820;
+      const isMobileUa = /android.*mobile|iphone|ipod|ipad|windows phone|blackberry|opera mini/i.test(ua);
+      const isSmallTouch = ("ontouchstart" in window || navigator.maxTouchPoints > 0) && Math.min(window.screen.width, window.screen.height) <= 900;
       return Boolean(isMobileUa || isSmallTouch);
     }
 
     const IS_MOBILE_CLIENT = isMobilePhoneBrowser();
     if (IS_MOBILE_CLIENT) {
       document.body.classList.add("mobile-client");
+      const hintEl = document.getElementById("drawerHint");
+      if (hintEl) hintEl.textContent = "Tap outside to close";
     }
 
-    /* Persistent Individual Device ID (Each TV / Phone has its own isolated progress timeline) */
+    /* Persistent Individual Device ID (Isolates playback progress per TV / Phone / Browser) */
     function readCookie(name) {
       const m = document.cookie.match(new RegExp("(?:^|; )" + name + "=([^;]*)"));
       return m ? decodeURIComponent(m[1]) : "";
@@ -1206,45 +1220,6 @@
       return `yp_${DEVICE_ID}_${itemId}`;
     }
 
-    /* Mobile-Only Landscape Fullscreen Toggle (Never visible on TV) */
-    const mobFsBtn = document.getElementById("mobFsBtn");
-    let mobileLandscapeActive = false;
-
-    if (IS_MOBILE_CLIENT && mobFsBtn) {
-      mobFsBtn.classList.remove("hidden");
-    }
-
-    async function toggleMobileLandscapeFullscreen() {
-      if (!IS_MOBILE_CLIENT) return;
-      const docEl = document.documentElement;
-      const isFs = Boolean(document.fullscreenElement || document.webkitFullscreenElement || mobileLandscapeActive);
-
-      if (!isFs) {
-        mobileLandscapeActive = true;
-        try {
-          if (docEl.requestFullscreen) await docEl.requestFullscreen();
-          else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen();
-        } catch (_) {}
-        try {
-          if (screen.orientation && typeof screen.orientation.lock === "function") {
-            await screen.orientation.lock("landscape");
-          }
-        } catch (_) {}
-      } else {
-        mobileLandscapeActive = false;
-        try {
-          if (screen.orientation && typeof screen.orientation.unlock === "function") {
-            screen.orientation.unlock();
-          }
-        } catch (_) {}
-        try {
-          if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
-          else if (document.webkitFullscreenElement && document.webkitExitFullscreen) document.webkitExitFullscreen();
-        } catch (_) {}
-      }
-      resetHudTimer(4200);
-    }
-
     /* DOM References */
     const stage = document.getElementById("stage");
     const video = document.getElementById("video");
@@ -1289,6 +1264,7 @@
     const qualMenu = document.getElementById("qualMenu");
     const speedWrap = document.getElementById("speedWrap");
     const speedBtn = document.getElementById("speedBtn");
+    const mobFsBtn = document.getElementById("mobFsBtn");
     const drawerBackdrop = document.getElementById("drawerBackdrop");
     const sideDrawer = document.getElementById("sideDrawer");
     const drawerScroll = document.getElementById("drawerScroll");
@@ -1296,6 +1272,73 @@
     const tabYPlay = document.getElementById("tabYPlay");
     const liveListPane = document.getElementById("liveListPane");
     const yplayListPane = document.getElementById("yplayListPane");
+
+    /* Mobile-Only Landscape Fullscreen Toggle (Never visible on TV) */
+    let mobileLandscapeActive = false;
+
+    function syncMobileFsIcon() {
+      if (!IS_MOBILE_CLIENT || !mobFsBtn) return;
+      const isFs = Boolean(document.fullscreenElement || document.webkitFullscreenElement || mobileLandscapeActive);
+      mobFsBtn.innerHTML = `${isFs ? ICONS.fsExit : ICONS.fsEnter}<span>${isFs ? "Exit" : "Full"}</span>`;
+    }
+
+    if (IS_MOBILE_CLIENT && mobFsBtn) {
+      mobFsBtn.classList.remove("hidden");
+      syncMobileFsIcon();
+      document.addEventListener("fullscreenchange", () => {
+        if (!document.fullscreenElement) mobileLandscapeActive = false;
+        syncMobileFsIcon();
+      });
+      document.addEventListener("webkitfullscreenchange", () => {
+        if (!document.webkitFullscreenElement) mobileLandscapeActive = false;
+        syncMobileFsIcon();
+      });
+    }
+
+    async function toggleMobileLandscapeFullscreen() {
+      if (!IS_MOBILE_CLIENT) return;
+      const docEl = document.documentElement;
+      const isFs = Boolean(document.fullscreenElement || document.webkitFullscreenElement || mobileLandscapeActive);
+
+      if (!isFs) {
+        mobileLandscapeActive = true;
+        let enteredDocFs = false;
+        try {
+          if (docEl.requestFullscreen) {
+            await docEl.requestFullscreen();
+            enteredDocFs = true;
+          } else if (docEl.webkitRequestFullscreen) {
+            docEl.webkitRequestFullscreen();
+            enteredDocFs = true;
+          }
+        } catch (_) {}
+
+        try {
+          if (screen.orientation && typeof screen.orientation.lock === "function") {
+            await screen.orientation.lock("landscape");
+          }
+        } catch (_) {}
+
+        if (!enteredDocFs && typeof video.webkitEnterFullscreen === "function") {
+          try {
+            video.webkitEnterFullscreen();
+          } catch (_) {}
+        }
+      } else {
+        mobileLandscapeActive = false;
+        try {
+          if (screen.orientation && typeof screen.orientation.unlock === "function") {
+            screen.orientation.unlock();
+          }
+        } catch (_) {}
+        try {
+          if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
+          else if (document.webkitFullscreenElement && document.webkitExitFullscreen) document.webkitExitFullscreen();
+        } catch (_) {}
+      }
+      syncMobileFsIcon();
+      resetHudTimer(4200);
+    }
 
     /* Application State */
     let hls = null;
@@ -1346,7 +1389,7 @@
     }
 
     /* =========================================================================
-       DEVICE LIVE & PAST ACTIVITY TELEMETRY
+       DEVICE LIVE & PAST ACTIVITY TELEMETRY (Zero CORS Preflight)
     ========================================================================= */
     async function sendDeviceHeartbeat() {
       try {
@@ -1372,7 +1415,6 @@
         const tid = setTimeout(() => ctrl.abort(), 4500);
         const res = await fetch(`${WORKER_URL}/api/device/heartbeat`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", "X-Device-Id": DEVICE_ID },
           body: JSON.stringify({
             device_id: DEVICE_ID,
             native_model: NATIVE_MODEL,
@@ -1728,7 +1770,7 @@
       errCountdown.textContent = `Switching in ${secsLeft}s`;
       errCountdown.classList.remove("hidden");
       playerError.classList.add("show");
-      setTimeout(() => errPrimaryBtn.focus(), 40);
+      if (!IS_MOBILE_CLIENT) setTimeout(() => errPrimaryBtn.focus(), 40);
 
       countdownTimer = setInterval(() => {
         secsLeft -= 1;
@@ -1752,7 +1794,7 @@
       errMsg.textContent = msg;
       errPrimaryBtn.textContent = primaryLabel;
       playerError.classList.add("show");
-      setTimeout(() => errPrimaryBtn.focus(), 40);
+      if (!IS_MOBILE_CLIENT) setTimeout(() => errPrimaryBtn.focus(), 40);
     }
 
     function hideError() {
@@ -2388,7 +2430,7 @@
       exitScrubMode(true);
     }, { passive: true });
 
-    /* Seek & Per-Device Monotonic Progress Protection */
+    /* Seek & Per-Device Monotonic Progress Protection (Zero CORS Preflight) */
     function getEffectiveDuration() {
       const item = yplayItems.find((x) => String(x.id) === String(activeYPlayId));
       const itemDur = item && Number(item.duration) > 0 ? Number(item.duration) : 0;
@@ -2414,7 +2456,6 @@
       if (!itemId) return;
       fetch(`${WORKER_URL}/api/yplay/progress`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Device-Id": DEVICE_ID },
         body: JSON.stringify({
           device_id: DEVICE_ID,
           id: itemId,
@@ -2896,7 +2937,7 @@
       showLoading(true);
       sendDeviceHeartbeat();
 
-      // Strictly per-device saved timeline (never shares progress across TV and phone)
+      /* Strictly isolated per-device timeline (TV progress never leaks to Phone) */
       const localSaved = Number(safeGetStorage(devProgressKey(item.id), "0"));
       const serverSaved = Number(item.progress_sec || 0);
       const bestSaved = Math.max(localSaved, serverSaved);
@@ -3525,7 +3566,6 @@
           `${WORKER_URL}/api/yplay/library?device_id=${encodeURIComponent(DEVICE_ID)}&t=${Date.now()}`,
           {
             cache: "no-store",
-            headers: { "X-Device-Id": DEVICE_ID },
             signal: ctrl.signal,
           }
         );
@@ -3584,8 +3624,18 @@
     window.addEventListener("pagehide", () => {
       shuttingDown = true;
       if (!isLive && activeYPlayId && maxConfirmedPos > 2) {
-        safeSetStorage(devProgressKey(activeYPlayId), String(Math.floor(maxConfirmedPos)));
-        syncProgressToServer(activeYPlayId, maxConfirmedPos, false, false);
+        const floored = Math.floor(maxConfirmedPos);
+        safeSetStorage(devProgressKey(activeYPlayId), String(floored));
+        const beaconPayload = JSON.stringify({
+          device_id: DEVICE_ID,
+          id: activeYPlayId,
+          position: floored,
+          explicit_seek: false,
+          completed: false,
+        });
+        if (!navigator.sendBeacon || !navigator.sendBeacon(`${WORKER_URL}/api/yplay/progress`, beaconPayload)) {
+          syncProgressToServer(activeYPlayId, floored, false, false);
+        }
       }
       video.pause();
       video.removeAttribute("src");
