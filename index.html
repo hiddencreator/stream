@@ -912,6 +912,41 @@
     .click-bounce {
       animation: clickBounce 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
+
+    /* Mobile Touch Optimization & Landscape Fullscreen Button (Mobile Only — Never shown on TV) */
+    body.mobile-client .hud {
+      padding: max(12px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+    }
+    body.mobile-client .dish-osd {
+      padding: 7px 12px;
+      border-radius: 12px;
+      gap: 10px;
+    }
+    body.mobile-client .dish-num {
+      font-size: 1.45rem;
+      padding-right: 10px;
+    }
+    body.mobile-client .dish-name {
+      font-size: 0.9rem;
+    }
+    body.mobile-client .controls-row {
+      gap: 6px;
+    }
+    body.mobile-client .ctrl-grp {
+      gap: 6px;
+    }
+    body.mobile-client .ctrl-btn {
+      padding: 7px 10px;
+      font-size: 0.76rem;
+      min-height: 36px;
+      border-radius: 9px;
+    }
+    body.mobile-client .side-drawer {
+      width: min(340px, 84vw);
+    }
+    body.mobile-client .yt-track-wrap {
+      height: 38px;
+    }
   </style>
 </head>
 <body>
@@ -1021,6 +1056,13 @@
                 <button class="pop-opt" data-rate="1.5" onclick="setSpeed(1.5);">1.5x</button>
               </div>
             </div>
+
+            <!-- Mobile-Only Landscape Fullscreen Button (Never visible on TV/APK) -->
+            <button id="mobFsBtn" class="ctrl-btn hidden" aria-label="Landscape Fullscreen" onclick="triggerBounce(this); toggleMobileLandscapeFullscreen();">
+              <svg id="mobFsIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+              </svg>
+            </button>
           </div>
         </div>
       </div>
@@ -1088,7 +1130,23 @@
       eng: "English", en: "English", english: "English"
     };
 
-    /* Persistent Hardware / Browser Device ID (For /device Live & Past Visitor List) */
+    /* Detect Mobile Browser (Strictly excludes Android TV APK & TV screens) */
+    function isMobilePhoneBrowser() {
+      if (window.YStreamNative) return false;
+      const ua = navigator.userAgent || "";
+      const isTvUa = /smart-?tv|googletv|android tv|appletv|hbbtv|netcast|viera|bravia|tizen|webos|roku|aft/i.test(ua);
+      if (isTvUa) return false;
+      const isMobileUa = /android.*mobile|iphone|ipod|windows phone|blackberry|opera mini/i.test(ua);
+      const isSmallTouch = ("ontouchstart" in window || navigator.maxTouchPoints > 0) && Math.min(window.screen.width, window.screen.height) <= 820;
+      return Boolean(isMobileUa || isSmallTouch);
+    }
+
+    const IS_MOBILE_CLIENT = isMobilePhoneBrowser();
+    if (IS_MOBILE_CLIENT) {
+      document.body.classList.add("mobile-client");
+    }
+
+    /* Persistent Individual Device ID (Each TV / Phone has its own isolated progress timeline) */
     function readCookie(name) {
       const m = document.cookie.match(new RegExp("(?:^|; )" + name + "=([^;]*)"));
       return m ? decodeURIComponent(m[1]) : "";
@@ -1119,10 +1177,11 @@
         did = readCookie("ystream_did");
       }
       if (!did || did.length < 8) {
+        const prefix = IS_MOBILE_CLIENT ? "mob_" : "web_";
         if (window.crypto && typeof crypto.randomUUID === "function") {
-          did = "ys_" + crypto.randomUUID().replace(/-/g, "");
+          did = prefix + crypto.randomUUID().replace(/-/g, "");
         } else {
-          did = "ys_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
+          did = prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
         }
       }
       did = did.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64);
@@ -1142,6 +1201,49 @@
 
     const DEVICE_ID = getPersistentDeviceId();
     const NATIVE_MODEL = getNativeDeviceModel();
+
+    function devProgressKey(itemId) {
+      return `yp_${DEVICE_ID}_${itemId}`;
+    }
+
+    /* Mobile-Only Landscape Fullscreen Toggle (Never visible on TV) */
+    const mobFsBtn = document.getElementById("mobFsBtn");
+    let mobileLandscapeActive = false;
+
+    if (IS_MOBILE_CLIENT && mobFsBtn) {
+      mobFsBtn.classList.remove("hidden");
+    }
+
+    async function toggleMobileLandscapeFullscreen() {
+      if (!IS_MOBILE_CLIENT) return;
+      const docEl = document.documentElement;
+      const isFs = Boolean(document.fullscreenElement || document.webkitFullscreenElement || mobileLandscapeActive);
+
+      if (!isFs) {
+        mobileLandscapeActive = true;
+        try {
+          if (docEl.requestFullscreen) await docEl.requestFullscreen();
+          else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen();
+        } catch (_) {}
+        try {
+          if (screen.orientation && typeof screen.orientation.lock === "function") {
+            await screen.orientation.lock("landscape");
+          }
+        } catch (_) {}
+      } else {
+        mobileLandscapeActive = false;
+        try {
+          if (screen.orientation && typeof screen.orientation.unlock === "function") {
+            screen.orientation.unlock();
+          }
+        } catch (_) {}
+        try {
+          if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
+          else if (document.webkitFullscreenElement && document.webkitExitFullscreen) document.webkitExitFullscreen();
+        } catch (_) {}
+      }
+      resetHudTimer(4200);
+    }
 
     /* DOM References */
     const stage = document.getElementById("stage");
@@ -1302,7 +1404,7 @@
         } else {
           const curPos = Math.floor(maxConfirmedPos || getEffectiveTime());
           if (activeYPlayId && curPos > 2) {
-            safeSetStorage(`yp_pos_${activeYPlayId}`, String(curPos));
+            safeSetStorage(devProgressKey(activeYPlayId), String(curPos));
             syncProgressToServer(activeYPlayId, curPos, false, false);
           }
           shutdownSnapshot = { mode: "yplay", yplayId: activeYPlayId, yplayPos: curPos };
@@ -1386,7 +1488,7 @@
         localStorage.setItem(k, v);
       } catch (_) {
         try {
-          const keys = Object.keys(localStorage).filter((x) => x.startsWith("yp_pos_"));
+          const keys = Object.keys(localStorage).filter((x) => x.startsWith("yp_"));
           keys.slice(0, 15).forEach((oldK) => localStorage.removeItem(oldK));
           localStorage.setItem(k, v);
         } catch (__) {}
@@ -1530,7 +1632,7 @@
     let seekExecTimer = null;
     let seekFlashTimer = null;
 
-    /* Playback & Anti-Regression Progress State */
+    /* Playback & Per-Device Anti-Regression Progress State */
     let pendingResumeTime = 0;
     let maxConfirmedPos = 0;
     let explicitSeekTarget = -1;
@@ -1722,8 +1824,10 @@
     function showHud(preferredFocus = null, autoHideMs = 4200) {
       if (drawerOpen || isSystemStopped) return;
       hud.classList.add("visible");
-      const target = getBestHudFocus(preferredFocus);
-      target.focus({ preventScroll: true });
+      if (!IS_MOBILE_CLIENT) {
+        const target = getBestHudFocus(preferredFocus);
+        target.focus({ preventScroll: true });
+      }
       resetHudTimer(autoHideMs);
     }
 
@@ -1766,11 +1870,13 @@
         activePopupTrigger = trigger;
         lastHudFocusEl = trigger;
         resetHudTimer(5500);
-        const activeOpt = menu.querySelector(".pop-opt.active") || menu.querySelector(".pop-opt");
-        if (activeOpt) activeOpt.focus({ preventScroll: true });
+        if (!IS_MOBILE_CLIENT) {
+          const activeOpt = menu.querySelector(".pop-opt.active") || menu.querySelector(".pop-opt");
+          if (activeOpt) activeOpt.focus({ preventScroll: true });
+        }
       } else {
         activePopupTrigger = null;
-        if (trigger) trigger.focus({ preventScroll: true });
+        if (!IS_MOBILE_CLIENT && trigger) trigger.focus({ preventScroll: true });
       }
     }
 
@@ -1886,16 +1992,18 @@
       drawerBackdrop.classList.add("open");
       sideDrawer.classList.add("open");
 
-      requestAnimationFrame(() => {
-        const pane = drawerTab === "live" ? liveListPane : yplayListPane;
-        const activeItem = pane.querySelector(".d-item.active") || pane.querySelector(".d-item");
-        if (activeItem) {
-          centerDrawerItem(activeItem);
-          activeItem.focus({ preventScroll: true });
-        } else {
-          (drawerTab === "live" ? tabLive : tabYPlay).focus({ preventScroll: true });
-        }
-      });
+      if (!IS_MOBILE_CLIENT) {
+        requestAnimationFrame(() => {
+          const pane = drawerTab === "live" ? liveListPane : yplayListPane;
+          const activeItem = pane.querySelector(".d-item.active") || pane.querySelector(".d-item");
+          if (activeItem) {
+            centerDrawerItem(activeItem);
+            activeItem.focus({ preventScroll: true });
+          } else {
+            (drawerTab === "live" ? tabLive : tabYPlay).focus({ preventScroll: true });
+          }
+        });
+      }
     }
 
     function closeDrawer(resumeIfNeeded = true) {
@@ -1994,7 +2102,7 @@
       updateLiveAudioUi();
       closeAllPops();
       lastHudFocusEl = langBtn;
-      langBtn.focus({ preventScroll: true });
+      if (!IS_MOBILE_CLIENT) langBtn.focus({ preventScroll: true });
       resetHudTimer();
     }
 
@@ -2038,7 +2146,7 @@
       updateLiveQualUi();
       closeAllPops();
       lastHudFocusEl = qualBtn;
-      qualBtn.focus({ preventScroll: true });
+      if (!IS_MOBILE_CLIENT) qualBtn.focus({ preventScroll: true });
       resetHudTimer();
     }
 
@@ -2061,7 +2169,7 @@
       renderVodQualMenu();
       closeAllPops();
       lastHudFocusEl = qualBtn;
-      qualBtn.focus({ preventScroll: true });
+      if (!IS_MOBILE_CLIENT) qualBtn.focus({ preventScroll: true });
       if (!isLive && activeYPlayId) restartYPlayAt(maxConfirmedPos || getEffectiveTime(), false);
     }
 
@@ -2137,7 +2245,7 @@
       langMenu.querySelectorAll(".pop-opt").forEach((b) => b.classList.toggle("active", Number(b.dataset.a) === idx));
       closeAllPops();
       lastHudFocusEl = langBtn;
-      langBtn.focus({ preventScroll: true });
+      if (!IS_MOBILE_CLIENT) langBtn.focus({ preventScroll: true });
       if (!isLive && activeYPlayId) restartYPlayAt(maxConfirmedPos || getEffectiveTime(), false);
     }
 
@@ -2146,7 +2254,7 @@
       subMenu.querySelectorAll(".pop-opt").forEach((b) => b.classList.toggle("active", Number(b.dataset.s) === idx));
       closeAllPops();
       lastHudFocusEl = subBtn;
-      subBtn.focus({ preventScroll: true });
+      if (!IS_MOBILE_CLIENT) subBtn.focus({ preventScroll: true });
       if (idx < 0) {
         subBtn.textContent = "CC";
         subCues = [];
@@ -2164,7 +2272,7 @@
       document.querySelectorAll("#speedMenu .pop-opt").forEach((b) => b.classList.toggle("active", Number(b.dataset.rate) === rate));
       closeAllPops();
       lastHudFocusEl = speedBtn;
-      speedBtn.focus({ preventScroll: true });
+      if (!IS_MOBILE_CLIENT) speedBtn.focus({ preventScroll: true });
       resetHudTimer();
     }
 
@@ -2232,20 +2340,55 @@
       renderProgressVisual(scrubPreviewSec, dur);
     }
 
-    progressBar.addEventListener("click", (e) => {
-      e.stopPropagation();
+    function scrubFromClientX(clientX) {
       if (isLive) return;
       const dur = getEffectiveDuration();
       if (dur <= 0) return;
       const rect = progressBar.getBoundingClientRect();
-      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
       const target = ratio * dur;
       if (isScrubbing) exitScrubMode(false);
       seekYPlayTo(target);
       resetHudTimer();
+    }
+
+    progressBar.addEventListener("click", (e) => {
+      e.stopPropagation();
+      scrubFromClientX(e.clientX);
     });
 
-    /* Seek & Monotonic Progress Protection (Fixes 70% -> 20% Jump Bug) */
+    progressBar.addEventListener("touchstart", (e) => {
+      e.stopPropagation();
+      if (isLive || !e.touches || !e.touches.length) return;
+      const dur = getEffectiveDuration();
+      if (dur <= 0) return;
+      isScrubbing = true;
+      progressBar.classList.add("scrubbing");
+      clearTimeout(hudTimer);
+      const rect = progressBar.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width));
+      scrubPreviewSec = ratio * dur;
+      renderProgressVisual(scrubPreviewSec, dur);
+    }, { passive: true });
+
+    progressBar.addEventListener("touchmove", (e) => {
+      e.stopPropagation();
+      if (!isScrubbing || !e.touches || !e.touches.length) return;
+      const dur = getEffectiveDuration();
+      if (dur <= 0) return;
+      const rect = progressBar.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width));
+      scrubPreviewSec = ratio * dur;
+      renderProgressVisual(scrubPreviewSec, dur);
+    }, { passive: true });
+
+    progressBar.addEventListener("touchend", (e) => {
+      e.stopPropagation();
+      if (!isScrubbing) return;
+      exitScrubMode(true);
+    }, { passive: true });
+
+    /* Seek & Per-Device Monotonic Progress Protection */
     function getEffectiveDuration() {
       const item = yplayItems.find((x) => String(x.id) === String(activeYPlayId));
       const itemDur = item && Number(item.duration) > 0 ? Number(item.duration) : 0;
@@ -2271,7 +2414,7 @@
       if (!itemId) return;
       fetch(`${WORKER_URL}/api/yplay/progress`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-Device-Id": DEVICE_ID },
         body: JSON.stringify({
           device_id: DEVICE_ID,
           id: itemId,
@@ -2320,7 +2463,7 @@
       maxConfirmedPos = floored;
       explicitSeekTarget = floored;
       if (activeYPlayId) {
-        safeSetStorage(`yp_pos_${activeYPlayId}`, String(floored));
+        safeSetStorage(devProgressKey(activeYPlayId), String(floored));
         syncProgressToServer(activeYPlayId, floored, true, false);
       }
 
@@ -2340,7 +2483,7 @@
       if (hasOpenPop()) {
         const trigger = activePopupTrigger;
         closeAllPops();
-        if (trigger) trigger.focus({ preventScroll: true });
+        if (!IS_MOBILE_CLIENT && trigger) trigger.focus({ preventScroll: true });
         return;
       }
 
@@ -2753,7 +2896,8 @@
       showLoading(true);
       sendDeviceHeartbeat();
 
-      const localSaved = Number(safeGetStorage(`yp_pos_${item.id}`, "0"));
+      // Strictly per-device saved timeline (never shares progress across TV and phone)
+      const localSaved = Number(safeGetStorage(devProgressKey(item.id), "0"));
       const serverSaved = Number(item.progress_sec || 0);
       const bestSaved = Math.max(localSaved, serverSaved);
       const resumeSec = forceOffset !== null ? Math.max(0, Math.floor(forceOffset)) : (bestSaved > 5 ? Math.floor(bestSaved) : 0);
@@ -2861,7 +3005,7 @@
       hideLoading();
       syncIcons();
       if (!isLive && activeYPlayId && maxConfirmedPos > 2) {
-        safeSetStorage(`yp_pos_${activeYPlayId}`, String(Math.floor(maxConfirmedPos)));
+        safeSetStorage(devProgressKey(activeYPlayId), String(Math.floor(maxConfirmedPos)));
         syncProgressToServer(activeYPlayId, maxConfirmedPos, false, false);
       }
       if (!isLive && !drawerOpen && !shuttingDown && !isSystemStopped && video.getAttribute("src")) {
@@ -2921,7 +3065,7 @@
       const now = Date.now();
       if (activeYPlayId && displayPos > 2 && now - lastSavedPosTime > 2500) {
         lastSavedPosTime = now;
-        safeSetStorage(`yp_pos_${activeYPlayId}`, String(Math.floor(displayPos)));
+        safeSetStorage(devProgressKey(activeYPlayId), String(Math.floor(displayPos)));
       }
       if (activeYPlayId && displayPos > 2 && now - lastServerSyncTime > 5000) {
         lastServerSyncTime = now;
@@ -2937,7 +3081,7 @@
 
       if (dur >= 30 && finalPos >= dur - 20) {
         if (activeYPlayId) {
-          safeRemoveStorage(`yp_pos_${activeYPlayId}`);
+          safeRemoveStorage(devProgressKey(activeYPlayId));
           syncProgressToServer(activeYPlayId, finalPos, false, true);
         }
         maxConfirmedPos = 0;
@@ -3293,7 +3437,7 @@
     }, true);
 
     /* =========================================================================
-       LIVE DATA FETCHERS (CHANNELS & YPLAY LIBRARY)
+       LIVE DATA FETCHERS (CHANNELS & PER-DEVICE YPLAY LIBRARY)
     ========================================================================= */
     function fmt(t) {
       if (!isFinite(t) || t < 0) return "00:00";
@@ -3335,7 +3479,7 @@
         const nextList = Array.isArray(data.channels) ? data.channels : [];
         const sig = JSON.stringify(nextList.map((c) => [c.num, c.name, c.url, c.logo, c.status]));
         if (sig !== channelsSig) {
-          const prevFocusedNum = (drawerOpen && drawerTab === "live" && document.activeElement?.dataset?.num !== undefined)
+          const prevFocusedNum = (!IS_MOBILE_CLIENT && drawerOpen && drawerTab === "live" && document.activeElement?.dataset?.num !== undefined)
             ? Number(document.activeElement.dataset.num)
             : -1;
 
@@ -3377,10 +3521,14 @@
       try {
         const ctrl = new AbortController();
         const tid = setTimeout(() => ctrl.abort(), 8000);
-        const res = await fetch(`${WORKER_URL}/api/yplay/library?t=${Date.now()}`, {
-          cache: "no-store",
-          signal: ctrl.signal,
-        });
+        const res = await fetch(
+          `${WORKER_URL}/api/yplay/library?device_id=${encodeURIComponent(DEVICE_ID)}&t=${Date.now()}`,
+          {
+            cache: "no-store",
+            headers: { "X-Device-Id": DEVICE_ID },
+            signal: ctrl.signal,
+          }
+        );
         clearTimeout(tid);
         const data = await res.json();
         if (data && typeof data.stopped === "boolean") {
@@ -3389,7 +3537,7 @@
         const nextItems = Array.isArray(data.items) ? data.items : [];
         const sig = JSON.stringify(nextItems.map((x) => [x.id, x.title, x.quality, x.compat_audio, x.duration, x.status, (x.audio_tracks || []).length, (x.subtitles || []).length]));
         if (sig !== yplaySig) {
-          const prevFocusedYpIdx = (drawerOpen && drawerTab === "yplay" && document.activeElement?.dataset?.yp !== undefined)
+          const prevFocusedYpIdx = (!IS_MOBILE_CLIENT && drawerOpen && drawerTab === "yplay" && document.activeElement?.dataset?.yp !== undefined)
             ? Number(document.activeElement.dataset.yp)
             : -1;
 
@@ -3436,7 +3584,7 @@
     window.addEventListener("pagehide", () => {
       shuttingDown = true;
       if (!isLive && activeYPlayId && maxConfirmedPos > 2) {
-        safeSetStorage(`yp_pos_${activeYPlayId}`, String(Math.floor(maxConfirmedPos)));
+        safeSetStorage(devProgressKey(activeYPlayId), String(Math.floor(maxConfirmedPos)));
         syncProgressToServer(activeYPlayId, maxConfirmedPos, false, false);
       }
       video.pause();
@@ -3460,7 +3608,7 @@
       }
     });
 
-    /* Init Fullscreen TV Experience (Immediate Open — No Approval Gate) */
+    /* Init Fullscreen TV & Mobile Experience */
     syncIcons();
     renderLiveListPane();
     renderYPlayListPane();
