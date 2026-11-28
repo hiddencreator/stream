@@ -6,10 +6,13 @@ import re
 import shutil
 import subprocess
 import time
+import urllib.request
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 from pyrogram import Client, enums, filters
@@ -34,12 +37,15 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 CACHE_DIR = Path("/tmp/yplay_chunks")
 LIBRARY_FILE = DATA_DIR / "yplay_library.json"
+CHANNELS_FILE = DATA_DIR / "channels.json"
+DEVICES_FILE = DATA_DIR / "devices.json"
 OWNER_FILE = DATA_DIR / "owner.json"
 STATE_FILE = DATA_DIR / "system_state.json"
 SESSION_FILE = DATA_DIR / "ystream_bot"
 
 CHUNK_SIZE = 1024 * 1024  # 1 MiB
 MAX_CACHE_BYTES = int(1.5 * 1024 * 1024 * 1024)  # 1.5 GB cap
+DEVICE_ONLINE_TTL = 25  # seconds before device considered offline
 START_TIME = time.time()
 NATIVE_AUDIO_CODECS = {"aac", "mp3", "opus", "vorbis", "flac"}
 TEXT_SUB_CODECS = {"subrip", "srt", "ass", "ssa", "mov_text", "webvtt", "text"}
@@ -56,6 +62,22 @@ LANG_NAMES = {
     "spa": "Spanish", "es": "Spanish",
     "fre": "French", "fra": "French", "fr": "French",
 }
+
+DEFAULT_CHANNELS = [
+    {"num": 1, "id": "suntv", "short": "SUN", "bg": "#d92323", "name": "Sun TV", "type": "hls", "url": "https://offline.ystream.local/suntv/index.m3u8", "logo": "suntv.webp", "status": "offline"},
+    {"num": 2, "id": "vijaytv", "short": "VIJAY", "bg": "#c2410c", "name": "Vijay TV", "type": "hls", "url": "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:starvijayuk.smil/playlist.m3u8", "logo": "vijaytv.webp", "status": "online"},
+    {"num": 3, "id": "zeetamil", "short": "ZEE", "bg": "#6d28d9", "name": "Zee Tamil HD", "type": "hls", "url": "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:zeetamil1.smil/playlist.m3u8", "logo": "zeetamil.webp", "status": "online"},
+    {"num": 4, "id": "colorstamil", "short": "COLORS", "bg": "#be185d", "name": "Colors Tamil HD", "type": "hls", "url": "https://da86m1sqpm3o0.cloudfront.net/28072023/smil:colorstamilhd11.smil/playlist.m3u8", "logo": "colorstamil.webp", "status": "online"},
+    {"num": 5, "id": "vijaytakkar", "short": "TAKKAR", "bg": "#b91c1c", "name": "Vijay Takkar", "type": "dash", "url": "https://tglmp01.akamaized.net/out/v1/c1071012b73f4f189b202e1529e8f802/manifest.mpd", "logo": "vijaytakkar.webp", "status": "online"},
+    {"num": 6, "id": "vendhartv", "short": "VENDHAR", "bg": "#0f766e", "name": "Vendhar TV", "type": "hls", "url": "https://mumt04.tangotv.in/m18aqlK4VENDHARTV/index.m3u8", "logo": "vendhartv.webp", "status": "online"},
+    {"num": 7, "id": "rajtv", "short": "RAJ", "bg": "#1d4ed8", "name": "Raj TV", "type": "hls", "url": "https://livestream.rajtv.tv/hlslive/Admin/px08241087/live/RAJTV/master_1.m3u8", "logo": "rajtv.webp", "status": "online"},
+    {"num": 8, "id": "makkaltv", "short": "MAKKAL", "bg": "#047857", "name": "Makkal TV", "type": "hls", "url": "https://5k8q87azdy4v-hls-live.wmncdn.net/MAKKAL/271ddf829afeece44d8732757fba1a66.sdp/playlist.m3u8", "logo": "makkaltv.webp", "status": "online"},
+    {"num": 9, "id": "7smusic", "short": "7S", "bg": "#7e22ce", "name": "7S Music", "type": "hls", "url": "https://cdn.pishow.tv/ott/live/1257/master.m3u8", "logo": "7smusic.webp", "status": "online"},
+    {"num": 10, "id": "isaiaruvi", "short": "ISAI", "bg": "#a21caf", "name": "Isaiaruvi", "type": "hls", "url": "https://segment.yuppcdn.net/140622/isaiaruvi/playlist.m3u8", "logo": "isaiaruvi.webp", "status": "online"},
+    {"num": 11, "id": "newstamil24", "short": "NEWS24", "bg": "#dc2626", "name": "News Tamil 24x7", "type": "hls", "url": "https://streams.tangotv.in/NEWSTAMIL24X7/ORIGIN/index.m3u8", "logo": "newstamil24.webp", "status": "online"},
+    {"num": 12, "id": "puthiyathalaimurai", "short": "PT", "bg": "#b91c1c", "name": "Puthiya Thalaimurai", "type": "hls", "url": "https://mumt07.tangotv.in/zHjX9OFlPUTHIYAEXPRESS/index.m3u8", "logo": "puthiyathalaimurai.webp", "status": "online"},
+    {"num": 13, "id": "discoverytamil", "short": "DISC", "bg": "#0369a1", "name": "Discovery Tamil", "type": "dash-clearkey", "url": "https://login.bheem.tv/bpk-tv/22652/output/index.mpd", "kid": "c6cb0bcbeac25fb286fed851e41de38c", "key": "955c54f2cac8783fafccae5e5f9cdf8d", "logo": "discoverytamil.webp", "status": "online"},
+]
 
 for d in (DATA_DIR, CACHE_DIR):
     d.mkdir(parents=True, exist_ok=True)
@@ -82,11 +104,14 @@ play_proc_lock = asyncio.Lock()
 msg_cache: dict[str, Message] = {}
 prewarm_tasks: dict[str, asyncio.Task] = {}
 state_subscribers: set[asyncio.Queue] = set()
+bot_dialog_state: dict[int, dict] = {}
+bulk_upload_buffers: dict[int, dict] = {}
+LAST_SYSTEM_UPDATE: float = time.time()
 
 
 def read_json(path: Path, default):
     if not path.exists():
-        path.write_text(json.dumps(default, indent=2), encoding="utf-8")
+        write_json(path, default)
         return default
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -95,21 +120,38 @@ def read_json(path: Path, default):
 
 
 def write_json(path: Path, data):
-    tmp = path.with_suffix(".tmp")
+    global LAST_SYSTEM_UPDATE
+    tmp = path.with_suffix(f".{os.getpid()}.tmp")
     tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
     os.replace(tmp, path)
+    LAST_SYSTEM_UPDATE = time.time()
 
 
+def init_channels_store():
+    existing = read_json(CHANNELS_FILE, None)
+    if not existing or not isinstance(existing, list):
+        write_json(CHANNELS_FILE, DEFAULT_CHANNELS)
+        return
+    # Migrate legacy channels lacking fixed "num" or Sun TV at #1
+    if any("num" not in c for c in existing):
+        write_json(CHANNELS_FILE, DEFAULT_CHANNELS)
+
+
+init_channels_store()
 read_json(LIBRARY_FILE, [])
+read_json(DEVICES_FILE, {})
 SYSTEM_STOPPED: bool = bool(read_json(STATE_FILE, {"stopped": False}).get("stopped", False))
 
 
-def broadcast_event(event_type: str = "state"):
-    payload = json.dumps({
+def broadcast_event(event_type: str = "state", extra: Optional[dict] = None):
+    data = {
         "type": event_type,
         "stopped": SYSTEM_STOPPED,
         "ts": time.time(),
-    })
+    }
+    if extra:
+        data.update(extra)
+    payload = json.dumps(data)
     for q in list(state_subscribers):
         try:
             q.put_nowait(payload)
@@ -145,6 +187,21 @@ def authorize_user(user: Optional[User], allow_claim: bool = False) -> bool:
         write_json(OWNER_FILE, {"owner_id": uid, "claimed_at": int(time.time())})
         return True
     return False
+
+
+async def notify_owner(text: str, reply_markup: Optional[InlineKeyboardMarkup] = None):
+    owner = get_owner_id()
+    if owner <= 0 or not tg_client.is_connected:
+        return
+    try:
+        await tg_client.send_message(
+            owner,
+            text,
+            parse_mode=enums.ParseMode.HTML,
+            reply_markup=reply_markup,
+        )
+    except Exception as exc:
+        print(f"[Notify owner error] {exc}")
 
 
 def get_active_tunnel_url() -> str:
@@ -211,6 +268,303 @@ def fmt_uptime(sec: float) -> str:
     return f"{m}m {s}s"
 
 
+def fmt_ago(ts: float) -> str:
+    if not ts or ts <= 0:
+        return "Never"
+    diff = int(max(0, time.time() - ts))
+    if diff < 10:
+        return "Just now"
+    if diff < 60:
+        return f"{diff}s ago"
+    if diff < 3600:
+        return f"{diff // 60}m ago"
+    if diff < 86400:
+        return f"{diff // 3600}h ago"
+    return datetime.fromtimestamp(ts).strftime("%d %b %H:%M")
+
+
+def truncate_text(text: str, max_len: int) -> str:
+    s = re.sub(r"\s+", " ", str(text or "")).strip()
+    if len(s) <= max_len:
+        return s
+    return s[: max_len - 3].rstrip() + "..."
+
+
+# =============================================================================
+# DEVICE DETECTION, APPROVAL & TELEMETRY
+# =============================================================================
+def detect_device_name(user_agent: str, native_model: str = "", platform: str = "") -> str:
+    nm = re.sub(r"\s+", " ", str(native_model or "")).strip()
+    if nm and nm.lower() not in ("unknown", "android", "generic", "sdk"):
+        return truncate_text(nm, 28)
+
+    ua = str(user_agent or "")
+    # Extract Android build model from User-Agent: "; ModelName Build/"
+    m = re.search(r";\s*([^;()]+?)\s+Build/", ua)
+    if m:
+        raw_model = m.group(1).strip()
+        low_m = raw_model.lower()
+        if "mitv" in low_m or "mibox" in low_m or "xiaomi" in low_m:
+            return truncate_text(f"Xiaomi TV ({raw_model})", 28)
+        if "bravia" in low_m:
+            return truncate_text(f"Sony TV ({raw_model})", 28)
+        if "aft" in low_m:
+            return truncate_text(f"Fire TV ({raw_model})", 28)
+        if "shield" in low_m:
+            return "NVIDIA Shield TV"
+        return truncate_text(raw_model, 28)
+
+    low_ua = ua.lower()
+    if "tizen" in low_ua or "samsung" in low_ua:
+        return "Samsung Smart TV"
+    if "webos" in low_ua or "lg netcast" in low_ua:
+        return "LG webOS TV"
+    if "android tv" in low_ua or "googletv" in low_ua or "aft" in low_ua:
+        return "Android TV"
+    if "iphone" in low_ua:
+        return "Apple iPhone"
+    if "ipad" in low_ua:
+        return "Apple iPad"
+    if "android" in low_ua:
+        return "Android Device"
+    if "windows" in low_ua:
+        return "Windows PC"
+    if "macintosh" in low_ua or "mac os" in low_ua:
+        return "MacBook / Mac"
+    if "linux" in low_ua:
+        return "Linux Browser"
+    plat = str(platform or "").strip()
+    return truncate_text(plat if plat else "Smart TV / Web", 28)
+
+
+def get_devices_ordered() -> list[dict]:
+    raw = read_json(DEVICES_FILE, {})
+    items = list(raw.values()) if isinstance(raw, dict) else []
+    items.sort(key=lambda d: int(d.get("created_at") or 0))
+    now = time.time()
+    for idx, d in enumerate(items, start=1):
+        d["num"] = idx
+        last_seen = float(d.get("last_seen") or 0)
+        d["is_online"] = bool(d.get("approved")) and (now - last_seen) <= DEVICE_ONLINE_TTL
+    return items
+
+
+def count_online_devices() -> int:
+    return sum(1 for d in get_devices_ordered() if d["is_online"])
+
+
+def is_device_approved(device_id: str) -> bool:
+    clean_id = re.sub(r"[^a-zA-Z0-9_-]", "", str(device_id or ""))
+    if not clean_id:
+        return False
+    raw = read_json(DEVICES_FILE, {})
+    rec = raw.get(clean_id)
+    return bool(rec and rec.get("approved") is True)
+
+
+def build_device_dashboard_text() -> tuple[str, Optional[InlineKeyboardMarkup]]:
+    devices = get_devices_ordered()
+    total = len(devices)
+    active_cnt = sum(1 for d in devices if d["is_online"])
+
+    lines = [
+        f"<b>Device Management</b>",
+        f"Total Devices: <code>{total}</code>  |  Active Now: <code>{active_cnt}</code>\n",
+    ]
+
+    if not devices:
+        lines.append("<i>No devices registered yet. Open the TV app or website to register a device.</i>")
+        return "\n".join(lines), InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔄 Refresh", callback_data="dev:refresh")]
+        ])
+
+    table_rows = ["No.  Device Name               Activity", "----------------------------------------------"]
+    for d in devices:
+        num_str = str(d["num"]).ljust(4)
+        name_str = truncate_text(d.get("name") or "Device", 24).ljust(25)
+        if not d.get("approved"):
+            act_line = "⏳ Pending Approval"
+            sub_line = ""
+        elif not d["is_online"]:
+            act_line = "Offline"
+            sub_line = ""
+        else:
+            act = d.get("activity") or "idle"
+            playing = truncate_text(d.get("playing") or "", 30)
+            if act == "live":
+                act_line = "📺 Live TV"
+                sub_line = f"     Currently Playing: {playing}" if playing else ""
+            elif act == "yplay":
+                act_line = "🎬 YPlay"
+                sub_line = f"     Currently Playing: {playing}" if playing else ""
+            else:
+                act_line = "🟢 Online (Idle)"
+                sub_line = ""
+        table_rows.append(f"{num_str} {name_str} {act_line}")
+        if sub_line:
+            table_rows.append(sub_line)
+
+    lines.append(f"<pre>{html.escape(chr(10).join(table_rows))}</pre>")
+    kb = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("ℹ️ Details", callback_data="dev:info_prompt"),
+            InlineKeyboardButton("🗑 Remove", callback_data="dev:remove_prompt"),
+        ],
+        [InlineKeyboardButton("🔄 Refresh", callback_data="dev:refresh")],
+    ])
+    return "\n".join(lines), kb
+
+
+# =============================================================================
+# /YStream — LIVE TV CHANNEL MANAGEMENT & ZERO-IDLE RECOVERY MONITOR
+# =============================================================================
+def get_channels_sorted() -> list[dict]:
+    chans = read_json(CHANNELS_FILE, DEFAULT_CHANNELS)
+    chans.sort(key=lambda c: int(c.get("num") or 0))
+    return chans
+
+
+def build_ystream_dashboard() -> tuple[str, InlineKeyboardMarkup]:
+    chans = get_channels_sorted()
+    rows = ["No.  Channel Name             Status", "--------------------------------------"]
+    for c in chans:
+        n_str = str(c.get("num")).ljust(4)
+        name_str = truncate_text(c.get("name") or "Channel", 23).ljust(24)
+        st = "🟢" if c.get("status") == "online" else "🔴"
+        rows.append(f"{n_str} {name_str} {st}")
+    if not chans:
+        rows.append("No channels configured.")
+
+    txt = f"<b>YStream — Live TV Channels</b>\n<pre>{html.escape(chr(10).join(rows))}</pre>"
+    kb = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("➕ Add", callback_data="ys:add"),
+            InlineKeyboardButton("🗑 Remove", callback_data="ys:remove"),
+            InlineKeyboardButton("✏️ Edit", callback_data="ys:edit"),
+        ],
+        [InlineKeyboardButton("🔄 Refresh", callback_data="ys:refresh")],
+    ])
+    return txt, kb
+
+
+def validate_channel_lines(raw_text: str) -> tuple[bool, str, Optional[tuple[str, str, str]]]:
+    lines = [ln.strip() for ln in (raw_text or "").strip().splitlines() if ln.strip()]
+    if len(lines) != 3:
+        return False, (
+            "❌ <b>Invalid Format!</b>\nPlease send exact 3 lines:\n"
+            "<code>Channel Name\nLive Stream Link\nlogoname.webp</code>"
+        ), None
+
+    name, url, logo = lines
+    if len(name) < 2 or len(name) > 40:
+        return False, "❌ <b>Invalid Channel Name:</b> Must be between 2 and 40 characters.", None
+
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc or " " in url:
+        return False, "❌ <b>Invalid Stream Link:</b> Must be a valid <code>http://</code> or <code>https://</code> URL.", None
+
+    logo_clean = logo.replace("assets/", "").strip()
+    if not re.match(r"^[a-zA-Z0-9._-]+\.webp$", logo_clean, re.IGNORECASE):
+        return False, "❌ <b>Invalid Logo Name:</b> Must end with <code>.webp</code> (example: <code>suntv.webp</code>).", None
+
+    return True, "", (name, url, logo_clean)
+
+
+def make_channel_obj(num: int, name: str, url: str, logo: str) -> dict:
+    palette = ["#d92323", "#c2410c", "#6d28d9", "#be185d", "#0f766e", "#1d4ed8", "#047857", "#7e22ce", "#0369a1"]
+    short = re.sub(r"[^A-Za-z0-9]", "", name).upper()[:6] or f"CH{num}"
+    cid = f"ch_{num}_{re.sub(r'[^a-z0-9]', '', name.lower())[:12]}"
+    stype = "dash" if ".mpd" in url.lower() else "hls"
+    return {
+        "num": int(num),
+        "id": cid,
+        "short": short,
+        "bg": palette[num % len(palette)],
+        "name": name,
+        "type": stype,
+        "url": url,
+        "logo": logo,
+        "status": "online",
+    }
+
+
+def probe_stream_url_sync(url: str) -> bool:
+    if not url or "offline.ystream.local" in url:
+        return False
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
+                "Accept": "*/*",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=7) as resp:
+            code = getattr(resp, "status", 200)
+            if code < 200 or code >= 400:
+                return False
+            sample = resp.read(2048).decode("utf-8", errors="ignore")
+            low_u = url.lower()
+            if ".m3u8" in low_u:
+                return "#EXTM3U" in sample
+            if ".mpd" in low_u:
+                return "<MPD" in sample or "urn:mpeg:dash" in sample
+            return len(sample) > 0
+    except Exception:
+        return False
+
+
+async def mark_channel_status(num: int, new_status: str, notify: bool = True):
+    chans = get_channels_sorted()
+    target = next((c for c in chans if int(c.get("num") or 0) == int(num)), None)
+    if not target:
+        return
+    old_status = target.get("status", "online")
+    if old_status == new_status:
+        return
+
+    target["status"] = new_status
+    write_json(CHANNELS_FILE, chans)
+    broadcast_event("channels")
+
+    if notify:
+        icon = "🟢" if new_status == "online" else "🔴"
+        header = "✅ <b>Channel Recovered & Restored</b>" if new_status == "online" else "⚠️ <b>Channel Stream Offline</b>"
+        table = (
+            "No.  Channel Name             Status\n"
+            "--------------------------------------\n"
+            f"{str(target['num']).ljust(4)} {truncate_text(target['name'], 23).ljust(24)} {icon}"
+        )
+        await notify_owner(f"{header}\n<pre>{html.escape(table)}</pre>")
+
+
+async def zero_idle_channel_recovery_loop():
+    """Runs zero checks when 0 devices are online OR 0 channels are offline."""
+    while True:
+        await asyncio.sleep(25)
+        try:
+            if SYSTEM_STOPPED:
+                continue
+            if count_online_devices() == 0:
+                continue
+            chans = get_channels_sorted()
+            offline_chans = [c for c in chans if c.get("status") != "online"]
+            if not offline_chans:
+                continue
+
+            for ch in offline_chans:
+                if count_online_devices() == 0 or SYSTEM_STOPPED:
+                    break
+                ok = await asyncio.to_thread(probe_stream_url_sync, ch.get("url", ""))
+                if ok:
+                    await mark_channel_status(int(ch["num"]), "online", notify=True)
+        except Exception as exc:
+            print(f"[Recovery monitor error] {exc}")
+
+
+# =============================================================================
+# /YPlay — MEDIA QUALITY, PROBING, CACHE & DYNAMIC RENUMBERING
+# =============================================================================
 def detect_quality(title: str, width: int = 0, height: int = 0) -> str:
     if width >= 3800 or height >= 2100:
         return "4K"
@@ -290,7 +644,6 @@ def get_media_info(msg: Message) -> Optional[dict]:
     mime = getattr(media, "mime_type", None) or "video/mp4"
     size = int(getattr(media, "file_size", None) or 0)
     raw_dur = int(getattr(media, "duration", None) or 0)
-    # Ignore bogus <30s metadata on large movie files (>20MB) so ffprobe resolves true duration
     duration = 0 if (size > 20 * 1024 * 1024 and raw_dur < 30) else raw_dur
     width = int(getattr(media, "width", 0) or 0)
     height = int(getattr(media, "height", 0) or 0)
@@ -313,8 +666,42 @@ def get_media_info(msg: Message) -> Optional[dict]:
         "default_audio_idx": 0,
         "subtitles": [],
         "probed": False,
+        "status": "working",
+        "progress_sec": 0,
         "added_at": int(time.time()),
     }
+
+
+def format_yplay_table_rows(items: list[dict], start_num: int = 1) -> str:
+    lines = ["No.  File Title", "----------------------------------------------"]
+    for offset, m in enumerate(items):
+        num_str = str(start_num + offset).ljust(4)
+        title_str = truncate_text(m.get("title") or "Untitled", 34)
+        if m.get("status") == "error":
+            lines.append(f"{num_str} {title_str} 🔴")
+        else:
+            q_str = str(m.get("quality") or "HD").upper()
+            tracks = m.get("audio_tracks") or []
+            lang_cnt = max(1, len({str(t.get("label") or "").lower() for t in tracks if t.get("label")})) if tracks else 1
+            lines.append(f"{num_str} {title_str}")
+            lines.append(f"     {q_str} · {lang_cnt}Lang · 🟢")
+    if not items:
+        lines.append("No files in YPlay.")
+    return "\n".join(lines)
+
+
+def build_yplay_dashboard() -> tuple[str, InlineKeyboardMarkup]:
+    items = read_json(LIBRARY_FILE, [])
+    table = format_yplay_table_rows(items, start_num=1)
+    txt = f"<b>YPlay — Movie & File Library</b>\n<pre>{html.escape(table)}</pre>"
+    kb = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("➕ Add", callback_data="yp:add"),
+            InlineKeyboardButton("🗑 Remove", callback_data="yp:remove"),
+        ],
+        [InlineKeyboardButton("🔄 Refresh", callback_data="yp:refresh")],
+    ])
+    return txt, kb
 
 
 def safe_item_dir(item_id: str) -> Path:
@@ -326,6 +713,13 @@ def safe_item_dir(item_id: str) -> Path:
 
 def block_path(item_id: str, b_idx: int) -> Path:
     return safe_item_dir(item_id) / f"{b_idx}.blk"
+
+
+def delete_item_cache_sync(item_id: str):
+    safe = "".join(c for c in item_id if c.isalnum() or c in ("_", "-"))
+    p = CACHE_DIR / safe
+    if p.exists() and p.is_dir():
+        shutil.rmtree(p, ignore_errors=True)
 
 
 def write_block_sync(path: Path, data: bytes):
@@ -349,17 +743,6 @@ def get_cache_stats_sync() -> tuple[int, int]:
     return len(files), sum(f.stat().st_size for f in files)
 
 
-def clear_all_cache_sync():
-    for child in CACHE_DIR.iterdir():
-        try:
-            if child.is_dir():
-                shutil.rmtree(child, ignore_errors=True)
-            else:
-                child.unlink()
-        except Exception:
-            pass
-
-
 def prune_cache_sync():
     files = list(CACHE_DIR.glob("*/*.blk"))
     total = sum(f.stat().st_size for f in files if f.exists())
@@ -377,7 +760,7 @@ def prune_cache_sync():
             pass
 
 
-def run_ffprobe_http(stream_index: int) -> Optional[dict]:
+def run_ffprobe_http(item_id: str) -> Optional[dict]:
     try:
         cmd = [
             "ffprobe", "-v", "error",
@@ -385,7 +768,7 @@ def run_ffprobe_http(stream_index: int) -> Optional[dict]:
             "-probesize", "10000000",
             "-show_entries", "format=duration:stream=codec_type,codec_name,width,height:stream_tags=language,title",
             "-of", "json",
-            f"http://127.0.0.1:8000/api/yplay/stream/{stream_index}",
+            f"http://127.0.0.1:8000/api/yplay/stream/{item_id}?internal=1",
         ]
         res = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL, timeout=14)
         return json.loads(res)
@@ -448,7 +831,6 @@ def parse_ffprobe_data(data: dict, file_size: int = 0) -> Optional[dict]:
     except Exception:
         pass
 
-    # Reject truncated fragment durations (<30s) when file is >20MB
     if file_size > 20 * 1024 * 1024 and dur < 30:
         dur = 0
 
@@ -462,12 +844,12 @@ def parse_ffprobe_data(data: dict, file_size: int = 0) -> Optional[dict]:
         "height": h,
         "duration": dur,
         "probed": True,
+        "status": "working" if (w > 0 or audio_tracks) else "error",
     }
 
 
-def probe_media_sync(stream_index: int, file_size: int = 0) -> Optional[dict]:
-    # Always probe via HTTP range-capable stream endpoint so ffprobe reads full container moov/cues
-    raw = run_ffprobe_http(stream_index)
+def probe_media_sync(item_id: str, file_size: int = 0) -> Optional[dict]:
+    raw = run_ffprobe_http(item_id)
     if raw:
         parsed = parse_ffprobe_data(raw, file_size)
         if parsed and (parsed["width"] > 0 or parsed["audio_tracks"]):
@@ -481,6 +863,7 @@ def update_library_probe(item_id: str, info: dict):
     for row in items:
         if row.get("id") == item_id:
             row["probed"] = True
+            row["status"] = info.get("status", "working")
             row["audio_tracks"] = info.get("audio_tracks", [])
             row["default_audio_idx"] = int(info.get("default_audio_idx", 0))
             row["subtitles"] = info.get("subtitles", [])
@@ -505,6 +888,18 @@ def update_library_probe(item_id: str, info: dict):
         broadcast_event("library")
 
 
+def find_yplay_item(item_ref: str) -> tuple[Optional[int], Optional[dict]]:
+    items = read_json(LIBRARY_FILE, [])
+    for i, row in enumerate(items):
+        if str(row.get("id")) == str(item_ref):
+            return i, row
+    if str(item_ref).isdigit():
+        idx = int(item_ref)
+        if 0 <= idx < len(items):
+            return idx, items[idx]
+    return None, None
+
+
 async def kill_active_play_proc():
     global active_play_proc
     async with play_proc_lock:
@@ -516,17 +911,6 @@ async def kill_active_play_proc():
                 await proc.wait()
             except Exception:
                 pass
-
-
-async def clear_queue_and_cache():
-    await kill_active_play_proc()
-    for task in list(prewarm_tasks.values()):
-        task.cancel()
-    prewarm_tasks.clear()
-    msg_cache.clear()
-    write_json(LIBRARY_FILE, [])
-    await asyncio.to_thread(clear_all_cache_sync)
-    broadcast_event("library")
 
 
 async def get_tg_message(item: dict, force_refresh: bool = False) -> Message:
@@ -573,24 +957,19 @@ async def prewarm_head_tail(item: dict):
             return
         total_blocks = (total_size + CHUNK_SIZE - 1) // CHUNK_SIZE
 
-        # Cache first 2MB (header)
         head_count = min(2, total_blocks)
         if not all(block_path(item_id, b).exists() for b in range(head_count)):
             await cache_span(item, 0, head_count)
 
-        # Cache last 2MB (EOF moov atom / cues for instant full-movie duration probe)
         if total_blocks > 3:
             tail_start = max(head_count, total_blocks - 2)
             tail_count = total_blocks - tail_start
             if not all(block_path(item_id, b).exists() for b in range(tail_start, total_blocks)):
                 await cache_span(item, tail_start, tail_count)
 
-        items = read_json(LIBRARY_FILE, [])
-        idx = next((i for i, r in enumerate(items) if r.get("id") == item_id), None)
-        if idx is not None:
-            probe_res = await asyncio.to_thread(probe_media_sync, idx, total_size)
-            if probe_res:
-                update_library_probe(item_id, probe_res)
+        probe_res = await asyncio.to_thread(probe_media_sync, item_id, total_size)
+        if probe_res:
+            update_library_probe(item_id, probe_res)
 
         await asyncio.to_thread(prune_cache_sync)
     except asyncio.CancelledError:
@@ -610,63 +989,156 @@ def trigger_prewarm(item: dict):
     prewarm_tasks[item_id] = asyncio.create_task(prewarm_head_tail(item))
 
 
-def save_media_to_queue(item: dict) -> tuple[bool, int]:
+def save_media_to_queue(item: dict) -> tuple[bool, int, dict]:
     items = read_json(LIBRARY_FILE, [])
-    for row in items:
+    for idx, row in enumerate(items, start=1):
         if row.get("chat_id") == item["chat_id"] and row.get("message_id") == item["message_id"]:
             trigger_prewarm(row)
             broadcast_event("library")
-            return False, len(items)
+            return False, idx, row
     items.append(item)
     write_json(LIBRARY_FILE, items)
     broadcast_event("library")
     trigger_prewarm(item)
-    return True, len(items)
+    return True, len(items), item
 
 
+# =============================================================================
+# /status — COMPLETE REAL-TIME SYSTEM STATUS
+# =============================================================================
 async def build_status_html() -> str:
-    items = read_json(LIBRARY_FILE, [])
+    devices = get_devices_ordered()
+    dev_total = len(devices)
+    dev_online = sum(1 for d in devices if d["is_online"])
+    dev_offline = dev_total - dev_online
+    dev_approved = sum(1 for d in devices if d.get("approved"))
+    dev_pending = dev_total - dev_approved
+    dev_live = sum(1 for d in devices if d["is_online"] and d.get("activity") == "live")
+    dev_yplay = sum(1 for d in devices if d["is_online"] and d.get("activity") == "yplay")
+
+    chans = get_channels_sorted()
+    ch_total = len(chans)
+    ch_working = sum(1 for c in chans if c.get("status") == "online")
+    ch_offline = ch_total - ch_working
+    ch_monitored = ch_offline if (dev_online > 0 and not SYSTEM_STOPPED) else 0
+
+    yp_items = read_json(LIBRARY_FILE, [])
+    yp_total = len(yp_items)
+    yp_working = sum(1 for m in yp_items if m.get("status") != "error")
+    yp_error = yp_total - yp_working
+    yp_playing = dev_yplay
+
     blk_cnt, blk_bytes = await asyncio.to_thread(get_cache_stats_sync)
     sys = await asyncio.to_thread(get_sys_stats)
     tunnel = get_active_tunnel_url()
-    owner_id = get_owner_id()
 
-    rows = [
-        ("Bot", "Connected" if tg_client.is_connected else "Offline"),
-        ("System", "SHUTDOWN" if SYSTEM_STOPPED else "ACTIVE"),
-        ("Owner Lock", str(owner_id) if owner_id else "Unlocked"),
-        ("Queue", f"{len(items)} movie(s)"),
-        ("Cache", f"{fmt_bytes(blk_bytes)} ({blk_cnt} blk)"),
-        ("RAM", f"{sys['mem_used_mb']}/{sys['mem_total_mb']} MB"),
-        ("Disk", f"{sys['disk_used_gb']:.1f}/{sys['disk_total_gb']:.1f} GB"),
-        ("CPU Load", f"{sys['load_1m']:.2f}"),
-        ("Tunnel", "Online" if tunnel else "Missing"),
-        ("Uptime", fmt_uptime(time.time() - START_TIME)),
+    monitor_status = (
+        "Suspended (Shutdown)" if SYSTEM_STOPPED
+        else (f"Active ({ch_monitored} offline)" if ch_monitored > 0 else "Idle (Zero-Load)")
+    )
+
+    sections = [
+        "<b>📊 YStream Complete System Status</b>\n",
+        "<b>A. Device Statistics</b>",
+        "<pre>" + html.escape("\n".join([
+            f"Total Registered      : {dev_total}",
+            f"Currently Online      : {dev_online}",
+            f"Currently Offline     : {dev_offline}",
+            f"Approved Devices      : {dev_approved}",
+            f"Pending Approval      : {dev_pending}",
+            f"Watching Live TV      : {dev_live}",
+            f"Watching YPlay        : {dev_yplay}",
+        ])) + "</pre>\n",
+        "<b>B. Live TV Statistics</b>",
+        "<pre>" + html.escape("\n".join([
+            f"Configured Channels   : {ch_total}",
+            f"Working Channels (🟢) : {ch_working}",
+            f"Offline Channels (🔴) : {ch_offline}",
+            f"Actively Monitored    : {ch_monitored}",
+        ])) + "</pre>\n",
+        "<b>C. YPlay Statistics</b>",
+        "<pre>" + html.escape("\n".join([
+            f"Total Files Available : {yp_total}",
+            f"Playable Files (🟢)   : {yp_working}",
+            f"Error Files (🔴)      : {yp_error}",
+            f"Currently Playing     : {yp_playing}",
+        ])) + "</pre>\n",
+        "<b>D. System Activity</b>",
+        "<pre>" + html.escape("\n".join([
+            f"Telegram Bot          : {'Connected' if tg_client.is_connected else 'Offline'}",
+            f"Server Status         : {'SYSTEM SHUTDOWN' if SYSTEM_STOPPED else 'ACTIVE'}",
+            f"Live TV Service       : {'Stopped' if SYSTEM_STOPPED else 'Operational'}",
+            f"YPlay Service         : {'Stopped' if SYSTEM_STOPPED else 'Operational'}",
+            f"Background Monitor    : {monitor_status}",
+            f"Active Sessions       : {dev_live + dev_yplay}",
+            f"Last System Update    : {fmt_ago(LAST_SYSTEM_UPDATE)}",
+            f"Cache / RAM / Disk    : {fmt_bytes(blk_bytes)} | {sys['mem_used_mb']}/{sys['mem_total_mb']}MB | {sys['disk_used_gb']:.1f}/{sys['disk_total_gb']:.1f}GB",
+            f"Server Uptime         : {fmt_uptime(time.time() - START_TIME)}",
+        ])) + "</pre>",
     ]
 
-    w1, w2 = 10, 19
-    sep = f"+-{'-'*w1}-+-{'-'*w2}-+"
-    lines = [sep, f"| {'Component':<{w1}} | {'Diagnosis':<{w2}} |", sep]
-    for k, v in rows:
-        lines.append(f"| {k:<{w1}} | {v[:w2]:<{w2}} |")
-    lines.append(sep)
-    table = "\n".join(lines)
-
-    out = f"<b>YStream Full Diagnosis</b>\n<pre>{html.escape(table)}</pre>"
     if tunnel:
-        out += f"\n\n<b>Tunnel URL:</b>\n<code>{html.escape(tunnel)}</code>"
-    return out
+        sections.append(f"\n<b>Tunnel URL:</b>\n<code>{html.escape(tunnel)}</code>")
+    return "\n".join(sections)
 
 
-# --- Owner-Only Telegram Bot Handlers ---
+# =============================================================================
+# TELEGRAM BOT COMMANDS & INTERACTIVE MANAGEMENT
+# =============================================================================
 @tg_client.on_message(filters.private & filters.command("start"))
 async def cmd_start(_, msg: Message):
     if not authorize_user(msg.from_user, allow_claim=True):
         return
-    state_txt = "SYSTEM SHUTDOWN (send /resume to restore)" if SYSTEM_STOPPED else "ACTIVE"
+    bot_dialog_state.pop(int(msg.from_user.id), None)
+    state_txt = "SYSTEM SHUTDOWN (send /resume)" if SYSTEM_STOPPED else "ACTIVE"
     await msg.reply_text(
-        f"<b>YStream Bot Ready.</b>\nStatus: <code>{state_txt}</code>\nForward any movie to add to YPlay.\nCommands: /status, /shutdown, /resume, /clear",
+        f"<b>YStream Bot Active</b>\n"
+        f"System State: <code>{state_txt}</code>\n\n"
+        f"• /YStream — Manage Live TV channels\n"
+        f"• /YPlay — Manage YPlay movies & files\n"
+        f"• /device — Manage & approve devices\n"
+        f"• /status — Complete system status",
         parse_mode=enums.ParseMode.HTML,
+    )
+
+
+@tg_client.on_message(filters.private & filters.command("ystream"))
+async def cmd_ystream(_, msg: Message):
+    if not authorize_user(msg.from_user, allow_claim=False):
+        return
+    bot_dialog_state.pop(int(msg.from_user.id), None)
+    txt, kb = build_ystream_dashboard()
+    await msg.reply_text(txt, parse_mode=enums.ParseMode.HTML, reply_markup=kb)
+
+
+@tg_client.on_message(filters.private & filters.command("yplay"))
+async def cmd_yplay(_, msg: Message):
+    if not authorize_user(msg.from_user, allow_claim=False):
+        return
+    bot_dialog_state.pop(int(msg.from_user.id), None)
+    txt, kb = build_yplay_dashboard()
+    await msg.reply_text(txt, parse_mode=enums.ParseMode.HTML, reply_markup=kb)
+
+
+@tg_client.on_message(filters.private & filters.command("device"))
+async def cmd_device(_, msg: Message):
+    if not authorize_user(msg.from_user, allow_claim=False):
+        return
+    bot_dialog_state.pop(int(msg.from_user.id), None)
+    txt, kb = build_device_dashboard_text()
+    await msg.reply_text(txt, parse_mode=enums.ParseMode.HTML, reply_markup=kb)
+
+
+@tg_client.on_message(filters.private & filters.command("status"))
+async def cmd_status(_, msg: Message):
+    if not authorize_user(msg.from_user, allow_claim=True):
+        return
+    bot_dialog_state.pop(int(msg.from_user.id), None)
+    txt = await build_status_html()
+    await msg.reply_text(
+        txt,
+        parse_mode=enums.ParseMode.HTML,
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh", callback_data="st:refresh")]]),
     )
 
 
@@ -674,6 +1146,7 @@ async def cmd_start(_, msg: Message):
 async def cmd_shutdown(_, msg: Message):
     if not authorize_user(msg.from_user, allow_claim=False):
         return
+    bot_dialog_state.pop(int(msg.from_user.id), None)
     set_system_stopped(True)
     await kill_active_play_proc()
     await msg.reply_text(
@@ -686,6 +1159,7 @@ async def cmd_shutdown(_, msg: Message):
 async def cmd_resume(_, msg: Message):
     if not authorize_user(msg.from_user, allow_claim=False):
         return
+    bot_dialog_state.pop(int(msg.from_user.id), None)
     set_system_stopped(False)
     await msg.reply_text(
         "<b>System Resumed.</b>\nPlayback restored immediately on TV & Browser.",
@@ -693,71 +1167,487 @@ async def cmd_resume(_, msg: Message):
     )
 
 
-@tg_client.on_message(filters.private & filters.command("status"))
-async def cmd_status(_, msg: Message):
-    if not authorize_user(msg.from_user, allow_claim=True):
+async def flush_bulk_yplay_upload(uid: int):
+    await asyncio.sleep(1.2)
+    bundle = bulk_upload_buffers.pop(uid, None)
+    if not bundle:
         return
-    txt = await build_status_html()
-    await msg.reply_text(
-        txt,
-        parse_mode=enums.ParseMode.HTML,
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh", callback_data="cb:status")]]),
-    )
-
-
-@tg_client.on_message(filters.private & filters.command("clear"))
-async def cmd_clear(_, msg: Message):
-    if not authorize_user(msg.from_user, allow_claim=False):
+    added_records = bundle.get("added") or []
+    chat_id = bundle.get("chat_id")
+    if not added_records or not chat_id:
         return
-    await clear_queue_and_cache()
-    await msg.reply_text(
-        "<b>Cleared All Movies & Cache.</b>\nNext video sent starts at <code>#1</code>.",
-        parse_mode=enums.ParseMode.HTML,
-    )
 
-
-@tg_client.on_message(filters.private & (filters.video | filters.document | filters.animation))
-async def on_file(_, msg: Message):
-    if not authorize_user(msg.from_user, allow_claim=False):
-        return
-    info = get_media_info(msg)
-    if not info:
-        return
-    added, total = save_media_to_queue(info)
-    if added:
-        await msg.reply_text(
-            f"Queued <code>#{total}</code> • <code>{html.escape(info['quality'])}</code> • <code>{fmt_bytes(info['file_size'])}</code>\n<b>{html.escape(info['title'])}</b>",
+    if len(added_records) == 1:
+        pos, item = added_records[0]
+        table = format_yplay_table_rows([item], start_num=pos)
+        await tg_client.send_message(
+            chat_id,
+            f"<pre>{html.escape(table)}</pre>\n\n✅ File successfully added at position <code>{pos}</code> in YPlay.",
             parse_mode=enums.ParseMode.HTML,
         )
+    else:
+        lines = ["No.  File Title", "----------------------------------------------"]
+        for pos, item in added_records:
+            q_str = str(item.get("quality") or "HD").upper()
+            lines.append(f"{str(pos).ljust(4)} {truncate_text(item.get('title') or 'Untitled', 34)}")
+            lines.append(f"     {q_str} · 1Lang · 🟢")
+        await tg_client.send_message(
+            chat_id,
+            f"✅ <b>{len(added_records)} files successfully added to YPlay:</b>\n<pre>{html.escape(chr(10).join(lines))}</pre>",
+            parse_mode=enums.ParseMode.HTML,
+        )
+
+
+@tg_client.on_message(
+    filters.private
+    & ~filters.command(["start", "ystream", "yplay", "device", "status", "shutdown", "resume", "poweron"])
+)
+async def on_interactive_input(_, msg: Message):
+    if not authorize_user(msg.from_user, allow_claim=False):
+        return
+    uid = int(msg.from_user.id)
+    st = bot_dialog_state.get(uid)
+    mode = st.get("mode") if st else None
+
+    has_any_media = bool(
+        msg.video or msg.document or msg.animation or msg.photo or msg.audio or msg.voice or msg.sticker
+    )
+
+    # STRICT UPLOAD RESTRICTION: Only accept files when explicitly in /YPlay -> Add mode
+    if has_any_media:
+        if mode != "yp_add":
+            await msg.reply_text(
+                "⚠️ <b>Upload Blocked</b>\nFiles shared directly are not added to YPlay.\nPlease open /YPlay and tap <b>➕ Add</b> first.",
+                parse_mode=enums.ParseMode.HTML,
+            )
+            return
+
+        if not is_video_msg(msg):
+            await msg.reply_text(
+                "❌ <b>Unsupported File Format</b>\nOnly video files (<code>.mp4</code>, <code>.mkv</code>, <code>.webm</code>, <code>.mov</code>, <code>.avi</code>) are accepted. PDFs, images and other formats are rejected.",
+                parse_mode=enums.ParseMode.HTML,
+            )
+            return
+
+        info = get_media_info(msg)
+        if not info:
+            await msg.reply_text("❌ Could not read video metadata.", parse_mode=enums.ParseMode.HTML)
+            return
+
+        _, pos, saved_item = save_media_to_queue(info)
+        entry = bulk_upload_buffers.get(uid)
+        if not entry:
+            entry = {"chat_id": msg.chat.id, "added": [], "task": None}
+            bulk_upload_buffers[uid] = entry
+        entry["added"].append((pos, saved_item))
+        if entry.get("task") and not entry["task"].done():
+            entry["task"].cancel()
+        entry["task"] = asyncio.create_task(flush_bulk_yplay_upload(uid))
+        return
+
+    if not mode or not msg.text:
+        return
+
+    text = msg.text.strip()
+
+    # --- /YStream -> Add Channel ---
+    if mode == "ys_add":
+        ok, err_msg, parsed = validate_channel_lines(text)
+        if not ok or not parsed:
+            await msg.reply_text(err_msg, parse_mode=enums.ParseMode.HTML)
+            return
+        name, url, logo = parsed
+        chans = get_channels_sorted()
+        if any(c.get("name", "").strip().lower() == name.lower() or c.get("url", "").strip() == url for c in chans):
+            await msg.reply_text(
+                "⚠️ <b>Duplicate Channel</b>\nThis channel name or stream link already exists in /YStream.",
+                parse_mode=enums.ParseMode.HTML,
+            )
+            return
+        next_num = max([int(c.get("num") or 0) for c in chans], default=0) + 1
+        new_ch = make_channel_obj(next_num, name, url, logo)
+        is_up = await asyncio.to_thread(probe_stream_url_sync, url)
+        new_ch["status"] = "online" if is_up else "offline"
+        chans.append(new_ch)
+        write_json(CHANNELS_FILE, chans)
+        broadcast_event("channels")
+        bot_dialog_state.pop(uid, None)
+        dash_txt, dash_kb = build_ystream_dashboard()
+        await msg.reply_text(
+            f"✅ <b>Channel #{next_num} ({html.escape(name)}) added!</b>\n\n{dash_txt}",
+            parse_mode=enums.ParseMode.HTML,
+            reply_markup=dash_kb,
+        )
+        return
+
+    # --- /YStream -> Remove Channel (Single or Bulk) ---
+    if mode == "ys_remove":
+        tokens = [t for t in re.split(r"[\s,]+", text) if t]
+        if not tokens or any(not t.isdigit() for t in tokens):
+            await msg.reply_text(
+                "❌ <b>Invalid Channel Number</b>\nSend a valid number (e.g. <code>1</code>) or multiple numbers (e.g. <code>1 2 4</code>).",
+                parse_mode=enums.ParseMode.HTML,
+            )
+            return
+        nums = list(dict.fromkeys(int(t) for t in tokens))
+        chans = get_channels_sorted()
+        existing_nums = {int(c.get("num") or 0) for c in chans}
+        missing = [n for n in nums if n not in existing_nums]
+        if missing:
+            await msg.reply_text(
+                f"❌ <b>Channel Not Found:</b> <code>{', '.join(map(str, missing))}</code>\nNo channels were removed.",
+                parse_mode=enums.ParseMode.HTML,
+            )
+            return
+        # Remove selected channels while keeping remaining fixed channel numbers intact
+        updated = [c for c in chans if int(c.get("num") or 0) not in set(nums)]
+        write_json(CHANNELS_FILE, updated)
+        broadcast_event("channels")
+        bot_dialog_state.pop(uid, None)
+        dash_txt, dash_kb = build_ystream_dashboard()
+        await msg.reply_text(
+            f"✅ <b>Removed channel(s):</b> <code>{', '.join(map(str, nums))}</code>\n\n{dash_txt}",
+            parse_mode=enums.ParseMode.HTML,
+            reply_markup=dash_kb,
+        )
+        return
+
+    # --- /YStream -> Edit Step 1 (Pick Number) ---
+    if mode == "ys_edit_num":
+        if not text.isdigit():
+            await msg.reply_text("❌ Please enter a valid channel number (e.g. <code>1</code>).", parse_mode=enums.ParseMode.HTML)
+            return
+        target_num = int(text)
+        chans = get_channels_sorted()
+        ch = next((c for c in chans if int(c.get("num") or 0) == target_num), None)
+        if not ch:
+            await msg.reply_text(f"❌ Channel number <code>{target_num}</code> does not exist.", parse_mode=enums.ParseMode.HTML)
+            return
+        bot_dialog_state[uid] = {"mode": "ys_edit_data", "num": target_num}
+        cur_block = f"{ch.get('name')}\n{ch.get('url')}\n{ch.get('logo')}"
+        await msg.reply_text(
+            f"<b>Editing Channel #{target_num}</b>\nCurrent details:\n<pre>{html.escape(cur_block)}</pre>\n\n"
+            f"Send the updated details in the exact 3-line format:",
+            parse_mode=enums.ParseMode.HTML,
+        )
+        return
+
+    # --- /YStream -> Edit Step 2 (Submit 3 Lines) ---
+    if mode == "ys_edit_data":
+        target_num = int(st.get("num") or 0)
+        ok, err_msg, parsed = validate_channel_lines(text)
+        if not ok or not parsed:
+            await msg.reply_text(err_msg, parse_mode=enums.ParseMode.HTML)
+            return
+        name, url, logo = parsed
+        chans = get_channels_sorted()
+        ch = next((c for c in chans if int(c.get("num") or 0) == target_num), None)
+        if not ch:
+            bot_dialog_state.pop(uid, None)
+            await msg.reply_text("❌ Channel no longer exists.", parse_mode=enums.ParseMode.HTML)
+            return
+
+        if (
+            ch.get("name", "").strip() == name
+            and ch.get("url", "").strip() == url
+            and ch.get("logo", "").strip() == logo
+        ):
+            await msg.reply_text(
+                "⚠️ <b>Duplicate Data Detected</b>\nThe submitted details are identical to the already saved channel details.",
+                parse_mode=enums.ParseMode.HTML,
+            )
+            return
+
+        for other in chans:
+            if int(other.get("num") or 0) == target_num:
+                continue
+            if other.get("name", "").strip().lower() == name.lower() or other.get("url", "").strip() == url:
+                await msg.reply_text(
+                    "⚠️ <b>Duplicate Channel Data</b>\nAnother channel already uses this name or stream link.",
+                    parse_mode=enums.ParseMode.HTML,
+                )
+                return
+
+        ch["name"] = name
+        ch["url"] = url
+        ch["logo"] = logo
+        ch["type"] = "dash" if ".mpd" in url.lower() else "hls"
+        ch["short"] = re.sub(r"[^A-Za-z0-9]", "", name).upper()[:6] or f"CH{target_num}"
+        is_up = await asyncio.to_thread(probe_stream_url_sync, url)
+        ch["status"] = "online" if is_up else "offline"
+
+        write_json(CHANNELS_FILE, chans)
+        broadcast_event("channels")
+        bot_dialog_state.pop(uid, None)
+        dash_txt, dash_kb = build_ystream_dashboard()
+        await msg.reply_text(
+            f"✅ <b>Channel #{target_num} updated successfully!</b>\n\n{dash_txt}",
+            parse_mode=enums.ParseMode.HTML,
+            reply_markup=dash_kb,
+        )
+        return
+
+    # --- /YPlay -> Remove File (Single or Bulk + Dynamic Renumbering) ---
+    if mode == "yp_remove":
+        tokens = [t for t in re.split(r"[\s,]+", text) if t]
+        if not tokens or any(not t.isdigit() for t in tokens):
+            await msg.reply_text(
+                "❌ <b>Invalid File Number</b>\nSend a valid number (e.g. <code>1</code>) or multiple numbers (e.g. <code>1 2 4</code>).",
+                parse_mode=enums.ParseMode.HTML,
+            )
+            return
+        nums = list(dict.fromkeys(int(t) for t in tokens))
+        items = read_json(LIBRARY_FILE, [])
+        invalid = [n for n in nums if n < 1 or n > len(items)]
+        if invalid:
+            await msg.reply_text(
+                f"❌ <b>File Number Not Found:</b> <code>{', '.join(map(str, invalid))}</code>\nNo files were removed.",
+                parse_mode=enums.ParseMode.HTML,
+            )
+            return
+
+        remove_set = set(nums)
+        kept = []
+        removed_ids = []
+        for idx, row in enumerate(items, start=1):
+            if idx in remove_set:
+                removed_ids.append(row["id"])
+            else:
+                kept.append(row)
+
+        write_json(LIBRARY_FILE, kept)
+        for rid in removed_ids:
+            msg_cache.pop(rid, None)
+            t = prewarm_tasks.pop(rid, None)
+            if t:
+                t.cancel()
+            await asyncio.to_thread(delete_item_cache_sync, rid)
+
+        broadcast_event("library", {"removed_ids": removed_ids})
+        bot_dialog_state.pop(uid, None)
+        dash_txt, dash_kb = build_yplay_dashboard()
+        await msg.reply_text(
+            f"✅ <b>Removed file(s) & renumbered YPlay list:</b>\n\n{dash_txt}",
+            parse_mode=enums.ParseMode.HTML,
+            reply_markup=dash_kb,
+        )
+        return
+
+    # --- /device -> Inspect Device Info ---
+    if mode == "dev_info":
+        if not text.isdigit():
+            await msg.reply_text("❌ Enter a valid device number (e.g. <code>1</code>).", parse_mode=enums.ParseMode.HTML)
+            return
+        d_num = int(text)
+        devices = get_devices_ordered()
+        dev = next((d for d in devices if d["num"] == d_num), None)
+        if not dev:
+            await msg.reply_text(f"❌ Device <code>#{d_num}</code> not found.", parse_mode=enums.ParseMode.HTML)
+            return
+        bot_dialog_state.pop(uid, None)
+        act = dev.get("activity") or "idle"
+        act_label = "Live TV" if act == "live" else ("YPlay" if act == "yplay" else "Idle")
+        info_lines = [
+            f"Device Number : #{dev['num']}",
+            f"Device Name   : {dev.get('name')}",
+            f"Device ID     : {dev.get('device_id')}",
+            f"Approval      : {'Approved ✅' if dev.get('approved') else 'Pending ⏳'}",
+            f"Connection    : {'Online 🟢' if dev['is_online'] else 'Offline'}",
+            f"Activity      : {act_label}",
+            f"Playing       : {dev.get('playing') or 'None'}",
+            f"Last Active   : {fmt_ago(float(dev.get('last_seen') or 0))}",
+        ]
+        await msg.reply_text(
+            f"<b>Device Details</b>\n<pre>{html.escape(chr(10).join(info_lines))}</pre>",
+            parse_mode=enums.ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🗑 Remove Device", callback_data=f"dev:del_id:{dev['device_id']}")],
+                [InlineKeyboardButton("⬅️ Back to Devices", callback_data="dev:refresh")],
+            ]),
+        )
+        return
+
+    # --- /device -> Remove Device by Number ---
+    if mode == "dev_remove":
+        if not text.isdigit():
+            await msg.reply_text("❌ Enter a valid device number (e.g. <code>1</code>).", parse_mode=enums.ParseMode.HTML)
+            return
+        d_num = int(text)
+        devices = get_devices_ordered()
+        dev = next((d for d in devices if d["num"] == d_num), None)
+        if not dev:
+            await msg.reply_text(f"❌ Device <code>#{d_num}</code> not found.", parse_mode=enums.ParseMode.HTML)
+            return
+        raw_devs = read_json(DEVICES_FILE, {})
+        removed_dev = raw_devs.pop(dev["device_id"], None)
+        write_json(DEVICES_FILE, raw_devs)
+        broadcast_event("device_revoked", {"device_id": dev["device_id"]})
+        bot_dialog_state.pop(uid, None)
+        dash_txt, dash_kb = build_device_dashboard_text()
+        was_active = " (Active session immediately blocked)" if (removed_dev and dev["is_online"]) else ""
+        await msg.reply_text(
+            f"🚫 <b>Removed & revoked access for {html.escape(dev.get('name') or 'Device')}</b>{was_active}\n\n{dash_txt}",
+            parse_mode=enums.ParseMode.HTML,
+            reply_markup=dash_kb,
+        )
+        return
 
 
 @tg_client.on_callback_query()
 async def on_callback(_, cq: CallbackQuery):
     if not authorize_user(cq.from_user, allow_claim=False):
         return
-    if cq.data == "cb:status":
-        try:
-            await cq.answer("Refreshing...")
-            txt = await build_status_html()
-            await cq.message.edit_text(
-                txt,
-                parse_mode=enums.ParseMode.HTML,
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh", callback_data="cb:status")]]),
-            )
-        except Exception:
-            pass
+    uid = int(cq.from_user.id)
+    data = str(cq.data or "")
+
+    try:
+        await cq.answer()
+    except Exception:
+        pass
+
+    # --- /YStream Callbacks ---
+    if data == "ys:refresh":
+        bot_dialog_state.pop(uid, None)
+        txt, kb = build_ystream_dashboard()
+        await cq.message.edit_text(txt, parse_mode=enums.ParseMode.HTML, reply_markup=kb)
+        return
+
+    if data == "ys:add":
+        bot_dialog_state[uid] = {"mode": "ys_add"}
+        await cq.message.reply_text(
+            "<b>Add Live TV Channel</b>\nSend channel details in exact 3-line format:\n\n"
+            "<code>Channel Name\nLive Stream Link\nlogoname.webp</code>",
+            parse_mode=enums.ParseMode.HTML,
+        )
+        return
+
+    if data == "ys:remove":
+        bot_dialog_state[uid] = {"mode": "ys_remove"}
+        await cq.message.reply_text(
+            "<b>Remove Live TV Channel(s)</b>\nEnter the channel number (e.g. <code>1</code>) or multiple numbers (e.g. <code>1 2 4</code>):",
+            parse_mode=enums.ParseMode.HTML,
+        )
+        return
+
+    if data == "ys:edit":
+        bot_dialog_state[uid] = {"mode": "ys_edit_num"}
+        await cq.message.reply_text(
+            "<b>Edit Live TV Channel</b>\nEnter the channel number you want to edit:",
+            parse_mode=enums.ParseMode.HTML,
+        )
+        return
+
+    # --- /YPlay Callbacks ---
+    if data == "yp:refresh":
+        bot_dialog_state.pop(uid, None)
+        txt, kb = build_yplay_dashboard()
+        await cq.message.edit_text(txt, parse_mode=enums.ParseMode.HTML, reply_markup=kb)
+        return
+
+    if data == "yp:add":
+        bot_dialog_state[uid] = {"mode": "yp_add"}
+        await cq.message.reply_text(
+            "<b>Add File to YPlay</b>\nSend or forward your video file(s) now.\n"
+            "<i>Supports single or bulk video uploads. Non-video files will be rejected.</i>",
+            parse_mode=enums.ParseMode.HTML,
+        )
+        return
+
+    if data == "yp:remove":
+        bot_dialog_state[uid] = {"mode": "yp_remove"}
+        await cq.message.reply_text(
+            "<b>Remove File(s) from YPlay</b>\nEnter the file number (e.g. <code>1</code>) or multiple numbers (e.g. <code>1 2 4</code>):",
+            parse_mode=enums.ParseMode.HTML,
+        )
+        return
+
+    # --- /device Callbacks ---
+    if data == "dev:refresh":
+        bot_dialog_state.pop(uid, None)
+        txt, kb = build_device_dashboard_text()
+        await cq.message.edit_text(txt, parse_mode=enums.ParseMode.HTML, reply_markup=kb)
+        return
+
+    if data == "dev:info_prompt":
+        bot_dialog_state[uid] = {"mode": "dev_info"}
+        await cq.message.reply_text("Enter the device number to inspect:", parse_mode=enums.ParseMode.HTML)
+        return
+
+    if data == "dev:remove_prompt":
+        bot_dialog_state[uid] = {"mode": "dev_remove"}
+        await cq.message.reply_text("Enter the device number to remove & revoke access:", parse_mode=enums.ParseMode.HTML)
+        return
+
+    if data.startswith("dev:approve:"):
+        dev_id = data.split(":", 2)[2]
+        raw_devs = read_json(DEVICES_FILE, {})
+        rec = raw_devs.get(dev_id)
+        if not rec:
+            await cq.message.edit_text("❌ Device request expired or not found.", parse_mode=enums.ParseMode.HTML)
+            return
+        rec["approved"] = True
+        rec["approved_at"] = int(time.time())
+        write_json(DEVICES_FILE, raw_devs)
+        broadcast_event("device_approved", {"device_id": dev_id})
+        await cq.message.edit_text(
+            f"✅ <b>Device Approved</b>\nName: <b>{html.escape(rec.get('name') or 'Device')}</b>\nID: <code>{html.escape(dev_id)}</code>",
+            parse_mode=enums.ParseMode.HTML,
+        )
+        return
+
+    if data.startswith("dev:cancel:"):
+        dev_id = data.split(":", 2)[2]
+        raw_devs = read_json(DEVICES_FILE, {})
+        rec = raw_devs.pop(dev_id, None)
+        write_json(DEVICES_FILE, raw_devs)
+        broadcast_event("device_revoked", {"device_id": dev_id})
+        dname = rec.get("name") if rec else dev_id
+        await cq.message.edit_text(
+            f"❌ <b>Device Access Cancelled</b>\nDevice <b>{html.escape(str(dname))}</b> was blocked and removed.",
+            parse_mode=enums.ParseMode.HTML,
+        )
+        return
+
+    if data.startswith("dev:del_id:"):
+        dev_id = data.split(":", 2)[2]
+        raw_devs = read_json(DEVICES_FILE, {})
+        rec = raw_devs.pop(dev_id, None)
+        write_json(DEVICES_FILE, raw_devs)
+        broadcast_event("device_revoked", {"device_id": dev_id})
+        txt, kb = build_device_dashboard_text()
+        dname = rec.get("name") if rec else dev_id
+        await cq.message.edit_text(
+            f"🚫 <b>Removed {html.escape(str(dname))}</b>\n\n{txt}",
+            parse_mode=enums.ParseMode.HTML,
+            reply_markup=kb,
+        )
+        return
+
+    if data == "st:refresh":
+        txt = await build_status_html()
+        await cq.message.edit_text(
+            txt,
+            parse_mode=enums.ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh", callback_data="st:refresh")]]),
+        )
 
 
+# =============================================================================
+# FASTAPI LIFECYCLE & ENDPOINTS
+# =============================================================================
 @app.on_event("startup")
 async def startup():
     await asyncio.to_thread(cleanup_orphan_tmps_sync)
     await tg_client.start()
     try:
         await tg_client.set_bot_commands([
-            BotCommand("status", "Full Diagnosis Table"),
-            BotCommand("shutdown", "System Shutdown Alert"),
-            BotCommand("resume", "Resume Playback"),
-            BotCommand("clear", "Clear Queue & Cache"),
+            BotCommand("start", "Confirm bot status & menu"),
+            BotCommand("ystream", "Manage Live TV channels"),
+            BotCommand("yplay", "Manage YPlay movies & files"),
+            BotCommand("device", "Manage & monitor devices"),
+            BotCommand("status", "Complete system status"),
+            BotCommand("shutdown", "Emergency system shutdown"),
+            BotCommand("resume", "Resume system playback"),
         ])
     except Exception as exc:
         print(f"[Bot commands error] {exc}")
@@ -765,6 +1655,7 @@ async def startup():
     items = read_json(LIBRARY_FILE, [])
     if items:
         trigger_prewarm(items[0])
+    asyncio.create_task(zero_idle_channel_recovery_loop())
 
 
 @app.on_event("shutdown")
@@ -781,18 +1672,20 @@ async def shutdown():
 @app.get("/health")
 async def health():
     items = read_json(LIBRARY_FILE, [])
+    chans = get_channels_sorted()
     return {
         "status": "ok",
         "stopped": SYSTEM_STOPPED,
         "bot_connected": tg_client.is_connected,
         "yplay_count": len(items),
+        "channel_count": len(chans),
         "tunnel_url": get_active_tunnel_url(),
     }
 
 
 @app.get("/api/events")
 async def api_events(request: Request):
-    q: asyncio.Queue = asyncio.Queue(maxsize=24)
+    q: asyncio.Queue = asyncio.Queue(maxsize=32)
     state_subscribers.add(q)
 
     async def event_stream():
@@ -817,18 +1710,117 @@ async def api_events(request: Request):
     )
 
 
+# --- Device Registration, Approval & Live Activity Heartbeat ---
+@app.post("/api/device/heartbeat")
+async def device_heartbeat(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    raw_id = str(body.get("device_id") or request.headers.get("x-device-id") or "")
+    device_id = re.sub(r"[^a-zA-Z0-9_-]", "", raw_id)[:64]
+    if len(device_id) < 6:
+        raise HTTPException(status_code=400, detail="Valid device_id required")
+
+    ua = str(request.headers.get("user-agent") or "")
+    native_model = str(body.get("native_model") or "")
+    platform = str(body.get("platform") or "")
+    activity = str(body.get("activity") or "idle").lower()
+    if activity not in ("live", "yplay", "idle"):
+        activity = "idle"
+    playing = truncate_text(str(body.get("playing") or ""), 60)
+
+    raw_devs = read_json(DEVICES_FILE, {})
+    now = time.time()
+    rec = raw_devs.get(device_id)
+
+    if not rec:
+        detected_name = detect_device_name(ua, native_model, platform)
+        rec = {
+            "device_id": device_id,
+            "name": detected_name,
+            "approved": False,
+            "created_at": int(now),
+            "last_seen": now,
+            "activity": "idle",
+            "playing": "",
+            "notified": True,
+        }
+        raw_devs[device_id] = rec
+        write_json(DEVICES_FILE, raw_devs)
+
+        kb = InlineKeyboardMarkup([[
+            InlineKeyboardButton("✅ Approve", callback_data=f"dev:approve:{device_id}"),
+            InlineKeyboardButton("❌ Cancel", callback_data=f"dev:cancel:{device_id}"),
+        ]])
+        await notify_owner(
+            f"🔔 <b>New Device Approval Request</b>\n\n"
+            f"Device Name: <b>{html.escape(detected_name)}</b>\n"
+            f"Device ID: <code>{html.escape(device_id)}</code>\n\n"
+            f"All content is blocked until you approve this device.",
+            reply_markup=kb,
+        )
+        return {"approved": False, "stopped": SYSTEM_STOPPED, "name": detected_name}
+
+    # Update device model if native Android model becomes available later
+    if native_model and rec.get("name", "").startswith(("Smart TV", "Android Device", "Android TV")):
+        better = detect_device_name(ua, native_model, platform)
+        if better:
+            rec["name"] = better
+
+    rec["last_seen"] = now
+    if rec.get("approved"):
+        rec["activity"] = activity
+        rec["playing"] = playing
+    write_json(DEVICES_FILE, raw_devs)
+
+    return {
+        "approved": bool(rec.get("approved")),
+        "stopped": SYSTEM_STOPPED,
+        "name": rec.get("name"),
+    }
+
+
+# --- Live TV Channels API ---
+@app.get("/api/channels")
+async def api_channels(request: Request, device_id: str = ""):
+    did = device_id or request.headers.get("x-device-id", "")
+    if not is_device_approved(did):
+        raise HTTPException(status_code=403, detail="Device approval required")
+    chans = get_channels_sorted()
+    return {
+        "stopped": SYSTEM_STOPPED,
+        "channels": chans,
+    }
+
+
+@app.post("/api/channels/{num}/report_error")
+async def api_channel_report_error(num: int, request: Request, device_id: str = ""):
+    did = device_id or request.headers.get("x-device-id", "")
+    if not is_device_approved(did):
+        raise HTTPException(status_code=403, detail="Device approval required")
+    await mark_channel_status(num, "offline", notify=True)
+    return {"ok": True, "num": num, "status": "offline"}
+
+
+# --- YPlay Library, Progress & Resilient Streaming API ---
 @app.get("/api/yplay/library")
-async def yplay_library():
+async def yplay_library(request: Request, device_id: str = ""):
+    did = device_id or request.headers.get("x-device-id", "")
+    if not is_device_approved(did):
+        raise HTTPException(status_code=403, detail="Device approval required")
+
     items = read_json(LIBRARY_FILE, [])
     enriched = []
     for idx, x in enumerate(items):
         row = dict(x)
         f_size = int(row.get("file_size") or 0)
         cur_dur = int(row.get("duration") or 0)
-        # Re-trigger prewarm if not probed or if duration was a bogus <30s fragment on a large file
         if not row.get("probed") or (f_size > 20 * 1024 * 1024 and cur_dur < 30):
             trigger_prewarm(row)
         row["index"] = idx
+        row["number"] = idx + 1
         row["quality"] = detect_quality(
             row.get("title", ""),
             int(row.get("width") or 0),
@@ -838,15 +1830,64 @@ async def yplay_library():
     return {"stopped": SYSTEM_STOPPED, "count": len(enriched), "items": enriched}
 
 
-@app.api_route("/api/yplay/stream/{index}", methods=["GET", "HEAD"])
-async def yplay_stream(index: int, request: Request):
+@app.post("/api/yplay/progress")
+async def yplay_save_progress(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    did = str(body.get("device_id") or request.headers.get("x-device-id") or "")
+    if not is_device_approved(did):
+        raise HTTPException(status_code=403, detail="Device approval required")
+
+    item_id = str(body.get("id") or "")
+    pos = max(0, int(body.get("position") or 0))
+    explicit_seek = bool(body.get("explicit_seek", False))
+    completed = bool(body.get("completed", False))
+
+    items = read_json(LIBRARY_FILE, [])
+    updated = False
+    for row in items:
+        if str(row.get("id")) == item_id:
+            prev = int(row.get("progress_sec") or 0)
+            dur = int(row.get("duration") or 0)
+            if completed and dur > 30 and pos >= dur - 20:
+                row["progress_sec"] = 0
+                updated = True
+            elif explicit_seek:
+                row["progress_sec"] = pos
+                updated = True
+            else:
+                # Anti-regression guard: prevent sudden 70% -> 20% glitch overwrite
+                if prev > 120 and pos < int(prev * 0.5):
+                    return {"ok": True, "progress_sec": prev, "ignored_regression": True}
+                if pos > prev or abs(pos - prev) <= 30:
+                    row["progress_sec"] = pos
+                    updated = True
+            break
+
+    if updated:
+        write_json(LIBRARY_FILE, items)
+    return {"ok": True}
+
+
+@app.api_route("/api/yplay/stream/{item_ref}", methods=["GET", "HEAD"])
+async def yplay_stream(item_ref: str, request: Request, device_id: str = "", internal: int = 0):
     if SYSTEM_STOPPED:
         raise HTTPException(status_code=503, detail="System shutdown")
-    items = read_json(LIBRARY_FILE, [])
-    if index < 0 or index >= len(items):
+
+    client_host = request.client.host if request.client else ""
+    is_local_internal = internal == 1 and client_host in ("127.0.0.1", "::1", "localhost")
+    if not is_local_internal:
+        did = device_id or request.headers.get("x-device-id", "")
+        if not is_device_approved(did):
+            raise HTTPException(status_code=403, detail="Device approval required")
+
+    _, item = find_yplay_item(item_ref)
+    if not item:
         raise HTTPException(status_code=404, detail="Movie not found in YPlay queue")
 
-    item = items[index]
     item_id = item["id"]
     msg = await get_tg_message(item)
     media = msg.video or msg.document or msg.animation
@@ -891,6 +1932,7 @@ async def yplay_stream(index: int, request: Request):
 
     async def continuous_gen():
         pos = start_byte
+        retries = 0
         while pos <= end_byte:
             if SYSTEM_STOPPED or await request.is_disconnected():
                 break
@@ -905,13 +1947,15 @@ async def yplay_stream(index: int, request: Request):
                     take = min(len(raw) - b_off, end_byte - pos + 1)
                     yield raw[b_off : b_off + take]
                     pos += take
+                    retries = 0
                     continue
 
             stream_block = b_idx
             buf = bytearray()
-            refresh_msg = await get_tg_message(item)
+            progressed = False
 
             try:
+                refresh_msg = await get_tg_message(item, force_refresh=(retries > 0))
                 async for chunk in tg_client.stream_media(refresh_msg, offset=b_idx):
                     if SYSTEM_STOPPED or await request.is_disconnected():
                         return
@@ -927,6 +1971,8 @@ async def yplay_stream(index: int, request: Request):
                                 take = min(len(blk_bytes) - cur_off, end_byte - pos + 1)
                                 yield blk_bytes[cur_off : cur_off + take]
                                 pos += take
+                                progressed = True
+                                retries = 0
 
                         stream_block += 1
                         if pos > end_byte:
@@ -946,28 +1992,54 @@ async def yplay_stream(index: int, request: Request):
                         take = min(len(tail_bytes) - cur_off, end_byte - pos + 1)
                         yield tail_bytes[cur_off : cur_off + take]
                         pos += take
-            except Exception:
+                        progressed = True
+                        retries = 0
+            except Exception as exc:
                 msg_cache.pop(item_id, None)
-                break
+                retries += 1
+                if retries > 4:
+                    print(f"[Stream abort {item_id} at {pos}] {exc}")
+                    break
+                await asyncio.sleep(min(2.0, 0.4 * retries))
+                continue
+
+            if not progressed and pos <= end_byte:
+                retries += 1
+                if retries > 4:
+                    break
+                await asyncio.sleep(0.4)
 
         asyncio.create_task(asyncio.to_thread(prune_cache_sync))
 
     return StreamingResponse(continuous_gen(), status_code=status_code, headers=headers, media_type=mime)
 
 
-@app.api_route("/api/yplay/play/{index}", methods=["GET", "HEAD"])
-@app.api_route("/api/yplay/compat/{index}", methods=["GET", "HEAD"])
-async def yplay_play_stream(index: int, request: Request, t: float = 0.0, q: str = "orig", a: int = 0):
+@app.api_route("/api/yplay/play/{item_ref}", methods=["GET", "HEAD"])
+@app.api_route("/api/yplay/compat/{item_ref}", methods=["GET", "HEAD"])
+async def yplay_play_stream(
+    item_ref: str,
+    request: Request,
+    t: float = 0.0,
+    q: str = "orig",
+    a: int = 0,
+    device_id: str = "",
+):
     global active_play_proc
     if SYSTEM_STOPPED:
         raise HTTPException(status_code=503, detail="System shutdown")
-    items = read_json(LIBRARY_FILE, [])
-    if index < 0 or index >= len(items):
+
+    did = device_id or request.headers.get("x-device-id", "")
+    if not is_device_approved(did):
+        raise HTTPException(status_code=403, detail="Device approval required")
+
+    _, item = find_yplay_item(item_ref)
+    if not item:
         raise HTTPException(status_code=404, detail="Movie not found")
 
     if request.method == "HEAD":
         return Response(status_code=200, headers={"Content-Type": "video/mp4", "Cache-Control": "no-store"})
 
+    item_id = item["id"]
     seek_sec = max(0.0, float(t or 0.0))
     audio_idx = max(0, int(a or 0))
     q_clean = str(q or "orig").lower()
@@ -980,7 +2052,7 @@ async def yplay_play_stream(index: int, request: Request, t: float = 0.0, q: str
         cmd.extend(["-ss", f"{seek_sec:.2f}"])
 
     cmd.extend([
-        "-i", f"http://127.0.0.1:8000/api/yplay/stream/{index}",
+        "-i", f"http://127.0.0.1:8000/api/yplay/stream/{item_id}?internal=1",
         "-map", "0:v:0", "-map", f"0:a:{audio_idx}?",
     ])
 
@@ -1048,20 +2120,33 @@ async def yplay_play_stream(index: int, request: Request, t: float = 0.0, q: str
     )
 
 
-@app.get("/api/yplay/sub/{index}/{sub_idx}.vtt")
-async def yplay_sub_vtt(index: int, sub_idx: int, t: float = 0.0, dur: float = 180.0):
+@app.get("/api/yplay/sub/{item_ref}/{sub_idx}.vtt")
+async def yplay_sub_vtt(
+    item_ref: str,
+    sub_idx: int,
+    request: Request,
+    t: float = 0.0,
+    dur: float = 180.0,
+    device_id: str = "",
+):
     if SYSTEM_STOPPED:
         raise HTTPException(status_code=503, detail="System shutdown")
-    items = read_json(LIBRARY_FILE, [])
-    if index < 0 or index >= len(items):
+
+    did = device_id or request.headers.get("x-device-id", "")
+    if not is_device_approved(did):
+        raise HTTPException(status_code=403, detail="Device approval required")
+
+    _, item = find_yplay_item(item_ref)
+    if not item:
         raise HTTPException(status_code=404, detail="Movie not found")
 
+    item_id = item["id"]
     start_sec = max(0.0, float(t or 0.0))
     win_sec = min(240.0, max(30.0, float(dur or 180.0)))
     cmd = [
         "ffmpeg", "-nostdin", "-loglevel", "error",
         "-ss", f"{start_sec:.2f}",
-        "-i", f"http://127.0.0.1:8000/api/yplay/stream/{index}",
+        "-i", f"http://127.0.0.1:8000/api/yplay/stream/{item_id}?internal=1",
         "-t", f"{win_sec:.2f}",
         "-vn", "-an",
         "-map", f"0:s:{max(0, sub_idx)}",
